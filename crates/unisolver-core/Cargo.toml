@@ -41,3 +41,11 @@ ruzstd = "0.8"
 [[test]]
 name = "imageio_local_test"
 required-features = ["imageio"]
+
+[[test]]
+name = "exif_test"
+required-features = ["imageio"]
+
+[[test]]
+name = "exif_local_test"
+required-features = ["imageio"]

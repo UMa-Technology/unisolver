@@ -37,9 +37,9 @@ pub use frame::{Frame, PixelData};
 pub use names_pack::NamesPack;
 pub use outcome::{CentroidOut, MatchOut, SolveOutcome, SolveStatus, SolvedGeometry, Timing, Wcs};
 pub use pool::{PoolAttempt, PoolOutcome, SolverPool, TierInfo};
-pub use solver::aspect_ladder;
 #[cfg(feature = "imageio")]
 pub use solver::presets_with_hints;
+pub use solver::{aspect_ladder, focal_35mm_hint, ladder_after_hints};
 pub use solver::{
     DbProperties, ExtractionOptions, ExtractionProfile, FovAttempt, FovPreset, SolveOptions, Solver,
 };

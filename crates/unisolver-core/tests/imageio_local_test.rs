@@ -11,6 +11,8 @@ fn local_fits_parse_and_hints() {
     }
     let (frame, meta) = load_image(m24.to_str().unwrap()).unwrap();
     assert_eq!((frame.width, frame.height), (6248, 4176));
+    // DATE-OBS 2026-07-25T14:23:26.307 (start, UTC) plus half of EXPTIME 300 s
+    assert_eq!(meta.observation_unix_ms, Some(1_784_989_556_307));
     let hints = meta.solve_hints();
     assert!(!hints.is_empty());
     assert!(
@@ -31,6 +33,8 @@ fn local_fits_parse_and_hints() {
     if asi.exists() {
         let (_, m) = load_image(asi.to_str().unwrap()).unwrap();
         assert_eq!(m.exposure_s, Some(600.0));
+        // DATE-AVG 2026-03-18T16:08:11.0769318 wins over DATE-OBS + 300 s
+        assert_eq!(m.observation_unix_ms, Some(1_773_850_091_076));
         let h = m.solve_hints();
         assert!(
             (h[0].fov_deg - 2.95).abs() < 0.05,

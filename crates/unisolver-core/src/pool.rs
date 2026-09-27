@@ -13,7 +13,7 @@
 //!    tiers first), not interleaved by FOV, to avoid paging between large mmaps.
 use crate::outcome::{SolveOutcome, SolveStatus};
 use crate::search::{self, Pass};
-use crate::solver::{build_solve_config_with, db_range_ladder, ExtractCache};
+use crate::solver::{build_solve_config_with, db_range_ladder, with_focal_hint, ExtractCache};
 use crate::{CoreError, FovPreset, Frame, Result, Solver};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -218,7 +218,7 @@ impl SolverPool {
                 }
                 cands.into_iter().map(|i| (i, None)).collect()
             }
-            None => plan(&spans, hints)
+            None => plan(&spans, &with_focal_hint(base, w, h, hints))
                 .into_iter()
                 .map(|(i, p)| (i, Some(p)))
                 .collect(),
@@ -288,17 +288,21 @@ impl SolverPool {
             last = Some(out);
             Ok(ok)
         })?;
+        let mut outcome = last.ok_or_else(|| {
+            CoreError::InvalidInput("no tier covers this frame (empty routing plan)".into())
+        })?;
+        outcome.observation_unix_ms = base.observation_unix_ms;
         Ok(PoolOutcome {
-            outcome: last.ok_or_else(|| {
-                CoreError::InvalidInput("no tier covers this frame (empty routing plan)".into())
-            })?,
+            outcome,
             attempts,
             db: solved_by,
             extract_count: cache.len(),
         })
     }
 
-    /// Fully automatic file entry: load any of the five formats → header hints + aspect ladder → route.
+    /// Fully automatic file entry: load any of the five formats → header hints + aspect ladder
+    /// → route. The header's observation time fills in when `base` has none; the outcome
+    /// carries it and the header's place (EXIF GPS) for the annotator.
     #[cfg(feature = "imageio")]
     pub fn solve_image_file_auto(
         &self,
@@ -307,7 +311,11 @@ impl SolverPool {
     ) -> Result<PoolOutcome> {
         let (frame, meta) = crate::imageio::load_image(path)?;
         let hints = crate::presets_with_hints(&meta, frame.width, frame.height);
-        self.solve_auto(&frame, base, &hints)
+        let mut base = base.clone();
+        meta.apply_time(&mut base);
+        let mut r = self.solve_auto(&frame, &base, &hints)?;
+        meta.apply_place(&mut r.outcome);
+        Ok(r)
     }
 }
 

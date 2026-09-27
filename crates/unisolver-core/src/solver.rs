@@ -117,6 +117,12 @@ pub struct SolveOptions {
     pub observation_unix_ms: Option<i64>,
     /// Advanced override: observer ICRS velocity in km/s; wins over the time above.
     pub observer_velocity_km_s: Option<[f64; 3]>,
+    /// Ladders only: a 35 mm-equivalent focal length from metadata the caller read itself
+    /// (EXIF through the platform, for HEIC and other formats the engine does not decode).
+    /// Its FOV goes first as a hint (±15%) and the ladder still follows; ignored by single
+    /// solves and when the FOV is known (camera or tracking).
+    #[serde(default)]
+    pub focal_length_35mm: Option<f32>,
 }
 
 impl SolveOptions {
@@ -136,6 +142,7 @@ impl SolveOptions {
             timeout_ms: Some(5000),
             observation_unix_ms: None,
             observer_velocity_km_s: None,
+            focal_length_35mm: None,
         }
     }
 }
@@ -290,6 +297,7 @@ impl Solver {
                 if matches!(out2.status, SolveStatus::Ok) {
                     let mut out2 = out2;
                     out2.extraction_retried = true;
+                    out2.observation_unix_ms = opts.observation_unix_ms;
                     return Ok((out2, raw2));
                 }
                 // The retry failed too: keep the first result (its status reflects the
@@ -300,6 +308,7 @@ impl Solver {
             }
         }
         let _ = &mut raw;
+        out.observation_unix_ms = opts.observation_unix_ms;
         Ok((out, raw))
     }
 
@@ -348,6 +357,8 @@ impl Solver {
                         timing,
                         extraction_retried: false,
                         median_elongation: ext.median_elongation,
+                        observation_unix_ms: None,
+                        observer: None,
                     },
                     Some((sol, ext.centroids.clone())),
                 ))
@@ -372,6 +383,8 @@ impl Solver {
                         timing,
                         extraction_retried: false,
                         median_elongation: ext.median_elongation,
+                        observation_unix_ms: None,
+                        observer: None,
                     },
                     None,
                 ))
@@ -505,6 +518,7 @@ impl Solver {
         // database's own range instead.
         let props = self.properties();
         let (lo, hi) = (props.min_fov_deg * 0.8, props.max_fov_deg * 1.25);
+        let presets = with_focal_hint(base, frame.width, frame.height, presets);
         let mut presets: Vec<FovPreset> = presets
             .iter()
             .copied()
@@ -556,7 +570,9 @@ impl Solver {
             last = Some(out);
             Ok(ok)
         })?;
-        Ok((last.expect("presets non-empty"), attempts))
+        let mut out = last.expect("presets non-empty");
+        out.observation_unix_ms = base.observation_unix_ms;
+        Ok((out, attempts))
     }
 }
 
@@ -627,6 +643,54 @@ pub fn aspect_ladder(width: u32, height: u32) -> Vec<FovPreset> {
     v
 }
 
+/// A rung around a FOV read from metadata: ±15%, because headers are hints, never truth.
+pub(crate) fn hint_preset(fov_deg: f32) -> FovPreset {
+    FovPreset {
+        fov_deg,
+        max_error_deg: fov_deg * 0.15,
+    }
+}
+
+/// Hint rung for a 35 mm-equivalent focal length (EXIF FocalLengthIn35mmFilm) on a frame
+/// of this size: the CIPA diagonal convention gives the diagonal FOV, the aspect ratio the
+/// horizontal one. None for an implausible focal length or a FOV outside (0.2°, 120°).
+pub fn focal_35mm_hint(mm: f32, width: u32, height: u32) -> Option<FovPreset> {
+    let cam = CameraParams::from_equivalent_focal_35mm(mm as f64, width, height).ok()?;
+    let fov = cam.horizontal_fov_deg(width);
+    (0.2..=120.0)
+        .contains(&fov)
+        .then(|| hint_preset(fov as f32))
+}
+
+/// Hint rungs first, then `ladder` without the rungs within 1° of a hint. Hints are only
+/// hints: when they fail, the rest of the ladder still runs.
+pub fn ladder_after_hints(hints: &[FovPreset], ladder: &[FovPreset]) -> Vec<FovPreset> {
+    let mut out = hints.to_vec();
+    for p in ladder {
+        if !out.iter().any(|q| (q.fov_deg - p.fov_deg).abs() < 1.0) {
+            out.push(*p);
+        }
+    }
+    out
+}
+
+/// `presets` with the caller's 35 mm focal-length hint (`SolveOptions::focal_length_35mm`)
+/// in front, when there is one.
+pub(crate) fn with_focal_hint(
+    base: &SolveOptions,
+    width: u32,
+    height: u32,
+    presets: &[FovPreset],
+) -> Vec<FovPreset> {
+    match base
+        .focal_length_35mm
+        .and_then(|mm| focal_35mm_hint(mm, width, height))
+    {
+        Some(h) => ladder_after_hints(&[h], presets),
+        None => presets.to_vec(),
+    }
+}
+
 /// Header hint rungs (possibly none) placed before the aspect ladder; rungs within 1°
 /// are deduplicated. Headers are hints: after they fail, the ladder still runs.
 #[cfg(feature = "imageio")]
@@ -635,11 +699,5 @@ pub fn presets_with_hints(
     width: u32,
     height: u32,
 ) -> Vec<FovPreset> {
-    let mut out = meta.solve_hints();
-    for p in aspect_ladder(width, height) {
-        if !out.iter().any(|q| (q.fov_deg - p.fov_deg).abs() < 1.0) {
-            out.push(p);
-        }
-    }
-    out
+    ladder_after_hints(&meta.solve_hints(), &aspect_ladder(width, height))
 }

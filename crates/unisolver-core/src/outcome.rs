@@ -139,6 +139,16 @@ pub struct SolveOutcome {
     /// [`CentroidOut::elongation`] (for example the p75 of bright stars). The
     /// extraction covariance underestimates long streaks. None with no centroids.
     pub median_elongation: Option<f32>,
+    /// Observation time the solve used (Unix ms, UTC): the caller's, or for file entries the
+    /// header's when it pins the zone (FITS `DATE-OBS`, EXIF with an offset). Hand it to the
+    /// annotator for the solar-system layer; None when neither gave one.
+    #[serde(default)]
+    pub observation_unix_ms: Option<i64>,
+    /// Where the observation was made, for file entries whose header says so (EXIF GPS).
+    /// Not used by the solve; hand it to the annotator with the time (the moon's parallax
+    /// reaches 1° without it). None for frames and files without a position.
+    #[serde(default)]
+    pub observer: Option<crate::Observer>,
 }
 
 /// Axis ratio √(λmax/λmin) from the extraction's second-moment covariance.

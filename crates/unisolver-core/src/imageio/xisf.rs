@@ -319,8 +319,14 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
             .map(|v| v.trim_matches(|c| c == '\'' || c == ' ').to_string())
             .filter(|s| !s.is_empty())
     };
+    let exposure_s = sane_f64(kwf("EXPTIME").or_else(|| kwf("EXPOSURE")), 1e-6, 86_400.0);
     let meta = ImageMeta {
-        exposure_s: sane_f64(kwf("EXPTIME").or_else(|| kwf("EXPOSURE")), 1e-6, 86_400.0),
+        exposure_s,
+        observation_unix_ms: super::header_time(
+            kws("DATE-AVG").as_deref(),
+            kws("DATE-OBS").as_deref(),
+            exposure_s,
+        ),
         focal_len_mm: sane_f64(kwf("FOCALLEN"), 1.0, 100_000.0),
         pixel_size_um: sane_f64(kwf("XPIXSZ").or_else(|| kwf("PIXSIZE1")), 0.5, 50.0),
         binning: kwf("XBINNING")

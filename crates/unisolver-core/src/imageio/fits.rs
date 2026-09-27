@@ -185,11 +185,17 @@ fn build_meta(
             .map(|v| v.trim_matches(|c| c == '\'' || c == ' ').to_string())
             .filter(|s| !s.is_empty())
     };
+    let exposure_s = sane_f64(
+        get_f("EXPTIME").or_else(|| get_f("EXPOSURE")),
+        1e-6,
+        86_400.0,
+    );
     ImageMeta {
-        exposure_s: sane_f64(
-            get_f("EXPTIME").or_else(|| get_f("EXPOSURE")),
-            1e-6,
-            86_400.0,
+        exposure_s,
+        observation_unix_ms: super::header_time(
+            get_s("DATE-AVG").as_deref(),
+            get_s("DATE-OBS").as_deref(),
+            exposure_s,
         ),
         focal_len_mm: sane_f64(get_f("FOCALLEN"), 1.0, 100_000.0),
         pixel_size_um: sane_f64(get_f("XPIXSZ").or_else(|| get_f("PIXSIZE1")), 0.5, 50.0),
@@ -328,6 +334,35 @@ mod tests {
             meta.fov_hint_deg().is_none(),
             "out-of-range hint must be dropped"
         );
+    }
+
+    #[test]
+    fn observation_time_prefers_the_midpoint_then_start_plus_half_exposure() {
+        let time = |cards: &[&str]| {
+            read_fits_bytes(&synth_fits(8, 2, 1, cards, vec![1, 2]))
+                .unwrap()
+                .1
+                .observation_unix_ms
+        };
+        // 2026-03-18T16:03:09.543Z, 600 s → midpoint 16:08:09.543
+        let start = "DATE-OBS= '2026-03-18T16:03:09.5431999' / UTC";
+        assert_eq!(
+            time(&[start, "EXPTIME =                600.0"]),
+            Some(1_773_849_789_543 + 300_000)
+        );
+        assert_eq!(time(&[start]), Some(1_773_849_789_543));
+        assert_eq!(
+            time(&[
+                start,
+                "EXPTIME =                600.0",
+                "DATE-AVG= '2026-03-18T16:08:11.0769318'"
+            ]),
+            Some(1_773_850_091_076)
+        );
+        // A date alone or the old DD/MM/YY form gives no time (a wrong time is worse than none)
+        assert_eq!(time(&["DATE-OBS= '2026-03-18'"]), None);
+        assert_eq!(time(&["DATE-OBS= '18/03/26'"]), None);
+        assert_eq!(time(&[]), None);
     }
 
     #[test]

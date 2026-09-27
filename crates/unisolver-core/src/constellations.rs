@@ -4,6 +4,7 @@
 //! A separate file from the DSO catalog because it has its own source and release cycle;
 //! localized constellation names live in the names pack (keys `CON <abbr>`), so this file
 //! carries only the IAU abbreviation and Latin name.
+use crate::sky::{Cap, View};
 use crate::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 
@@ -110,61 +111,6 @@ pub struct BoundaryAnnotation {
     pub points: Vec<[f64; 2]>,
 }
 
-fn unit(ra_deg: f64, dec_deg: f64) -> [f64; 3] {
-    let (ra, dec) = (ra_deg.to_radians(), dec_deg.to_radians());
-    [dec.cos() * ra.cos(), dec.cos() * ra.sin(), dec.sin()]
-}
-
-fn radec(v: [f64; 3]) -> (f64, f64) {
-    (
-        v[1].atan2(v[0]).to_degrees().rem_euclid(360.0),
-        v[2].clamp(-1.0, 1.0).asin().to_degrees(),
-    )
-}
-
-fn angle(a: [f64; 3], b: [f64; 3]) -> f64 {
-    let dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    let cross = [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ];
-    (cross[0].hypot(cross[1]).hypot(cross[2])).atan2(dot)
-}
-
-/// The smallest-ish spherical cap around a polyline (centre = mean direction, radius = the
-/// farthest vertex). Caps under 90° are convex, so the great-circle arcs between the vertices
-/// stay inside too: a polyline whose cap misses the view is skipped without touching its points.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Cap {
-    centre: [f64; 3],
-    radius: f64,
-}
-
-impl Cap {
-    pub(crate) fn of(vertices: &[[f32; 2]]) -> Self {
-        let units: Vec<[f64; 3]> = vertices
-            .iter()
-            .map(|v| unit(v[0] as f64, v[1] as f64))
-            .collect();
-        let mut sum = [0.0; 3];
-        for u in &units {
-            (0..3).for_each(|k| sum[k] += u[k]);
-        }
-        let norm = sum[0].hypot(sum[1]).hypot(sum[2]);
-        if norm < 1e-9 {
-            // Degenerate (vertices spread round the sky): never skip
-            return Self {
-                centre: [0.0, 0.0, 1.0],
-                radius: std::f64::consts::PI,
-            };
-        }
-        let centre = [sum[0] / norm, sum[1] / norm, sum[2] / norm];
-        let radius = units.iter().map(|&u| angle(centre, u)).fold(0.0, f64::max);
-        Self { centre, radius }
-    }
-}
-
 /// A loaded pack with the caps of every figure line and boundary, computed once.
 pub(crate) struct Loaded {
     pub pack: ConstellationPack,
@@ -208,128 +154,6 @@ impl Loaded {
             .filter(|(_, (_, cap))| view.meets(cap))
             .flat_map(|(i, (b, _))| view.project(&b.points).into_iter().map(move |p| (i, p)))
             .collect()
-    }
-}
-
-/// What the camera sees, for clipping sky polylines before projection: the WCS distortion
-/// model is only meaningful near the frame, and far outside it can fold points back in.
-pub(crate) struct View<'a> {
-    wcs: &'a crate::Wcs,
-    centre: [f64; 3],
-    /// Points farther than this from the centre (radians) are not projected
-    limit: f64,
-    /// Great-circle sampling step (radians)
-    step: f64,
-}
-
-impl<'a> View<'a> {
-    pub(crate) fn new(wcs: &'a crate::Wcs) -> Self {
-        let (w, h) = (wcs.width as f64, wcs.height as f64);
-        let (cra, cdec) = wcs.pixel_to_world((w - 1.0) / 2.0, (h - 1.0) / 2.0);
-        let centre = unit(cra, cdec);
-        let corner = [
-            (0.0, 0.0),
-            (w - 1.0, 0.0),
-            (0.0, h - 1.0),
-            (w - 1.0, h - 1.0),
-        ]
-        .iter()
-        .map(|&(x, y)| {
-            let (ra, dec) = wcs.pixel_to_world(x, y);
-            angle(centre, unit(ra, dec))
-        })
-        .fold(0.0, f64::max);
-        let fov = (w * wcs.scale_arcsec_per_px() / 3600.0).to_radians();
-        let step = (fov / 40.0).clamp(0.02f64.to_radians(), 1.0f64.to_radians());
-        Self {
-            wcs,
-            centre,
-            limit: corner * 1.2 + step,
-            step,
-        }
-    }
-
-    /// Whether a cap reaches into the view
-    pub(crate) fn meets(&self, cap: &Cap) -> bool {
-        angle(self.centre, cap.centre) <= self.limit + cap.radius
-    }
-
-    fn in_frame(&self, p: [f64; 2]) -> bool {
-        p[0] >= 0.0 && p[1] >= 0.0 && p[0] < self.wcs.width as f64 && p[1] < self.wcs.height as f64
-    }
-
-    /// A sky polyline (vertices joined by great-circle arcs) as pixel polylines: arcs are
-    /// sampled at the view's step, runs break where the sky leaves the view, and each run is
-    /// simplified to half a pixel. Runs without a vertex in the frame are dropped.
-    pub(crate) fn project(&self, vertices: &[[f32; 2]]) -> Vec<Vec<[f64; 2]>> {
-        let mut runs: Vec<Vec<[f64; 2]>> = Vec::new();
-        let mut run: Vec<[f64; 2]> = Vec::new();
-        let flush = |run: &mut Vec<[f64; 2]>, runs: &mut Vec<Vec<[f64; 2]>>| {
-            if run.len() >= 2 && run.iter().any(|&p| self.in_frame(p)) {
-                runs.push(crate::annotate::simplify(run, 0.5));
-            }
-            run.clear();
-        };
-        let push = |v: [f64; 3], run: &mut Vec<[f64; 2]>, runs: &mut Vec<Vec<[f64; 2]>>| {
-            let p = (angle(self.centre, v) <= self.limit)
-                .then(|| {
-                    let (ra, dec) = radec(v);
-                    self.wcs.world_to_pixel(ra, dec)
-                })
-                .flatten();
-            match p {
-                Some((x, y)) => run.push([x, y]),
-                None => flush(run, runs),
-            }
-        };
-        let units: Vec<[f64; 3]> = vertices
-            .iter()
-            .map(|v| unit(v[0] as f64, v[1] as f64))
-            .collect();
-        for (i, &b) in units.iter().enumerate() {
-            if i == 0 {
-                push(b, &mut run, &mut runs);
-                continue;
-            }
-            let a = units[i - 1];
-            let theta = angle(a, b);
-            // An arc wholly outside the view: nothing to sample
-            if angle(self.centre, a).min(angle(self.centre, b)) > self.limit + theta {
-                flush(&mut run, &mut runs);
-                continue;
-            }
-            let n = ((theta / self.step).ceil() as usize).max(1);
-            let s = theta.sin();
-            for k in 1..=n {
-                let t = k as f64 / n as f64;
-                let v = if s < 1e-12 {
-                    b
-                } else {
-                    let (wa, wb) = (((1.0 - t) * theta).sin() / s, (t * theta).sin() / s);
-                    [
-                        wa * a[0] + wb * b[0],
-                        wa * a[1] + wb * b[1],
-                        wa * a[2] + wb * b[2],
-                    ]
-                };
-                push(v, &mut run, &mut runs);
-            }
-        }
-        flush(&mut run, &mut runs);
-        runs
-    }
-
-    /// Pixel position of a sky point when it falls in the frame.
-    pub(crate) fn in_frame_point(&self, v: [f32; 2]) -> Option<[f64; 2]> {
-        if angle(self.centre, unit(v[0] as f64, v[1] as f64)) > self.limit {
-            return None;
-        }
-        let (x, y) = self.wcs.world_to_pixel(v[0] as f64, v[1] as f64)?;
-        self.in_frame([x, y]).then_some([x, y])
-    }
-
-    pub(crate) fn contains(&self, p: [f64; 2]) -> bool {
-        self.in_frame(p)
     }
 }
 

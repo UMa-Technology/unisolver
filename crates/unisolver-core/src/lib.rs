@@ -12,6 +12,7 @@ pub mod dso;
 pub mod ephemeris;
 pub mod error;
 pub mod frame;
+pub mod grid;
 #[cfg(feature = "imageio")]
 pub mod imageio;
 mod names;
@@ -22,6 +23,7 @@ mod quat;
 #[cfg(feature = "satellites")]
 pub mod satellites;
 mod search;
+pub mod sky;
 pub mod solver;
 
 pub use aberration::days_since_j2000;
@@ -36,9 +38,11 @@ pub use coords::{center_to_topleft, topleft_to_center};
 pub use ephemeris::Observer;
 pub use error::{CoreError, Result};
 pub use frame::{Frame, PixelData};
+pub use grid::{GridEdge, GridKind, GridLabel, GridLineAnnotation, GridSystem};
 pub use names_pack::NamesPack;
 pub use outcome::{CentroidOut, MatchOut, SolveOutcome, SolveStatus, SolvedGeometry, Timing, Wcs};
 pub use pool::{PoolAttempt, PoolOutcome, SolverPool, TierInfo};
+pub use sky::Viewport;
 #[cfg(feature = "imageio")]
 pub use solver::presets_with_hints;
 pub use solver::{aspect_ladder, focal_35mm_hint, ladder_after_hints};

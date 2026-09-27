@@ -930,3 +930,210 @@ fn bundled_constellation_pack_draws_real_skies() {
         .unwrap();
     assert!(label[0] > 0.0 && label[0] < 1920.0 && label[1] > 0.0 && label[1] < 1080.0);
 }
+
+fn orion_wcs() -> Wcs {
+    Wcs {
+        width: 1920,
+        height: 1080,
+        cd: [[0.0; 2]; 2],
+        crval_deg: [83.8, 0.0],
+        theta_rad: 0.4,
+        camera: CameraParams::from_horizontal_fov(70.0, 1920, 1080).unwrap(),
+    }
+}
+
+/// Equatorial grid: lines lie on their coordinate, are about the requested spacing apart,
+/// and label on the region edges; a zoomed viewport gets a finer grid labelled on its own edges.
+#[test]
+fn equatorial_grid_follows_the_sky_and_the_zoom() {
+    let solver = Solver::from_file(&test_db_path()).unwrap();
+    let ann = solver.annotator(None, None).unwrap();
+    let wcs = orion_wcs();
+    let a = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            equatorial_grid: true,
+            ..Default::default()
+        },
+    );
+    assert!(a.layers.grid);
+    let dec: Vec<&GridLineAnnotation> = a.grid.iter().filter(|g| g.kind == GridKind::Dec).collect();
+    let ra: Vec<&GridLineAnnotation> = a.grid.iter().filter(|g| g.kind == GridKind::Ra).collect();
+    assert!(
+        dec.len() >= 3 && ra.len() >= 3,
+        "{} dec, {} ra",
+        dec.len(),
+        ra.len()
+    );
+    // 70° over 1920 px at 150 px spacing is 5.5°: declination every 10°, right ascension
+    // every 30m (7.5°) at the equator
+    assert!(dec
+        .iter()
+        .all(|g| (g.value_deg / 10.0).fract().abs() < 1e-9));
+    assert!(ra.iter().all(|g| (g.value_deg / 7.5).fract().abs() < 1e-9));
+    assert!(dec.iter().any(|g| g.text == "0°") && dec.iter().any(|g| g.text == "−10°"));
+    assert!(ra.iter().any(|g| g.text == "5h") && ra.iter().any(|g| g.text == "5h30m"));
+    // Every vertex lies on its coordinate (to the half-pixel simplification)
+    for g in &a.grid {
+        for l in &g.lines {
+            let sky = wcs.pixels_to_sky(l);
+            for s in sky.into_iter().flatten() {
+                let off = match g.kind {
+                    GridKind::Dec => (s[1] - g.value_deg).abs(),
+                    _ => {
+                        let d = (s[0] - g.value_deg).rem_euclid(360.0);
+                        d.min(360.0 - d) * s[1].to_radians().cos()
+                    }
+                };
+                assert!(off < 0.05, "{} off by {off}°", g.text);
+            }
+        }
+        let l = g.label.expect("every line crossing the frame has a label");
+        assert!(l.edge != GridEdge::Inside);
+        assert!(l.x >= -0.5 && l.x <= 1920.5 && l.y >= -0.5 && l.y <= 1080.5);
+    }
+
+    // Zoom 8× into the centre: a finer step, labels on the viewport's edges
+    let vp = Viewport {
+        x: 840.0,
+        y: 480.0,
+        width: 240.0,
+        height: 120.0,
+        scale: 8.0,
+    };
+    let z = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            equatorial_grid: true,
+            viewport: Some(vp),
+            ..Default::default()
+        },
+    );
+    let zdec: Vec<&GridLineAnnotation> =
+        z.grid.iter().filter(|g| g.kind == GridKind::Dec).collect();
+    assert!(!zdec.is_empty());
+    assert!(zdec
+        .iter()
+        .all(|g| (g.value_deg * 60.0).round() % 60.0 != 0.0 || g.value_deg.fract() == 0.0));
+    let step = zdec
+        .windows(2)
+        .map(|w| (w[1].value_deg - w[0].value_deg).abs())
+        .fold(f64::MAX, f64::min);
+    assert!(step < 2.0, "zoomed step {step}°");
+    for g in &z.grid {
+        let l = g.label.unwrap();
+        let on_edge = (l.x - vp.x).abs() < 0.5
+            || (l.x - (vp.x + vp.width)).abs() < 0.5
+            || (l.y - vp.y).abs() < 0.5
+            || (l.y - (vp.y + vp.height)).abs() < 0.5;
+        assert!(on_edge, "{} label at ({}, {})", g.text, l.x, l.y);
+    }
+    // A viewport off the image draws nothing
+    let off = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            equatorial_grid: true,
+            viewport: Some(Viewport {
+                x: 5000.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+                scale: 1.0,
+            }),
+            ..Default::default()
+        },
+    );
+    assert!(off.grid.is_empty());
+}
+
+/// Horizontal grid: needs a time and a place; the horizon is its own kind; azimuths on the
+/// compass carry their point; a star sits between the altitude lines it should.
+#[test]
+fn horizontal_grid_needs_time_and_place_and_brackets_the_stars() {
+    let solver = Solver::from_file(&test_db_path()).unwrap();
+    let ann = solver.annotator(None, None).unwrap();
+    // Scorpius low in the south from Beijing (the Scorpius frame's instant): Antares at
+    // apparent altitude 23.59°, azimuth 177.2° (astropy)
+    let wcs = Wcs {
+        width: 1920,
+        height: 1080,
+        cd: [[0.0; 2]; 2],
+        crval_deg: [250.0, -19.0],
+        theta_rad: 0.1,
+        camera: CameraParams::from_horizontal_fov(73.7, 1920, 1080).unwrap(),
+    };
+    let without = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            horizontal_grid: true,
+            ..Default::default()
+        },
+    );
+    assert!(without.grid.is_empty());
+    assert!(without.layers.reasons.iter().any(|(l, _)| l == "grid"));
+
+    let opts = AnnotateOptions {
+        horizontal_grid: true,
+        observation_unix_ms: Some(1_781_018_520_519),
+        observer: Some(Observer {
+            lat_deg: 39.9,
+            lon_deg: 116.4,
+            alt_m: 0.0,
+        }),
+        grid_spacing_px: Some(60.0),
+        ..Default::default()
+    };
+    let a = ann.annotate(&wcs, &opts);
+    assert!(a.layers.grid);
+    let south = a
+        .grid
+        .iter()
+        .find(|g| g.kind == GridKind::Az && g.cardinal.as_deref() == Some("S"));
+    assert!(
+        south.is_some(),
+        "{:?}",
+        a.grid.iter().map(|g| &g.text).collect::<Vec<_>>()
+    );
+    assert!(a.grid.iter().all(|g| g.system == GridSystem::Horizontal));
+    // Antares's pixel lies between the 20° and 25° (or finer) altitude lines around it
+    let antares = wcs.sky_to_pixels(&[[247.35192, -26.43200]])[0].unwrap();
+    let alt_lines: Vec<&GridLineAnnotation> =
+        a.grid.iter().filter(|g| g.kind == GridKind::Alt).collect();
+    let dist = |g: &GridLineAnnotation| {
+        g.lines
+            .iter()
+            .flatten()
+            .map(|p| (p[0] - antares[0]).hypot(p[1] - antares[1]))
+            .fold(f64::MAX, f64::min)
+    };
+    let nearest = alt_lines
+        .iter()
+        .min_by(|x, y| dist(x).total_cmp(&dist(y)))
+        .unwrap();
+    assert!(
+        (nearest.value_deg - 23.59).abs() <= 2.5,
+        "nearest altitude line {}",
+        nearest.text
+    );
+}
+
+/// Batch transforms: round trip, and None where the lens model does not reach.
+#[test]
+fn batch_transforms_round_trip_and_refuse_the_far_side() {
+    let wcs = orion_wcs();
+    let sky = [[83.8, 0.0], [88.79, 7.41], [78.63, -8.2]];
+    let px = wcs.sky_to_pixels(&sky);
+    let px: Vec<[f64; 2]> = px.into_iter().map(|p| p.unwrap()).collect();
+    for (s, back) in sky.iter().zip(wcs.pixels_to_sky(&px)) {
+        let b = back.unwrap();
+        assert!((b[0] - s[0]).abs() < 1e-6 && (b[1] - s[1]).abs() < 1e-6);
+    }
+    assert!(
+        wcs.sky_to_pixels(&[[263.8, 0.0]])[0].is_none(),
+        "the opposite sky"
+    );
+    assert!(
+        wcs.pixels_to_sky(&[[-5000.0, 0.0]])[0].is_none(),
+        "far outside the image"
+    );
+}

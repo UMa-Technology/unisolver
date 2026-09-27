@@ -50,6 +50,23 @@ pub struct AnnotateOptions {
     /// IAU constellation boundaries; needs the constellation pack
     #[serde(default)]
     pub constellation_boundaries: bool,
+    /// Equatorial grid (J2000 right ascension and declination)
+    #[serde(default)]
+    pub equatorial_grid: bool,
+    /// Horizontal grid (apparent altitude and azimuth, with the horizon); needs
+    /// `observation_unix_ms` and `observer`
+    #[serde(default)]
+    pub horizontal_grid: bool,
+    /// Screen pixels between grid lines (default 150); the step is the finest round value
+    /// at least this far apart at the viewport's scale
+    #[serde(default)]
+    pub grid_spacing_px: Option<f64>,
+    /// What the app shows right now (visible image region and zoom). Lines and labels follow
+    /// it: grid spacing, sampling, simplification to half a screen pixel, labels on the
+    /// visible edges. None means the whole image at scale 1. Point layers (stars, DSO,
+    /// planets) are unaffected.
+    #[serde(default)]
+    pub viewport: Option<crate::sky::Viewport>,
 }
 impl Default for AnnotateOptions {
     fn default() -> Self {
@@ -68,6 +85,10 @@ impl Default for AnnotateOptions {
             language: "en".to_string(),
             include_constellations: false,
             constellation_boundaries: false,
+            equatorial_grid: false,
+            horizontal_grid: false,
+            grid_spacing_px: None,
+            viewport: None,
         }
     }
 }
@@ -161,6 +182,9 @@ pub struct LayerAvailability {
     /// Constellation figures and boundaries
     #[serde(default)]
     pub constellations: bool,
+    /// Coordinate grids
+    #[serde(default)]
+    pub grid: bool,
     pub reasons: Vec<(String, String)>,
 }
 
@@ -177,6 +201,9 @@ pub struct Annotations {
     /// IAU boundary stretches in the frame (`constellation_boundaries`)
     #[serde(default)]
     pub boundaries: Vec<crate::constellations::BoundaryAnnotation>,
+    /// Coordinate grid lines (`equatorial_grid`, `horizontal_grid`)
+    #[serde(default)]
+    pub grid: Vec<crate::grid::GridLineAnnotation>,
     pub layers: LayerAvailability,
 }
 
@@ -270,8 +297,13 @@ impl Annotator {
 
 /// Projects a record's outlines to pixels, up to `max_level`. A contour with a vertex that
 /// does not project (behind the camera) is dropped whole, as is one entirely off the image;
-/// the rest are simplified to half a pixel.
-fn project_outlines(wcs: &Wcs, r: &crate::dso::DsoRecord, max_level: u8) -> Vec<DsoOutline> {
+/// the rest are simplified to `tol` image pixels (half a screen pixel).
+fn project_outlines(
+    wcs: &Wcs,
+    r: &crate::dso::DsoRecord,
+    max_level: u8,
+    tol: f64,
+) -> Vec<DsoOutline> {
     let (w, h) = (wcs.width as f64, wcs.height as f64);
     r.outlines
         .iter()
@@ -297,7 +329,7 @@ fn project_outlines(wcs: &Wcs, r: &crate::dso::DsoRecord, max_level: u8) -> Vec<
                     if x1 < 0.0 || y1 < 0.0 || x0 >= w || y0 >= h {
                         return None;
                     }
-                    let points = simplify(&points, 0.5);
+                    let points = simplify(&points, tol);
                     (points.len() >= if c.closed { 3 } else { 2 }).then_some(OutlineContour {
                         closed: c.closed,
                         points,
@@ -457,6 +489,15 @@ impl Annotator {
             * 1.15)
             .to_radians();
 
+        // Lines are simplified to half a screen pixel at the app's zoom
+        let tol = 0.5
+            / opts
+                .viewport
+                .map(|v| v.scale)
+                .filter(|s| s.is_finite() && *s > 0.0)
+                .unwrap_or(1.0);
+        let view = crate::sky::View::new(wcs, opts.viewport.as_ref());
+
         // ── Catalog stars ──
         let all_stars = self.db.star_catalog.stars();
         let mut stars: Vec<StarAnnotation> =
@@ -561,7 +602,7 @@ impl Annotator {
                             .map(|m| m as f64 * 60.0 / 2.0 / scale)
                             .unwrap_or(semi_major_px);
                         let outlines = if outlined {
-                            project_outlines(wcs, r, opts.max_outline_level)
+                            project_outlines(wcs, r, opts.max_outline_level, tol)
                         } else {
                             Vec::new()
                         };
@@ -689,51 +730,84 @@ impl Annotator {
                 None => layers
                     .reasons
                     .push(("constellations".into(), self.constellations_error.clone())),
+                // A viewport off the image shows nothing
                 Some(loaded) => {
-                    layers.constellations = true;
-                    let pack = &loaded.pack;
-                    let view = crate::constellations::View::new(wcs);
-                    if opts.include_constellations {
-                        for (i, c) in pack.constellations.iter().enumerate() {
-                            let lines = loaded.figure(&view, i);
-                            if lines.is_empty() {
-                                continue;
+                    if let Some(view) = &view {
+                        layers.constellations = true;
+                        let pack = &loaded.pack;
+                        if opts.include_constellations {
+                            for (i, c) in pack.constellations.iter().enumerate() {
+                                let lines = loaded.figure(view, i);
+                                if lines.is_empty() {
+                                    continue;
+                                }
+                                let label = view.visible_point(c.label).or_else(|| {
+                                    let inside: Vec<[f64; 2]> = lines
+                                        .iter()
+                                        .flatten()
+                                        .copied()
+                                        .filter(|&p| view.contains(p))
+                                        .collect();
+                                    (!inside.is_empty()).then(|| {
+                                        let n = inside.len() as f64;
+                                        [
+                                            inside.iter().map(|p| p[0]).sum::<f64>() / n,
+                                            inside.iter().map(|p| p[1]).sum::<f64>() / n,
+                                        ]
+                                    })
+                                });
+                                constellations.push(
+                                    crate::constellations::ConstellationAnnotation {
+                                        abbr: c.abbr.clone(),
+                                        name: self
+                                            .localized(
+                                                &format!("CON {}", c.abbr),
+                                                lang,
+                                                Some(&c.name),
+                                            )
+                                            .unwrap_or_else(|| c.name.clone()),
+                                        label,
+                                        lines,
+                                    },
+                                );
                             }
-                            let label = view.in_frame_point(c.label).or_else(|| {
-                                let inside: Vec<[f64; 2]> = lines
-                                    .iter()
-                                    .flatten()
-                                    .copied()
-                                    .filter(|&p| view.contains(p))
-                                    .collect();
-                                (!inside.is_empty()).then(|| {
-                                    let n = inside.len() as f64;
-                                    [
-                                        inside.iter().map(|p| p[0]).sum::<f64>() / n,
-                                        inside.iter().map(|p| p[1]).sum::<f64>() / n,
-                                    ]
-                                })
-                            });
-                            constellations.push(crate::constellations::ConstellationAnnotation {
-                                abbr: c.abbr.clone(),
-                                name: self
-                                    .localized(&format!("CON {}", c.abbr), lang, Some(&c.name))
-                                    .unwrap_or_else(|| c.name.clone()),
-                                label,
-                                lines,
-                            });
+                        }
+                        if opts.constellation_boundaries {
+                            for (i, points) in loaded.boundaries(view) {
+                                boundaries.push(crate::constellations::BoundaryAnnotation {
+                                    between: pack.boundaries[i]
+                                        .between
+                                        .map(|k| pack.constellations[k as usize].abbr.clone()),
+                                    points,
+                                });
+                            }
                         }
                     }
-                    if opts.constellation_boundaries {
-                        for (i, points) in loaded.boundaries(&view) {
-                            boundaries.push(crate::constellations::BoundaryAnnotation {
-                                between: pack.boundaries[i]
-                                    .between
-                                    .map(|k| pack.constellations[k as usize].abbr.clone()),
-                                points,
-                            });
-                        }
+                }
+            }
+        }
+
+        // ── Coordinate grids ──
+        let mut grid = Vec::new();
+        if let Some(view) = &view {
+            let spacing = opts
+                .grid_spacing_px
+                .filter(|s| s.is_finite() && *s >= 10.0)
+                .unwrap_or(crate::grid::DEFAULT_SPACING_PX);
+            if opts.equatorial_grid {
+                layers.grid = true;
+                grid.extend(crate::grid::equatorial(view, spacing));
+            }
+            if opts.horizontal_grid {
+                match (opts.observation_unix_ms, opts.observer) {
+                    (Some(ms), Some(obs)) => {
+                        layers.grid = true;
+                        grid.extend(crate::grid::horizontal(view, spacing, ms, &obs));
                     }
+                    _ => layers.reasons.push((
+                        "grid".into(),
+                        "horizontal grid needs an observation time and an observer".into(),
+                    )),
                 }
             }
         }
@@ -746,6 +820,7 @@ impl Annotator {
             satellites,
             constellations,
             boundaries,
+            grid,
             layers,
         }
     }

@@ -13,6 +13,10 @@
 //!
 //! Solar-system bodies are not in the input (it has only deep-sky objects and stars); a small
 //! built-in table adds them.
+//!
+//! Constellation names come from a second, optional input (`--constellations`,
+//! `data/constellation-names.json`: `{"CON Ori": {"en": "Orion", "zh_cn": "猎户座", …}}`),
+//! derived from Stellarium's sky culture translations; their keys are `CON <IAU abbreviation>`.
 use clap::Parser;
 use std::collections::{BTreeSet, HashMap};
 use unisolver_core::names_pack::NamesPack;
@@ -23,6 +27,9 @@ struct Cli {
     input: std::path::PathBuf,
     #[arg(long)]
     output: std::path::PathBuf,
+    /// Constellation names (`CON <abbr>` → language → name)
+    #[arg(long)]
+    constellations: Option<std::path::PathBuf>,
     /// Print statistics without writing a file
     #[arg(long)]
     dry_run: bool,
@@ -294,18 +301,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         entries.insert((*key).to_string(), row);
     }
 
+    // Constellations: only the pack's languages are kept (the input has the same 13)
+    if let Some(path) = &cli.constellations {
+        let raw: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
+        let map = raw
+            .as_object()
+            .ok_or("the constellation input must be an object")?;
+        for (key, names) in map {
+            if !key.starts_with("CON ") {
+                return Err(format!("constellation key {key} lacks the CON prefix").into());
+            }
+            let mut row = vec![None; languages.len()];
+            for (l, n) in names.as_object().ok_or("names must be an object")? {
+                if let (Some(&i), Some(n)) = (col.get(l.as_str()), n.as_str()) {
+                    row[i] = Some(n.to_string());
+                }
+            }
+            entries.insert(key.clone(), row);
+        }
+    }
+
     let pack = NamesPack {
         languages: languages.clone(),
         entries,
     };
     let stars = pack.entries.keys().filter(|k| k.starts_with("HIP")).count();
+    let constellations = pack
+        .entries
+        .keys()
+        .filter(|k| k.starts_with("CON "))
+        .count();
     println!(
-        "{} languages: {}\n{} keys ({} stars, {} others); {} named rows in the source, {} with designations outside our catalogs",
+        "{} languages: {}\n{} keys ({} stars, {} constellations, {} others); {} named rows in the source, {} with designations outside our catalogs",
         languages.len(),
         languages.join(" "),
         pack.len(),
         stars,
-        pack.len() - stars,
+        constellations,
+        pack.len() - stars - constellations,
         rows_with_names,
         keys_skipped
     );

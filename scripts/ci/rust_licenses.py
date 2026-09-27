@@ -24,7 +24,8 @@ LICENSE_FILE = {"allo-isolate": "Apache-2.0 (license file)"}
 
 def crates():
     out = subprocess.run(
-        ["cargo", "tree", "-e", "normal", "--target", "all",
+        # --color never: with CARGO_TERM_COLOR=always (set in CI) the "(*)" markers carry ANSI codes
+        ["cargo", "tree", "--color", "never", "-e", "normal", "--target", "all",
          "-p", "unisolver-core", "-p", "unisolver-cabi", "-p", "unisolver_frb",
          "--features", "unisolver-core/imageio unisolver-core/satellites",
          "--prefix", "none", "--format", "{p}|{l}"],

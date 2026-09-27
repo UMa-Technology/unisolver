@@ -894,6 +894,10 @@ struct AnnotateOptsJson {
     observer: Option<core::Observer>,
     satellite_tle: Option<String>,
     language: String,
+    /// Constellation figures with their names (`constellations`); needs the constellation pack
+    include_constellations: bool,
+    /// IAU constellation boundaries (`boundaries`); needs the constellation pack
+    constellation_boundaries: bool,
 }
 
 impl Default for AnnotateOptsJson {
@@ -912,6 +916,8 @@ impl Default for AnnotateOptsJson {
             observer: d.observer,
             satellite_tle: d.satellite_tle,
             language: d.language,
+            include_constellations: d.include_constellations,
+            constellation_boundaries: d.constellation_boundaries,
         }
     }
 }
@@ -931,6 +937,8 @@ impl From<AnnotateOptsJson> for core::AnnotateOptions {
             observer: j.observer,
             satellite_tle: j.satellite_tle,
             language: j.language,
+            include_constellations: j.include_constellations,
+            constellation_boundaries: j.constellation_boundaries,
         }
     }
 }
@@ -1043,6 +1051,36 @@ pub unsafe extern "C" fn unisolver_annotator_languages_json(
         Err(e) => {
             set_error(error_out, &e);
             ptr::null_mut()
+        }
+    }
+}
+
+/// Loads the constellation pack (`unisolver_constellations.bin`) into an annotator, for the
+/// `include_constellations` and `constellation_boundaries` options. Returns true when loaded;
+/// on failure returns false with `error_out` set, and the annotator stays usable (those layers
+/// report themselves unavailable, with the reason, as a missing DSO catalog does).
+///
+/// # Safety
+/// `annotator` is live and no other call is in flight on it; `path` is a valid NUL-terminated
+/// string; `error_out` is NULL or a writable pointer slot.
+#[no_mangle]
+pub unsafe extern "C" fn unisolver_annotator_load_constellations(
+    annotator: *mut UnisolverAnnotator,
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> bool {
+    clear_error(error_out);
+    let run = || -> Result<(), String> {
+        let a = annotator.as_mut().ok_or("annotator is NULL")?;
+        a.inner
+            .load_constellations(cstr(path, "path")?)
+            .map_err(|e| e.to_string())
+    };
+    match run() {
+        Ok(()) => true,
+        Err(e) => {
+            set_error(error_out, &e);
+            false
         }
     }
 }
@@ -1509,6 +1547,95 @@ mod tests {
     }
 
     /// The annotation surface end to end: build → languages → annotate with the solve's wcs as-is → release.
+    /// Constellations through the C surface: load the pack, ask for the layers, get figures
+    /// and boundaries back; a bad path is an error and leaves the annotator usable.
+    #[test]
+    fn constellations_via_c_surface() {
+        use unisolver_core::constellations::{
+            BoundaryEdge, ConstellationFigure, ConstellationPack,
+        };
+        let dir = std::env::temp_dir().join(format!("cabi_ucon_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pack_path = dir.join("unisolver_constellations.bin");
+        ConstellationPack {
+            constellations: vec![
+                ConstellationFigure {
+                    abbr: "Ori".into(),
+                    name: "Orion".into(),
+                    lines: vec![vec![[88.79, 7.41], [81.28, 6.35], [78.63, -8.20]]],
+                    label: [83.0, 1.0],
+                },
+                ConstellationFigure {
+                    abbr: "Tau".into(),
+                    name: "Taurus".into(),
+                    lines: vec![vec![[68.98, 16.51], [84.41, 21.14]]],
+                    label: [70.0, 18.0],
+                },
+            ],
+            boundaries: vec![BoundaryEdge {
+                between: [0, 1],
+                points: (0..=12).map(|k| [86.0, 12.0 - k as f32]).collect(),
+            }],
+        }
+        .write(pack_path.to_str().unwrap())
+        .unwrap();
+
+        let mut err: *mut c_char = std::ptr::null_mut();
+        let solver = open_test_solver(&mut err);
+        let ann = unsafe {
+            unisolver_annotator_open(solver, std::ptr::null(), std::ptr::null(), &mut err)
+        };
+        let bad = CString::new("/nonexistent/ucon.bin").unwrap();
+        assert!(!unsafe { unisolver_annotator_load_constellations(ann, bad.as_ptr(), &mut err) });
+        assert!(!err.is_null());
+        unsafe { unisolver_string_free(err) };
+        err = std::ptr::null_mut();
+        let good = CString::new(pack_path.to_str().unwrap()).unwrap();
+        assert!(unsafe { unisolver_annotator_load_constellations(ann, good.as_ptr(), &mut err) });
+
+        let wcs = serde_json::to_string(&core::Wcs {
+            width: 1024,
+            height: 768,
+            cd: [[0.0; 2]; 2],
+            crval_deg: [83.8, -1.0],
+            theta_rad: 0.0,
+            camera: core::CameraParams::from_horizontal_fov(30.0, 1024, 768).unwrap(),
+        })
+        .unwrap();
+        let wcs = CString::new(wcs).unwrap();
+        let opts =
+            CString::new(r#"{"include_constellations":true,"constellation_boundaries":true}"#)
+                .unwrap();
+        let out = unsafe { unisolver_annotate_json(ann, wcs.as_ptr(), opts.as_ptr(), &mut err) };
+        assert!(!out.is_null());
+        let v: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+        unsafe { unisolver_string_free(out) };
+        assert_eq!(v["layers"]["constellations"], true, "{v}");
+        let names: Vec<&str> = v["constellations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"Orion"), "{names:?}");
+        assert_eq!(
+            v["boundaries"][0]["between"],
+            serde_json::json!(["Ori", "Tau"])
+        );
+        // Not asked for: no constellation keys filled
+        let out = unsafe { unisolver_annotate_json(ann, wcs.as_ptr(), std::ptr::null(), &mut err) };
+        let v: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+        unsafe { unisolver_string_free(out) };
+        assert_eq!(v["constellations"], serde_json::json!([]));
+        unsafe {
+            unisolver_annotator_close(ann);
+            unisolver_close(solver);
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn annotate_json_via_c_surface() {
         let db = CString::new(unisolver_synth::test_db_file("unisolver_core_test.db")).unwrap();
@@ -2046,7 +2173,8 @@ mod tests {
         unsafe { unisolver_string_free(p) };
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let arr = v.as_array().unwrap();
-        assert_eq!(arr.len(), 5);
+        assert_eq!(arr.len(), unisolver_core::data_attributions().len());
+        assert!(json.contains("\"iau_constellations\""));
         for a in arr {
             for k in ["id", "name", "applies_to", "license", "text", "url"] {
                 assert!(a[k].is_string(), "{k} missing in {a}");

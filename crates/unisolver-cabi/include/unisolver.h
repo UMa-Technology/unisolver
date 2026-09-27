@@ -275,6 +275,20 @@ UnisolverAnnotator *unisolver_pool_annotator_open(const UnisolverPool *pool,
 char *unisolver_annotator_languages_json(const UnisolverAnnotator *annotator, char **error_out);
 
 /**
+ * Loads the constellation pack (`unisolver_constellations.bin`) into an annotator, for the
+ * `include_constellations` and `constellation_boundaries` options. Returns true when loaded;
+ * on failure returns false with `error_out` set, and the annotator stays usable (those layers
+ * report themselves unavailable, with the reason, as a missing DSO catalog does).
+ *
+ * # Safety
+ * `annotator` is live and no other call is in flight on it; `path` is a valid NUL-terminated
+ * string; `error_out` is NULL or a writable pointer slot.
+ */
+bool unisolver_annotator_load_constellations(UnisolverAnnotator *annotator,
+                                             const char *path,
+                                             char **error_out);
+
+/**
  * Annotates a frame from the `wcs` object of the solve JSON, unchanged; returns OWNED annotation JSON.
  *
  * `opts_json` may be NULL or `{}` (all defaults); fields are listed on `AnnotateOptsJson`.

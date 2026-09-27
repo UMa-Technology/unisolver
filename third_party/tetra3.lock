@@ -1,0 +1,6 @@
+# Pinned upstream for third_party/tetra3, managed by `cargo xtask upstream` (docs/upstream.md)
+repo    = "https://github.com/ssmichael1/tetra3rs"
+tag     = "v0.13.0"
+commit  = "d43eb49256bdbe1d743be54c1058985ee2a6ae03"
+# Upstream paths copied into the vendored tree (python/, docs/, examples/ ... are not vendored)
+include = ["Cargo.toml", "LICENSE", "README.md", "CHANGELOG.md", "src", "tests"]

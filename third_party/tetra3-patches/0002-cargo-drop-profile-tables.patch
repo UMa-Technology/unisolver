@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: unisolver <patches@unisolver.invalid>
+Date: Sun, 27 Sep 2026 21:54:10 +0800
+Subject: [PATCH] cargo: drop profile tables
+
+Cargo only honors profiles at the workspace root; unisolver's root
+Cargo.toml carries the same settings.
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 460128f6617a73f593688ca147199c20577c033d..2165f0d166780ecca17b5a4b9f724a58d12874f9 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -50,14 +50,6 @@ image = ["dep:image", "numeris/imageproc"]
+ # sequential build. Combine with `image`: `--features image,parallel`.
+ parallel = ["dep:rayon", "numeris/rayon"]
+ 
+-[profile.test]
+-opt-level = 3
+-
+-[profile.release]
+-opt-level = 3
+-lto = "thin"
+-codegen-units = 1
+-
+ [dev-dependencies]
+ rand = "0.10.0"
+ rand_distr = "0.6.0"

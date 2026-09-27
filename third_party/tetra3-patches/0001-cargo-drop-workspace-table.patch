@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: unisolver <patches@unisolver.invalid>
+Date: Sun, 27 Sep 2026 21:54:09 +0800
+Subject: [PATCH] cargo: drop workspace table
+
+Upstream lists itself and python/ as a workspace. A package with its own
+[workspace] table cannot be a member of another workspace, and python/ is
+not vendored.
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 23ce11d59a0817801ad2ab625666cd5ec1f8f14d..460128f6617a73f593688ca147199c20577c033d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,6 +1,3 @@
+-[workspace]
+-members = [".", "python"]
+-
+ [package]
+ keywords = [
+     "star-plate-solver",

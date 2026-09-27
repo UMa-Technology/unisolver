@@ -1,6 +1,6 @@
 //! `edit` turns the queue into commits on the `unisolver` branch of the work clone; `export`
 //! turns that branch back into the vendored tree and the patch files.
-use super::fetch::{ensure_work, materialize};
+use super::fetch::{ensure_work, is_repo, materialize};
 use super::git::{path_str, Git, IDENTITY_EMAIL, IDENTITY_NAME};
 use super::{read_series, Ctx, VENDORED_KEEP};
 use anyhow::{bail, ensure, Result};
@@ -49,7 +49,7 @@ pub fn edit(ctx: &Ctx, force: bool) -> Result<PathBuf> {
 pub fn export(ctx: &Ctx) -> Result<usize> {
     let work = ctx.work_dir();
     ensure!(
-        work.join(".git").is_dir(),
+        is_repo(&work),
         "no work clone at {}: run `cargo xtask upstream edit` first",
         work.display()
     );

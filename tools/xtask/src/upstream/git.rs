@@ -24,9 +24,17 @@ impl Git {
         &self.dir
     }
 
-    /// `git -C <dir>` with the pinned settings; add a subcommand and arguments.
+    /// `git -C <dir>` with the pinned settings; add a subcommand and arguments. Git never looks
+    /// for a repository above `dir`: if `dir/.git` is broken, git must fail rather than act on
+    /// an enclosing repository (the unisolver checkout around `target/upstream/`).
     pub fn command(&self) -> Command {
         let mut c = Command::new("git");
+        if let Some(parent) = std::path::absolute(&self.dir)
+            .ok()
+            .and_then(|d| d.parent().map(Path::to_path_buf))
+        {
+            c.env("GIT_CEILING_DIRECTORIES", parent);
+        }
         c.arg("-C")
             .arg(&self.dir)
             .args(["-c", "core.autocrlf=false"])

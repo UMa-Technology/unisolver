@@ -70,3 +70,22 @@ fn a_cached_clone_works_offline() {
     ctx.repo_url = f.root.join("nowhere").to_str().unwrap().to_string();
     assert!(check_local(&ctx).unwrap().is_clean());
 }
+
+#[test]
+fn a_broken_cache_is_recloned_and_the_enclosing_repository_is_untouched() {
+    // A CI cache of target/ can restore target/upstream/cache with an incomplete .git; git must
+    // not then walk up and act on the repository around it
+    let f = fixture();
+    write(&f.root, ".gitignore", "target/\n");
+    git(&f.root, &["init", "--quiet"]);
+    git(&f.root, &["add", "-A"]);
+    git(&f.root, &["commit", "--quiet", "-m", "checkout"]);
+    let head = git(&f.root, &["rev-parse", "HEAD"]);
+    std::fs::create_dir_all(f.ctx().cache_dir().join(".git")).unwrap();
+
+    let report = check_local(&f.ctx()).unwrap();
+    assert!(report.is_clean(), "{report:?}");
+    assert_eq!(git(&f.root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git(&f.root, &["remote"]), "");
+    assert_eq!(git(&f.root, &["status", "--porcelain"]), "");
+}

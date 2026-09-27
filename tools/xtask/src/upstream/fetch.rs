@@ -11,7 +11,11 @@ const NET_TIMEOUT: Duration = Duration::from_secs(600);
 /// The cache clone, fetched until it has the locked commit.
 pub fn ensure_cache(ctx: &Ctx) -> Result<Git> {
     let dir = ctx.cache_dir();
-    if !dir.join(".git").is_dir() {
+    if !is_repo(&dir) {
+        // Missing, or half there (a CI cache of target/ can restore an incomplete .git)
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir)?;
+        }
         std::fs::create_dir_all(ctx.scratch())?;
         // Clone beside and rename, so an interrupted clone never looks like a cache
         let partial = ctx.scratch().join("cache.partial");
@@ -63,6 +67,12 @@ fn unreachable(ctx: &Ctx) -> String {
     )
 }
 
+/// Whether `dir` is a git repository of its own (`Git` keeps git from answering for an
+/// enclosing one).
+pub fn is_repo(dir: &Path) -> bool {
+    dir.is_dir() && Git::new(dir).succeeds(&["rev-parse", "--git-dir"])
+}
+
 pub fn has_commit(git: &Git, rev: &str) -> bool {
     git.succeeds(&["cat-file", "-e", &format!("{rev}^{{commit}}")])
 }
@@ -90,7 +100,13 @@ pub fn resolve_tag(git: &Git, tag: &str) -> Result<String> {
 pub fn ensure_work(ctx: &Ctx) -> Result<Git> {
     ensure_cache(ctx)?;
     let dir = ctx.work_dir();
-    if !dir.join(".git").is_dir() {
+    if dir.exists() && !is_repo(&dir) {
+        bail!(
+            "{} is not a git repository: move it away and run `cargo xtask upstream edit` again",
+            dir.display()
+        );
+    }
+    if !dir.exists() {
         let cache = ctx.cache_dir();
         Git::new(ctx.scratch()).run(&["clone", "--quiet", path_str(&cache)?, "work"])?;
     }

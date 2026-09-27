@@ -2234,8 +2234,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SolveOptionsDto dco_decode_solve_options_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return SolveOptionsDto(
       fovEstimateDeg: dco_decode_f_32(arr[0]),
       fovMaxErrorDeg: dco_decode_opt_box_autoadd_f_32(arr[1]),
@@ -2249,6 +2249,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       matchThreshold: dco_decode_f_64(arr[9]),
       timeoutMs: dco_decode_opt_box_autoadd_u_64(arr[10]),
       observationUnixMs: dco_decode_opt_box_autoadd_i_64(arr[11]),
+      focalLength35Mm: dco_decode_opt_box_autoadd_f_32(arr[12]),
     );
   }
 
@@ -2256,8 +2257,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SolveOutcomeDto dco_decode_solve_outcome_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return SolveOutcomeDto(
       status: dco_decode_solve_status_dto(arr[0]),
       solution: dco_decode_opt_box_autoadd_solved_geometry_dto(arr[1]),
@@ -2265,6 +2266,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timing: dco_decode_timing_dto(arr[3]),
       extractionRetried: dco_decode_bool(arr[4]),
       medianElongation: dco_decode_opt_box_autoadd_f_32(arr[5]),
+      observationUnixMs: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      observer: dco_decode_opt_box_autoadd_observer_dto(arr[7]),
     );
   }
 
@@ -3579,6 +3582,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_matchThreshold = sse_decode_f_64(deserializer);
     var var_timeoutMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_observationUnixMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_focalLength35Mm = sse_decode_opt_box_autoadd_f_32(deserializer);
     return SolveOptionsDto(
       fovEstimateDeg: var_fovEstimateDeg,
       fovMaxErrorDeg: var_fovMaxErrorDeg,
@@ -3592,6 +3596,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       matchThreshold: var_matchThreshold,
       timeoutMs: var_timeoutMs,
       observationUnixMs: var_observationUnixMs,
+      focalLength35Mm: var_focalLength35Mm,
     );
   }
 
@@ -3606,6 +3611,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_timing = sse_decode_timing_dto(deserializer);
     var var_extractionRetried = sse_decode_bool(deserializer);
     var var_medianElongation = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_observationUnixMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_observer = sse_decode_opt_box_autoadd_observer_dto(deserializer);
     return SolveOutcomeDto(
       status: var_status,
       solution: var_solution,
@@ -3613,6 +3620,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timing: var_timing,
       extractionRetried: var_extractionRetried,
       medianElongation: var_medianElongation,
+      observationUnixMs: var_observationUnixMs,
+      observer: var_observer,
     );
   }
 
@@ -4840,6 +4849,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.matchThreshold, serializer);
     sse_encode_opt_box_autoadd_u_64(self.timeoutMs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.observationUnixMs, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.focalLength35Mm, serializer);
   }
 
   @protected
@@ -4854,6 +4864,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_timing_dto(self.timing, serializer);
     sse_encode_bool(self.extractionRetried, serializer);
     sse_encode_opt_box_autoadd_f_32(self.medianElongation, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.observationUnixMs, serializer);
+    sse_encode_opt_box_autoadd_observer_dto(self.observer, serializer);
   }
 
   @protected
@@ -5080,8 +5092,10 @@ class UniSolverImpl extends RustOpaque implements UniSolver {
   );
 
   /// Fully automatic file entry (same strategy as the C ABI's solve_image_json): header FOV
-  /// hints first, the aspect ladder as fallback, rungs clamped to the database range. For
-  /// FITS/XISF prefer ExtractionProfileDto.auto() or cleanSensor().
+  /// hints (FITS focal length and pixel size, EXIF 35 mm focal length) first, the aspect
+  /// ladder as fallback, rungs clamped to the database range; the header's observation time
+  /// fills in when `base` has none. For FITS/XISF prefer ExtractionProfileDto.auto() or
+  /// cleanSensor().
   Future<LadderOutcomeDto> solveImageFileAuto({
     required String path,
     required SolveOptionsDto base,
@@ -5143,7 +5157,8 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
   List<String> skipped() =>
       RustLib.instance.api.crateApiSolverUniSolverPoolSkipped(that: this);
 
-  /// Camera frames (no file header): start from the aspect ladder, route across tiers.
+  /// Camera frames and decoded photos (no file header): the aspect ladder, preceded by the
+  /// FOV of `opts.focalLength35mm` when the app read one from EXIF; routed across tiers.
   Future<PoolOutcomeDto> solveFrameAuto({
     required FrameDto frame,
     required SolveOptionsDto opts,
@@ -5154,7 +5169,10 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
   );
 
   /// Fully automatic file entry without naming a tier (the one apps should use): load any
-  /// of the five formats → header FOV hints + aspect ladder → cross-tier routing.
+  /// of the five formats → header FOV hints (FITS, EXIF) + aspect ladder → cross-tier
+  /// routing. The header's observation time fills in when `base` has none and comes back in
+  /// `outcome.observationUnixMs`. HEIC is not decoded: decode it with the platform and use
+  /// [`Self::solve_frame_auto`].
   Future<PoolOutcomeDto> solveImageFileAuto({
     required String path,
     required SolveOptionsDto base,

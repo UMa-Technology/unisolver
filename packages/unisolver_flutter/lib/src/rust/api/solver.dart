@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `load_image_luma`
+// These functions are ignored because they are not marked as `pub`: `load_image_luma`, `load_with_header_time`
 
 Future<String> cameraParamsToJson({required CameraParamsDto c}) =>
     RustLib.instance.api.crateApiSolverCameraParamsToJson(c: c);
@@ -69,8 +69,10 @@ abstract class UniSolver implements RustOpaqueInterface {
   });
 
   /// Fully automatic file entry (same strategy as the C ABI's solve_image_json): header FOV
-  /// hints first, the aspect ladder as fallback, rungs clamped to the database range. For
-  /// FITS/XISF prefer ExtractionProfileDto.auto() or cleanSensor().
+  /// hints (FITS focal length and pixel size, EXIF 35 mm focal length) first, the aspect
+  /// ladder as fallback, rungs clamped to the database range; the header's observation time
+  /// fills in when `base` has none. For FITS/XISF prefer ExtractionProfileDto.auto() or
+  /// cleanSensor().
   Future<LadderOutcomeDto> solveImageFileAuto({
     required String path,
     required SolveOptionsDto base,
@@ -108,14 +110,18 @@ abstract class UniSolverPool implements RustOpaqueInterface {
   /// Files skipped when the directory was opened, as `"<path>: <reason>"`.
   List<String> skipped();
 
-  /// Camera frames (no file header): start from the aspect ladder, route across tiers.
+  /// Camera frames and decoded photos (no file header): the aspect ladder, preceded by the
+  /// FOV of `opts.focalLength35mm` when the app read one from EXIF; routed across tiers.
   Future<PoolOutcomeDto> solveFrameAuto({
     required FrameDto frame,
     required SolveOptionsDto opts,
   });
 
   /// Fully automatic file entry without naming a tier (the one apps should use): load any
-  /// of the five formats → header FOV hints + aspect ladder → cross-tier routing.
+  /// of the five formats → header FOV hints (FITS, EXIF) + aspect ladder → cross-tier
+  /// routing. The header's observation time fills in when `base` has none and comes back in
+  /// `outcome.observationUnixMs`. HEIC is not decoded: decode it with the platform and use
+  /// [`Self::solve_frame_auto`].
   Future<PoolOutcomeDto> solveImageFileAuto({
     required String path,
     required SolveOptionsDto base,

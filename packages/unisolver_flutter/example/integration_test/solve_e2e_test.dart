@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -86,6 +88,76 @@ void main() {
 
     // The log bridge received at least the attach event
     expect(logs, isNotEmpty);
+  });
+
+  // The HEIC path: the app decodes the photo itself and passes its EXIF focal length and
+  // time; the pool tries that FOV first and echoes the time for the annotator
+  testWidgets('decoded photo with EXIF values solves on the first rung', (
+    t,
+  ) async {
+    final paths = await UnisolverAssets.ensureInstalled();
+    final pool = await UniSolverPool.openDir(
+      dir: File(paths.dbPath).parent.path,
+    );
+    final bytes = await rootBundle.load('assets/sample_scorpius.jpg');
+    final codec = await ui.instantiateImageCodec(bytes.buffer.asUint8List());
+    final image = (await codec.getNextFrame()).image;
+    final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final (w, h) = (image.width, image.height);
+    // The sample spans 73.3° across its width; its 35 mm equivalent (CIPA diagonal) is 24 mm
+    final diag = math.sqrt(w * w + h * h);
+    final focal = (21.633 / (math.tan(73.3 / 2 * math.pi / 180) * diag / w))
+        .roundToDouble();
+    const takenAt = 1781018520519;
+    final d = SolveOptionsDto.defaults(fovEstimateDeg: 70);
+    final res = await pool.solveFrameAuto(
+      frame: FrameDto(
+        width: w,
+        height: h,
+        rowStrideBytes: null,
+        kind: PixelKindDto.rgba8,
+        bytes: rgba!.buffer.asUint8List(),
+      ),
+      opts: SolveOptionsDto(
+        fovEstimateDeg: d.fovEstimateDeg,
+        hintUncertaintyDeg: d.hintUncertaintyDeg,
+        strictHint: d.strictHint,
+        profile: d.profile,
+        retryAlternateProfile: d.retryAlternateProfile,
+        thorough: d.thorough,
+        matchThreshold: d.matchThreshold,
+        timeoutMs: d.timeoutMs,
+        observationUnixMs: takenAt,
+        focalLength35Mm: focal,
+      ),
+    );
+    expect(res.outcome.status, SolveStatusDto.ok);
+    expect(
+      res.attempts.length,
+      1,
+      reason: res.attempts.map((a) => a.fovDeg).join(' '),
+    );
+    expect(res.outcome.solution!.raDeg, closeTo(250.07, 0.5));
+    expect(res.outcome.observationUnixMs, takenAt);
+    expect(res.outcome.observer, isNull);
+
+    // A HEIC file is refused with directions to the platform decoder
+    final dir = await getApplicationSupportDirectory();
+    final heic = File('${dir.path}/photo.heic');
+    await heic.writeAsBytes([
+      0,
+      0,
+      0,
+      24,
+      ...'ftypheic'.codeUnits,
+      ...List.filled(16, 0),
+    ]);
+    await expectLater(
+      pool.solveImageFileAuto(path: heic.path, base: d),
+      throwsA(
+        predicate((e) => '$e'.contains('HEIC') && '$e'.contains('frame entry')),
+      ),
+    );
   });
 
   testWidgets('rust panic surfaces as Dart exception, not crash', (t) async {

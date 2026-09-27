@@ -274,6 +274,11 @@ pub struct SolveOptionsDto {
     pub match_threshold: f64,
     pub timeout_ms: Option<u64>,
     pub observation_unix_ms: Option<i64>,
+    /// Ladders only: EXIF FocalLengthIn35mmFilm read by the app, for formats the engine does
+    /// not decode (HEIC: decode with the platform and use `solveFrameAuto`). Its FOV is tried
+    /// first as a hint (±15%) and the ladder still follows; ignored with a camera or a
+    /// tracking hint. Files read their own EXIF.
+    pub focal_length_35mm: Option<f32>,
 }
 
 impl SolveOptionsDto {
@@ -293,6 +298,7 @@ impl SolveOptionsDto {
             match_threshold: 1e-5,
             timeout_ms: Some(5000),
             observation_unix_ms: None,
+            focal_length_35mm: None,
         }
     }
 }
@@ -312,6 +318,7 @@ impl TryFrom<SolveOptionsDto> for core::SolveOptions {
         o.match_threshold = d.match_threshold;
         o.timeout_ms = d.timeout_ms;
         o.observation_unix_ms = d.observation_unix_ms;
+        o.focal_length_35mm = d.focal_length_35mm;
         Ok(o)
     }
 }
@@ -425,6 +432,15 @@ pub struct SolveOutcomeDto {
     /// frames 1.8–1.9, while solvable phone frames span 1.13–2.51. Compare against a baseline
     /// from the same camera; never hard-code a threshold.
     pub median_elongation: Option<f32>,
+    /// Observation time the solve used (Unix ms, UTC): the options', or for file entries the
+    /// header's when it pins the zone (FITS DATE-OBS, EXIF with an offset). Pass it to
+    /// `AnnotateOptionsDto.observationUnixMs` for the solar-system layer; null when neither
+    /// gave one.
+    pub observation_unix_ms: Option<i64>,
+    /// Where the photo was taken, for file entries whose EXIF has a GPS position. Pass it to
+    /// `AnnotateOptionsDto.observer` with the time (the moon's parallax reaches 1° without
+    /// it); null for frames and files without a position.
+    pub observer: Option<ObserverDto>,
 }
 
 impl From<core::SolveOutcome> for SolveOutcomeDto {
@@ -471,6 +487,8 @@ impl From<core::SolveOutcome> for SolveOutcomeDto {
             },
             extraction_retried: o.extraction_retried,
             median_elongation: o.median_elongation,
+            observation_unix_ms: o.observation_unix_ms,
+            observer: o.observer.map(Into::into),
         }
     }
 }
@@ -482,6 +500,16 @@ pub struct ObserverDto {
     pub lat_deg: f64,
     pub lon_deg: f64,
     pub alt_m: f64,
+}
+
+impl From<core::Observer> for ObserverDto {
+    fn from(o: core::Observer) -> Self {
+        Self {
+            lat_deg: o.lat_deg,
+            lon_deg: o.lon_deg,
+            alt_m: o.alt_m,
+        }
+    }
 }
 
 impl From<ObserverDto> for core::Observer {

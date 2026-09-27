@@ -164,7 +164,11 @@ class _SolvePageState extends State<SolvePage> {
             dsoOutlines: true,
             maxOutlineLevel: 3,
             language: widget.language,
-            includeSolarSystem: false,
+            // A photo's EXIF (with its zone) or a FITS header gives the time, and EXIF GPS the
+            // place: the solve reports both, so the solar-system layer needs no input here
+            includeSolarSystem: out.observationUnixMs != null,
+            observationUnixMs: out.observationUnixMs,
+            observer: out.observer,
           ),
         );
         assert(base.maxStars > 0);

@@ -2598,6 +2598,7 @@ impl SseDecode for crate::api::types::SolveOptionsDto {
         let mut var_matchThreshold = <f64>::sse_decode(deserializer);
         let mut var_timeoutMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_observationUnixMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_focalLength35Mm = <Option<f32>>::sse_decode(deserializer);
         return crate::api::types::SolveOptionsDto {
             fov_estimate_deg: var_fovEstimateDeg,
             fov_max_error_deg: var_fovMaxErrorDeg,
@@ -2611,6 +2612,7 @@ impl SseDecode for crate::api::types::SolveOptionsDto {
             match_threshold: var_matchThreshold,
             timeout_ms: var_timeoutMs,
             observation_unix_ms: var_observationUnixMs,
+            focal_length_35mm: var_focalLength35Mm,
         };
     }
 }
@@ -2625,6 +2627,8 @@ impl SseDecode for crate::api::types::SolveOutcomeDto {
         let mut var_timing = <crate::api::types::TimingDto>::sse_decode(deserializer);
         let mut var_extractionRetried = <bool>::sse_decode(deserializer);
         let mut var_medianElongation = <Option<f32>>::sse_decode(deserializer);
+        let mut var_observationUnixMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_observer = <Option<crate::api::types::ObserverDto>>::sse_decode(deserializer);
         return crate::api::types::SolveOutcomeDto {
             status: var_status,
             solution: var_solution,
@@ -2632,6 +2636,8 @@ impl SseDecode for crate::api::types::SolveOutcomeDto {
             timing: var_timing,
             extraction_retried: var_extractionRetried,
             median_elongation: var_medianElongation,
+            observation_unix_ms: var_observationUnixMs,
+            observer: var_observer,
         };
     }
 }
@@ -3720,6 +3726,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::SolveOptionsDto {
             self.match_threshold.into_into_dart().into_dart(),
             self.timeout_ms.into_into_dart().into_dart(),
             self.observation_unix_ms.into_into_dart().into_dart(),
+            self.focal_length_35mm.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3745,6 +3752,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::SolveOutcomeDto {
             self.timing.into_into_dart().into_dart(),
             self.extraction_retried.into_into_dart().into_dart(),
             self.median_elongation.into_into_dart().into_dart(),
+            self.observation_unix_ms.into_into_dart().into_dart(),
+            self.observer.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4780,6 +4789,7 @@ impl SseEncode for crate::api::types::SolveOptionsDto {
         <f64>::sse_encode(self.match_threshold, serializer);
         <Option<u64>>::sse_encode(self.timeout_ms, serializer);
         <Option<i64>>::sse_encode(self.observation_unix_ms, serializer);
+        <Option<f32>>::sse_encode(self.focal_length_35mm, serializer);
     }
 }
 
@@ -4792,6 +4802,8 @@ impl SseEncode for crate::api::types::SolveOutcomeDto {
         <crate::api::types::TimingDto>::sse_encode(self.timing, serializer);
         <bool>::sse_encode(self.extraction_retried, serializer);
         <Option<f32>>::sse_encode(self.median_elongation, serializer);
+        <Option<i64>>::sse_encode(self.observation_unix_ms, serializer);
+        <Option<crate::api::types::ObserverDto>>::sse_encode(self.observer, serializer);
     }
 }
 

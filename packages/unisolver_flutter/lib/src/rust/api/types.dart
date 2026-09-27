@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
 
 class AnnotateOptionsDto {
   final double? starMaxMag;
@@ -839,6 +839,12 @@ class SolveOptionsDto {
   final BigInt? timeoutMs;
   final PlatformInt64? observationUnixMs;
 
+  /// Ladders only: EXIF FocalLengthIn35mmFilm read by the app, for formats the engine does
+  /// not decode (HEIC: decode with the platform and use `solveFrameAuto`). Its FOV is tried
+  /// first as a hint (±15%) and the ladder still follows; ignored with a camera or a
+  /// tracking hint. Files read their own EXIF.
+  final double? focalLength35Mm;
+
   const SolveOptionsDto({
     required this.fovEstimateDeg,
     this.fovMaxErrorDeg,
@@ -852,6 +858,7 @@ class SolveOptionsDto {
     required this.matchThreshold,
     this.timeoutMs,
     this.observationUnixMs,
+    this.focalLength35Mm,
   });
 
   /// Defaults shared with core::SolveOptions::new (PhoneJpeg, built-in σ, 5 s timeout)
@@ -873,7 +880,8 @@ class SolveOptionsDto {
       thorough.hashCode ^
       matchThreshold.hashCode ^
       timeoutMs.hashCode ^
-      observationUnixMs.hashCode;
+      observationUnixMs.hashCode ^
+      focalLength35Mm.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -891,7 +899,8 @@ class SolveOptionsDto {
           thorough == other.thorough &&
           matchThreshold == other.matchThreshold &&
           timeoutMs == other.timeoutMs &&
-          observationUnixMs == other.observationUnixMs;
+          observationUnixMs == other.observationUnixMs &&
+          focalLength35Mm == other.focalLength35Mm;
 }
 
 class SolveOutcomeDto {
@@ -908,6 +917,17 @@ class SolveOutcomeDto {
   /// from the same camera; never hard-code a threshold.
   final double? medianElongation;
 
+  /// Observation time the solve used (Unix ms, UTC): the options', or for file entries the
+  /// header's when it pins the zone (FITS DATE-OBS, EXIF with an offset). Pass it to
+  /// `AnnotateOptionsDto.observationUnixMs` for the solar-system layer; null when neither
+  /// gave one.
+  final PlatformInt64? observationUnixMs;
+
+  /// Where the photo was taken, for file entries whose EXIF has a GPS position. Pass it to
+  /// `AnnotateOptionsDto.observer` with the time (the moon's parallax reaches 1° without
+  /// it); null for frames and files without a position.
+  final ObserverDto? observer;
+
   const SolveOutcomeDto({
     required this.status,
     this.solution,
@@ -915,6 +935,8 @@ class SolveOutcomeDto {
     required this.timing,
     required this.extractionRetried,
     this.medianElongation,
+    this.observationUnixMs,
+    this.observer,
   });
 
   @override
@@ -924,7 +946,9 @@ class SolveOutcomeDto {
       centroids.hashCode ^
       timing.hashCode ^
       extractionRetried.hashCode ^
-      medianElongation.hashCode;
+      medianElongation.hashCode ^
+      observationUnixMs.hashCode ^
+      observer.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -936,7 +960,9 @@ class SolveOutcomeDto {
           centroids == other.centroids &&
           timing == other.timing &&
           extractionRetried == other.extractionRetried &&
-          medianElongation == other.medianElongation;
+          medianElongation == other.medianElongation &&
+          observationUnixMs == other.observationUnixMs &&
+          observer == other.observer;
 }
 
 enum SolveStatusDto { ok, noMatch, timeout, tooFew }

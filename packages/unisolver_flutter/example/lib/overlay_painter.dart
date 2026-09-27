@@ -90,6 +90,10 @@ class SolveOverlayPainter extends CustomPainter {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.5
     ..color = const Color(0xFFC878FF);
+  static final _solar = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.0
+    ..color = const Color(0xFFFFA040);
   // Outline levels 1..3: the faint outer edge is drawn faintest
   static final _outline = [0x70, 0xA8, 0xE0]
       .map(
@@ -171,6 +175,12 @@ class SolveOverlayPainter extends CustomPainter {
       for (final n in a.namedStars) {
         canvas.drawCircle(Offset(n.x, n.y), 16, _named);
         _label(canvas, n.name, n.x, n.y + 18, const Color(0xFF50C8FF));
+      }
+      // Planets, the moon and the sun (present only when the solve reported a time)
+      for (final b in a.solar) {
+        final r = (b.angularRadiusPx ?? 0).clamp(14.0, 4000.0);
+        canvas.drawCircle(Offset(b.x, b.y), r, _solar);
+        _label(canvas, b.name, b.x, b.y + r + 2, const Color(0xFFFFA040));
       }
     }
   }

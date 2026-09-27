@@ -36,9 +36,10 @@ impl UniSolver {
     }
 
     pub fn solve_image_file(&self, path: String, opts: SolveOptionsDto) -> Result<SolveOutcomeDto> {
-        let f = load_image_luma(&path)?;
-        let o: core::SolveOptions = opts.try_into()?;
-        Ok(self.inner.solve(&f, &o)?.into())
+        let (f, meta, o) = load_with_header_time(&path, opts)?;
+        let mut out = self.inner.solve(&f, &o)?;
+        meta.apply_place(&mut out);
+        Ok(out.into())
     }
 
     pub fn solve_image_file_with_presets(
@@ -47,8 +48,7 @@ impl UniSolver {
         base: SolveOptionsDto,
         presets: Vec<FovPresetDto>,
     ) -> Result<LadderOutcomeDto> {
-        let f = load_image_luma(&path)?;
-        let b: core::SolveOptions = base.try_into()?;
+        let (f, meta, b) = load_with_header_time(&path, base)?;
         let ps: Vec<core::FovPreset> = presets
             .into_iter()
             .map(|p| core::FovPreset {
@@ -56,7 +56,8 @@ impl UniSolver {
                 max_error_deg: p.max_error_deg,
             })
             .collect();
-        let (out, attempts) = self.inner.solve_with_fov_presets(&f, &b, &ps)?;
+        let (mut out, attempts) = self.inner.solve_with_fov_presets(&f, &b, &ps)?;
+        meta.apply_place(&mut out);
         Ok(LadderOutcomeDto {
             outcome: out.into(),
             attempts: attempts.into_iter().map(Into::into).collect(),
@@ -64,8 +65,10 @@ impl UniSolver {
     }
 
     /// Fully automatic file entry (same strategy as the C ABI's solve_image_json): header FOV
-    /// hints first, the aspect ladder as fallback, rungs clamped to the database range. For
-    /// FITS/XISF prefer ExtractionProfileDto.auto() or cleanSensor().
+    /// hints (FITS focal length and pixel size, EXIF 35 mm focal length) first, the aspect
+    /// ladder as fallback, rungs clamped to the database range; the header's observation time
+    /// fills in when `base` has none. For FITS/XISF prefer ExtractionProfileDto.auto() or
+    /// cleanSensor().
     pub fn solve_image_file_auto(
         &self,
         path: String,
@@ -73,8 +76,10 @@ impl UniSolver {
     ) -> Result<LadderOutcomeDto> {
         let (f, meta) = core::imageio::load_image(&path)?;
         let presets = core::presets_with_hints(&meta, f.width, f.height);
-        let b: core::SolveOptions = base.try_into()?;
-        let (out, attempts) = self.inner.solve_with_fov_presets(&f, &b, &presets)?;
+        let mut b: core::SolveOptions = base.try_into()?;
+        meta.apply_time(&mut b);
+        let (mut out, attempts) = self.inner.solve_with_fov_presets(&f, &b, &presets)?;
+        meta.apply_place(&mut out);
         Ok(LadderOutcomeDto {
             outcome: out.into(),
             attempts: attempts.into_iter().map(Into::into).collect(),
@@ -164,7 +169,10 @@ impl UniSolverPool {
     }
 
     /// Fully automatic file entry without naming a tier (the one apps should use): load any
-    /// of the five formats → header FOV hints + aspect ladder → cross-tier routing.
+    /// of the five formats → header FOV hints (FITS, EXIF) + aspect ladder → cross-tier
+    /// routing. The header's observation time fills in when `base` has none and comes back in
+    /// `outcome.observationUnixMs`. HEIC is not decoded: decode it with the platform and use
+    /// [`Self::solve_frame_auto`].
     pub fn solve_image_file_auto(
         &self,
         path: String,
@@ -179,7 +187,8 @@ impl UniSolverPool {
             .into())
     }
 
-    /// Camera frames (no file header): start from the aspect ladder, route across tiers.
+    /// Camera frames and decoded photos (no file header): the aspect ladder, preceded by the
+    /// FOV of `opts.focalLength35mm` when the app read one from EXIF; routed across tiers.
     pub fn solve_frame_auto(
         &self,
         frame: FrameDto,
@@ -228,6 +237,18 @@ impl UniSolverPool {
 /// Unified loading of FITS/XISF/PNG/JPEG/TIFF, dispatched on magic bytes
 fn load_image_luma(path: &str) -> Result<core::Frame> {
     Ok(core::imageio::load_image(path)?.0)
+}
+
+/// A file, its header and the options to solve it with: the header's observation time fills
+/// in when the options have none, as in every file entry (the place goes on the outcome).
+fn load_with_header_time(
+    path: &str,
+    opts: SolveOptionsDto,
+) -> Result<(core::Frame, core::imageio::ImageMeta, core::SolveOptions)> {
+    let (f, meta) = core::imageio::load_image(path)?;
+    let mut o: core::SolveOptions = opts.try_into()?;
+    meta.apply_time(&mut o);
+    Ok((f, meta, o))
 }
 
 #[frb(opaque)]

@@ -91,21 +91,34 @@ pub fn ideal_centroids(
     out.into_iter().map(|(_, c)| c).collect()
 }
 
+/// Angle (arcmin) between two directions as atan2(|a×b|, a·b): exact for tiny angles and
+/// independent of the vectors' lengths. acos of the dot product is neither — axes rotated by an
+/// f32 quaternion are off unit length by ~1e-7, which acos reads as ~1′.
+fn angle_arcmin(a: [f64; 3], b: [f64; 3]) -> f32 {
+    let cross = [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ];
+    let sin = cross.iter().map(|c| c * c).sum::<f64>().sqrt();
+    let cos: f64 = (0..3).map(|i| a[i] * b[i]).sum();
+    (sin.atan2(cos).to_degrees() * 60.0) as f32
+}
+
+fn boresight(q: &Quaternion<f32>) -> [f64; 3] {
+    let b = q.inverse() * Vector3::from_array([0.0f32, 0.0, 1.0]);
+    [b[0] as f64, b[1] as f64, b[2] as f64]
+}
+
 pub fn boresight_err_arcmin(a: &Quaternion<f32>, b: &Quaternion<f32>) -> f32 {
-    let z = Vector3::from_array([0.0f32, 0.0, 1.0]);
-    let (ba, bb) = (a.inverse() * z, b.inverse() * z);
-    // Dot product in f64 before acos, avoiding f32's ~1′ floor near 1.0
-    let dot: f64 = (0..3).map(|i| ba[i] as f64 * bb[i] as f64).sum();
-    (dot.clamp(-1.0, 1.0).acos().to_degrees() * 60.0) as f32
+    angle_arcmin(boresight(a), boresight(b))
 }
 
 /// Angular distance (arcmin) between (ra_deg, dec_deg) and the quaternion's boresight
 pub fn radec_err_arcmin(ra_deg: f64, dec_deg: f64, q: &Quaternion<f32>) -> f32 {
-    let b = q.inverse() * Vector3::from_array([0.0f32, 0.0, 1.0]);
     let (ra, dec) = (ra_deg.to_radians(), dec_deg.to_radians());
-    let t = [(dec.cos() * ra.cos()), (dec.cos() * ra.sin()), (dec.sin())];
-    let dot: f64 = (0..3).map(|i| b[i] as f64 * t[i]).sum();
-    (dot.clamp(-1.0, 1.0).acos().to_degrees() * 60.0) as f32
+    let t = [dec.cos() * ra.cos(), dec.cos() * ra.sin(), dec.sin()];
+    angle_arcmin(boresight(q), t)
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +247,21 @@ pub fn narrow_test_db() -> &'static SolverDatabase {
 mod tests {
     use super::*;
     use numeris::Vector3;
+
+    #[test]
+    fn boresight_errors_resolve_sub_arcsecond_offsets() {
+        let q = look_at(52.5, -17.0, 153.0);
+        let half = (1.0f32 / 3600.0).to_radians() / 2.0;
+        let tilt = Quaternion::new(half.cos(), half.sin(), 0.0, 0.0); // 1″ about the camera x axis
+        let one = boresight_err_arcmin(&(tilt * q), &q) * 60.0;
+        assert!((one - 1.0).abs() < 0.1, "a 1″ tilt reads {one}″");
+        assert!(boresight_err_arcmin(&q, &q) * 60.0 < 0.05);
+        let b = q.inverse() * Vector3::from_array([0.0f32, 0.0, 1.0]);
+        let ra = (b[1] as f64).atan2(b[0] as f64).to_degrees();
+        let dec = (b[2] as f64 / (b.norm() as f64)).asin().to_degrees();
+        let own = radec_err_arcmin(ra, dec, &q) * 60.0;
+        assert!(own < 0.05, "own boresight reads {own}″");
+    }
 
     #[test]
     fn look_at_points_boresight_at_target() {

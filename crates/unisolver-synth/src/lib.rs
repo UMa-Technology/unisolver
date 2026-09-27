@@ -4,7 +4,7 @@ use numeris::{Matrix3, Quaternion, Vector3};
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
 use rand_distr::{Distribution, Normal};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use tetra3::{Centroid, GenerateDatabaseConfig, SolverDatabase, Star};
 
 pub fn random_sky(n: usize, seed: u64, mag_min: f32, mag_max: f32) -> Vec<Star> {
@@ -190,6 +190,25 @@ pub fn test_db() -> &'static SolverDatabase {
         };
         SolverDatabase::generate_from_star_list(stars, &cfg, 2026.0).expect("gen test db")
     })
+}
+
+/// `test_db()` saved as a UNISOLV2 file named `name` in the temp dir; returns its path. Tests run
+/// in parallel, so the file is written under a lock and moved into place by rename: no caller
+/// ever opens a half-written file.
+pub fn test_db_file(name: &str) -> String {
+    static WRITE: Mutex<()> = Mutex::new(());
+    let path = std::env::temp_dir().join(name);
+    let _guard = WRITE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if !path.exists() {
+        let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+        test_db()
+            .save_to_file_v2(tmp.to_str().expect("UTF-8 temp dir"))
+            .expect("write the test database");
+        std::fs::rename(&tmp, &path).expect("move the test database into place");
+    }
+    path.to_string_lossy().into_owned()
 }
 
 /// Narrow test database (8–15°), the second tier for multi-tier routing. **Its catalog is

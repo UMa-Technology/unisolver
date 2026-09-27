@@ -3,13 +3,7 @@ use unisolver_synth as synth;
 
 #[test]
 fn radial_calibration_recovers_k1_and_improves_rmse() {
-    let p = std::env::temp_dir().join("unisolver_core_test.db");
-    if !p.exists() {
-        synth::test_db()
-            .save_to_file_v2(p.to_str().unwrap())
-            .unwrap();
-    }
-    let solver = Solver::from_file(p.to_str().unwrap()).unwrap();
+    let solver = Solver::from_file(&synth::test_db_file("unisolver_core_test.db")).unwrap();
     let mut session = solver.new_calibration_session().unwrap();
 
     // Real distortion: k1 = -2e-8 (≈1% barrel at r ≈ 700 px on a 1200 px frame)

@@ -295,13 +295,7 @@ mod tests {
     use super::*;
 
     fn test_db_path() -> String {
-        let p = std::env::temp_dir().join("unisolver_frb_test.db");
-        if !p.exists() {
-            unisolver_synth::test_db()
-                .save_to_file_v2(p.to_str().unwrap())
-                .unwrap();
-        }
-        p.to_str().unwrap().to_string()
+        unisolver_synth::test_db_file("unisolver_frb_test.db")
     }
 
     #[test]

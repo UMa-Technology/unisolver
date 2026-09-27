@@ -1260,14 +1260,8 @@ mod tests {
 
     #[test]
     fn open_solve_close_roundtrip_via_c_surface() {
-        // Reuse the synth test database file (same path convention as core's integration tests)
-        let p = std::env::temp_dir().join("unisolver_core_test.db");
-        if !p.exists() {
-            unisolver_synth::test_db()
-                .save_to_file_v2(p.to_str().unwrap())
-                .unwrap();
-        }
-        let db = CString::new(p.to_str().unwrap()).unwrap();
+        // Reuse the synth test database file (same name as core's integration tests)
+        let db = CString::new(unisolver_synth::test_db_file("unisolver_core_test.db")).unwrap();
         let mut err: *mut c_char = std::ptr::null_mut();
         let solver = unsafe { unisolver_open(db.as_ptr(), &mut err) };
         assert!(!solver.is_null());
@@ -1444,13 +1438,7 @@ mod tests {
     /// DSO outlines cross the C surface and `dso_outlines: false` turns them off.
     #[test]
     fn annotate_outlines_via_c_surface() {
-        let p = std::env::temp_dir().join("unisolver_core_test.db");
-        if !p.exists() {
-            unisolver_synth::test_db()
-                .save_to_file_v2(p.to_str().unwrap())
-                .unwrap();
-        }
-        let db = CString::new(p.to_str().unwrap()).unwrap();
+        let db = CString::new(unisolver_synth::test_db_file("unisolver_core_test.db")).unwrap();
         let mut err: *mut c_char = std::ptr::null_mut();
         let solver = unsafe { unisolver_open(db.as_ptr(), &mut err) };
         assert!(!solver.is_null());
@@ -1494,13 +1482,7 @@ mod tests {
     /// The annotation surface end to end: build → languages → annotate with the solve's wcs as-is → release.
     #[test]
     fn annotate_json_via_c_surface() {
-        let p = std::env::temp_dir().join("unisolver_core_test.db");
-        if !p.exists() {
-            unisolver_synth::test_db()
-                .save_to_file_v2(p.to_str().unwrap())
-                .unwrap();
-        }
-        let db = CString::new(p.to_str().unwrap()).unwrap();
+        let db = CString::new(unisolver_synth::test_db_file("unisolver_core_test.db")).unwrap();
         let mut err: *mut c_char = std::ptr::null_mut();
         let solver = unsafe { unisolver_open(db.as_ptr(), &mut err) };
         assert!(!solver.is_null());
@@ -1601,13 +1583,7 @@ mod tests {
     }
 
     fn open_test_solver(err: &mut *mut c_char) -> *mut UnisolverSolver {
-        let p = std::env::temp_dir().join("unisolver_core_test.db");
-        if !p.exists() {
-            unisolver_synth::test_db()
-                .save_to_file_v2(p.to_str().unwrap())
-                .unwrap();
-        }
-        let db = CString::new(p.to_str().unwrap()).unwrap();
+        let db = CString::new(unisolver_synth::test_db_file("unisolver_core_test.db")).unwrap();
         unsafe { unisolver_open(db.as_ptr(), err) }
     }
 

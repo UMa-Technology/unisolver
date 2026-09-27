@@ -9,13 +9,7 @@ fn names_pack_path() -> Option<String> {
 }
 
 fn test_db_path() -> String {
-    let p = std::env::temp_dir().join("unisolver_core_test.db");
-    if !p.exists() {
-        synth::test_db()
-            .save_to_file_v2(p.to_str().unwrap())
-            .unwrap();
-    }
-    p.to_str().unwrap().to_string()
+    synth::test_db_file("unisolver_core_test.db")
 }
 
 #[test]

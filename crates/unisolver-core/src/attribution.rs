@@ -7,7 +7,8 @@ use serde::Serialize;
 /// One data source and what its license asks of an app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct DataAttribution {
-    /// Stable identifier (`gaia`, `hipparcos`, `iau_wgsn`, `openngc`, `stellarium`)
+    /// Stable identifier (`gaia`, `hipparcos`, `iau_wgsn`, `openngc`, `stellarium`,
+    /// `iau_constellations`)
     pub id: &'static str,
     pub name: &'static str,
     /// What in the engine derives from it
@@ -19,12 +20,12 @@ pub struct DataAttribution {
     pub url: &'static str,
 }
 
-/// Every data source in the engine's databases, catalogs and names pack.
+/// Every data source in the engine's databases, catalogs, names pack and constellation pack.
 pub fn data_attributions() -> &'static [DataAttribution] {
     &ATTRIBUTIONS
 }
 
-static ATTRIBUTIONS: [DataAttribution; 5] = [
+static ATTRIBUTIONS: [DataAttribution; 6] = [
     DataAttribution {
         id: "gaia",
         name: "ESA Gaia DR3",
@@ -68,6 +69,16 @@ static ATTRIBUTIONS: [DataAttribution; 5] = [
         text: "Object names and translations from Stellarium (GPL-2.0-or-later).",
         url: "https://stellarium.org",
     },
+    DataAttribution {
+        id: "iau_constellations",
+        name: "IAU constellation figures and boundaries",
+        applies_to: "constellation pack",
+        license: "CC-BY-SA-4.0",
+        text: "Constellation figures from the IAU charts by Sky & Telescope (Roger Sinnott, Rick \
+               Fienberg, Alan MacRobert) and boundaries after Delporte (1930), as digitized by \
+               Pierre Barbier, via Stellarium's modern (IAU) sky culture (CC BY-SA 4.0).",
+        url: "https://www.iau.org/public/themes/constellations/",
+    },
 ];
 
 #[cfg(test)]
@@ -80,7 +91,14 @@ mod tests {
         let ids: Vec<&str> = all.iter().map(|a| a.id).collect();
         assert_eq!(
             ids,
-            ["gaia", "hipparcos", "iau_wgsn", "openngc", "stellarium"]
+            [
+                "gaia",
+                "hipparcos",
+                "iau_wgsn",
+                "openngc",
+                "stellarium",
+                "iau_constellations"
+            ]
         );
         for a in all {
             assert!(!a.name.is_empty() && !a.text.is_empty() && !a.license.is_empty());

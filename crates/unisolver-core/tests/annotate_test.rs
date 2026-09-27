@@ -694,3 +694,239 @@ fn dso_outlines_project_to_pixels() {
     };
     assert!(ann.annotate(&wcs, &off).objects[0].outlines.is_empty());
 }
+
+/// Constellation figures and boundaries: projected where the camera looks, clipped where it
+/// does not, localized through the names pack, and silent unless asked for.
+#[test]
+fn constellation_layers_project_figures_boundaries_and_names() {
+    use unisolver_core::constellations::{BoundaryEdge, ConstellationFigure, ConstellationPack};
+    use unisolver_core::names_pack::NamesPack;
+    let solver = Solver::from_file(&test_db_path()).unwrap();
+    let dir = std::env::temp_dir().join(format!("ucon_test_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (betelgeuse, bellatrix, rigel) = ([88.79f32, 7.41], [81.28f32, 6.35], [78.63f32, -8.20]);
+    let pack = ConstellationPack {
+        constellations: vec![
+            ConstellationFigure {
+                abbr: "Ori".into(),
+                name: "Orion".into(),
+                // A figure in the frame, and a long line leaving the camera's view
+                lines: vec![
+                    vec![betelgeuse, bellatrix, rigel],
+                    vec![[83.0, 0.0], [150.0, 0.0]],
+                ],
+                label: [83.0, 1.0],
+            },
+            ConstellationFigure {
+                abbr: "Tau".into(),
+                name: "Taurus".into(),
+                lines: vec![vec![[300.0, 40.0], [310.0, 45.0]]],
+                label: [305.0, 42.0],
+            },
+        ],
+        boundaries: vec![BoundaryEdge {
+            between: [0, 1],
+            points: (0..=12).map(|k| [86.0, 22.0 - k as f32]).collect(),
+        }],
+    };
+    let pack_path = dir.join("unisolver_constellations.bin");
+    pack.write(pack_path.to_str().unwrap()).unwrap();
+    let names_path = dir.join("names.bin");
+    NamesPack {
+        languages: vec!["en".into(), "zh_cn".into()],
+        entries: [(
+            "CON Ori".to_string(),
+            vec![Some("Orion".into()), Some("猎户座".into())],
+        )]
+        .into(),
+    }
+    .write(names_path.to_str().unwrap())
+    .unwrap();
+
+    let wcs = Wcs {
+        width: 1024,
+        height: 768,
+        cd: [[0.0; 2]; 2],
+        crval_deg: [83.8, -1.0],
+        theta_rad: 0.2,
+        camera: CameraParams::from_horizontal_fov(30.0, 1024, 768).unwrap(),
+    };
+    let both = AnnotateOptions {
+        include_constellations: true,
+        constellation_boundaries: true,
+        language: "zh_cn".into(),
+        ..Default::default()
+    };
+
+    // Not asked for: nothing, and no complaint
+    let plain = solver.annotator(None, None).unwrap();
+    let a = plain.annotate(&wcs, &AnnotateOptions::default());
+    assert!(a.constellations.is_empty() && a.boundaries.is_empty());
+    assert!(!a.layers.reasons.iter().any(|(l, _)| l == "constellations"));
+    // Asked for without a pack: unavailable, with the reason
+    let a = plain.annotate(&wcs, &both);
+    assert!(!a.layers.constellations);
+    assert!(a
+        .layers
+        .reasons
+        .iter()
+        .any(|(l, r)| l == "constellations" && r.contains("no constellation pack")));
+    let broken = solver
+        .annotator(None, None)
+        .unwrap()
+        .with_constellations(Some("/nonexistent/ucon.bin"));
+    assert!(broken
+        .annotate(&wcs, &both)
+        .layers
+        .reasons
+        .iter()
+        .any(|(l, _)| l == "constellations"));
+
+    let ann = solver
+        .annotator(None, Some(names_path.to_str().unwrap()))
+        .unwrap()
+        .with_constellations(Some(pack_path.to_str().unwrap()));
+    let a = ann.annotate(&wcs, &both);
+    assert!(a.layers.constellations);
+    assert_eq!(
+        a.constellations.len(),
+        1,
+        "Taurus's figure is on the other side of the sky"
+    );
+    let ori = &a.constellations[0];
+    assert_eq!((ori.abbr.as_str(), ori.name.as_str()), ("Ori", "猎户座"));
+    let px = |v: [f32; 2]| wcs.world_to_pixel(v[0] as f64, v[1] as f64).unwrap();
+    let label = ori.label.expect("the anchor is in the frame");
+    let want = px([83.0, 1.0]);
+    assert!((label[0] - want.0).hypot(label[1] - want.1) < 1e-6);
+    // Stars land where the WCS puts them, and an ideal camera maps great-circle arcs to
+    // straight lines, so the sampled figure simplifies back to its three stars
+    let figure = ori
+        .lines
+        .iter()
+        .find(|l| l.len() == 3)
+        .unwrap_or_else(|| panic!("{:?}", ori.lines));
+    for (p, star) in figure.iter().zip([betelgeuse, bellatrix, rigel]) {
+        let s = px(star);
+        assert!((p[0] - s.0).hypot(p[1] - s.1) < 1e-6, "{p:?} vs {s:?}");
+    }
+    // The long line runs from the centre past the frame edge, and stops where the view ends
+    let long = ori
+        .lines
+        .iter()
+        .find(|l| l.len() != 3)
+        .expect("the long line");
+    let far = long.iter().map(|p| p[0]).fold(f64::MIN, f64::max);
+    assert!(far > 1024.0 && far < 1024.0 * 3.0, "{far}");
+
+    assert_eq!(a.boundaries.len(), 1);
+    let b = &a.boundaries[0];
+    assert_eq!(b.between, ["Ori".to_string(), "Tau".to_string()]);
+    assert!(b
+        .points
+        .iter()
+        .any(|p| p[0] >= 0.0 && p[0] < 1024.0 && p[1] >= 0.0 && p[1] < 768.0));
+
+    // Without the names pack: the IAU name
+    let latin = solver
+        .annotator(None, None)
+        .unwrap()
+        .with_constellations(Some(pack_path.to_str().unwrap()));
+    assert_eq!(latin.annotate(&wcs, &both).constellations[0].name, "Orion");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The bundled constellation pack: all 88 constellations, every one bordered, and real
+/// fields show the constellations they should. Skipped when the pack is absent.
+#[test]
+fn bundled_constellation_pack_draws_real_skies() {
+    use unisolver_core::constellations::ConstellationPack;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/unisolver_flutter/assets/unisolver_constellations.bin");
+    if !path.exists() {
+        eprintln!("skipped: constellation pack not generated");
+        return;
+    }
+    let pack = ConstellationPack::open(path.to_str().unwrap()).unwrap();
+    assert_eq!(pack.constellations.len(), 88);
+    let mut bordered = [false; 88];
+    for b in &pack.boundaries {
+        for i in b.between {
+            bordered[i as usize] = true;
+        }
+        // Densified: neighbouring points no more than a fraction of a degree apart
+        for w in b.points.windows(2) {
+            let d = ((w[1][0] - w[0][0])
+                .rem_euclid(360.0)
+                .min((w[0][0] - w[1][0]).rem_euclid(360.0))
+                * w[0][1].to_radians().cos())
+            .hypot(w[1][1] - w[0][1]);
+            assert!(d < 0.25, "{d}");
+        }
+    }
+    assert!(
+        bordered.iter().all(|&b| b),
+        "every constellation has a boundary"
+    );
+    // Orion's figure passes through Betelgeuse and Rigel (J2000)
+    let ori = pack
+        .constellations
+        .iter()
+        .find(|c| c.abbr == "Ori")
+        .unwrap();
+    let near = |ra: f32, dec: f32| {
+        ori.lines
+            .iter()
+            .flatten()
+            .any(|v| (v[0] - ra).abs() < 0.01 && (v[1] - dec).abs() < 0.01)
+    };
+    assert!(
+        near(88.793, 7.407) && near(78.634, -8.202),
+        "{:?}",
+        ori.lines
+    );
+
+    // A 70° field on Orion: Orion and its neighbours, with boundaries between them
+    let solver = Solver::from_file(&test_db_path()).unwrap();
+    let ann = solver
+        .annotator(None, names_pack_path().as_deref())
+        .unwrap()
+        .with_constellations(path.to_str());
+    let wcs = Wcs {
+        width: 1920,
+        height: 1080,
+        cd: [[0.0; 2]; 2],
+        crval_deg: [83.8, 0.0],
+        theta_rad: 0.0,
+        camera: CameraParams::from_horizontal_fov(70.0, 1920, 1080).unwrap(),
+    };
+    let a = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            include_constellations: true,
+            constellation_boundaries: true,
+            language: "zh_cn".into(),
+            ..Default::default()
+        },
+    );
+    let abbrs: Vec<&str> = a.constellations.iter().map(|c| c.abbr.as_str()).collect();
+    for want in ["Ori", "Tau", "Mon", "CMi", "Lep", "Eri"] {
+        assert!(abbrs.contains(&want), "{want} missing from {abbrs:?}");
+    }
+    assert!(a
+        .boundaries
+        .iter()
+        .any(|b| b.between.contains(&"Ori".to_string())));
+    if names_pack_path().is_some() {
+        let ori = a.constellations.iter().find(|c| c.abbr == "Ori").unwrap();
+        assert_eq!(ori.name, "猎户座");
+    }
+    let label = a
+        .constellations
+        .iter()
+        .find(|c| c.abbr == "Ori")
+        .unwrap()
+        .label
+        .unwrap();
+    assert!(label[0] > 0.0 && label[0] < 1920.0 && label[1] > 0.0 && label[1] < 1080.0);
+}

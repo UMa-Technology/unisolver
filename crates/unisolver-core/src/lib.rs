@@ -6,6 +6,7 @@ pub mod attribution;
 mod bands;
 pub mod calibrate;
 pub mod camera;
+pub mod constellations;
 pub mod coords;
 pub mod dso;
 pub mod ephemeris;

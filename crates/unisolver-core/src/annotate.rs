@@ -43,6 +43,13 @@ pub struct AnnotateOptions {
     /// Language code (`en` / `zh_cn` / `ja` / …); English when the pack lacks it.
     /// Available languages come from the names pack, see `Annotator::languages()`.
     pub language: LanguageCode,
+    /// Constellation figures (the IAU charts' lines) with their names; needs the
+    /// constellation pack (see `Annotator::with_constellations`)
+    #[serde(default)]
+    pub include_constellations: bool,
+    /// IAU constellation boundaries; needs the constellation pack
+    #[serde(default)]
+    pub constellation_boundaries: bool,
 }
 impl Default for AnnotateOptions {
     fn default() -> Self {
@@ -59,6 +66,8 @@ impl Default for AnnotateOptions {
             observer: None,
             satellite_tle: None,
             language: "en".to_string(),
+            include_constellations: false,
+            constellation_boundaries: false,
         }
     }
 }
@@ -149,6 +158,9 @@ pub struct LayerAvailability {
     pub dso: bool,
     pub solar_system: bool,
     pub satellites: bool,
+    /// Constellation figures and boundaries
+    #[serde(default)]
+    pub constellations: bool,
     pub reasons: Vec<(String, String)>,
 }
 
@@ -159,6 +171,12 @@ pub struct Annotations {
     pub objects: Vec<DsoAnnotation>,
     pub solar: Vec<SolarAnnotation>,
     pub satellites: Vec<SatelliteAnnotation>,
+    /// Constellations with part of their figure in the frame (`include_constellations`)
+    #[serde(default)]
+    pub constellations: Vec<crate::constellations::ConstellationAnnotation>,
+    /// IAU boundary stretches in the frame (`constellation_boundaries`)
+    #[serde(default)]
+    pub boundaries: Vec<crate::constellations::BoundaryAnnotation>,
     pub layers: LayerAvailability,
 }
 
@@ -168,6 +186,8 @@ pub struct Annotator {
     dso_error: Option<String>,
     names: Option<crate::names_pack::NamesPack>,
     names_error: Option<String>,
+    constellations: Option<crate::constellations::Loaded>,
+    constellations_error: String,
 }
 
 impl Solver {
@@ -197,11 +217,39 @@ impl Solver {
             dso_error,
             names,
             names_error,
+            constellations: None,
+            constellations_error: "no constellation pack configured".into(),
         })
     }
 }
 
 impl Annotator {
+    /// Loads the constellation pack (`UCON`) for the figure and boundary layers. Like the
+    /// DSO catalog and the names pack, a missing or broken file does not fail: the layers
+    /// report themselves unavailable, with the reason in `layers.reasons`.
+    pub fn with_constellations(mut self, path: Option<&str>) -> Self {
+        if let Some(p) = path {
+            let _ = self.load_constellations(p);
+        }
+        self
+    }
+
+    /// As [`Self::with_constellations`] on an existing annotator, also returning the error
+    /// (the layers then report it too).
+    pub fn load_constellations(&mut self, path: &str) -> Result<()> {
+        match crate::constellations::ConstellationPack::open(path) {
+            Ok(p) => {
+                self.constellations = Some(crate::constellations::Loaded::new(p));
+                Ok(())
+            }
+            Err(e) => {
+                self.constellations = None;
+                self.constellations_error = e.to_string();
+                Err(e)
+            }
+        }
+    }
+
     /// Languages in the names pack (empty = no pack, English only).
     pub fn languages(&self) -> Vec<String> {
         self.names
@@ -265,7 +313,7 @@ fn project_outlines(wcs: &Wcs, r: &crate::dso::DsoRecord, max_level: u8) -> Vec<
 }
 
 /// Ramer–Douglas–Peucker simplification of a polyline, keeping both ends.
-fn simplify(points: &[[f64; 2]], tol: f64) -> Vec<[f64; 2]> {
+pub(crate) fn simplify(points: &[[f64; 2]], tol: f64) -> Vec<[f64; 2]> {
     fn rdp(p: &[[f64; 2]], tol: f64, keep: &mut [bool], lo: usize, hi: usize) {
         if hi <= lo + 1 {
             return;
@@ -634,12 +682,70 @@ impl Annotator {
             }
         }
 
+        // ── Constellations: figures with names, and IAU boundaries ──
+        let (mut constellations, mut boundaries) = (Vec::new(), Vec::new());
+        if opts.include_constellations || opts.constellation_boundaries {
+            match &self.constellations {
+                None => layers
+                    .reasons
+                    .push(("constellations".into(), self.constellations_error.clone())),
+                Some(loaded) => {
+                    layers.constellations = true;
+                    let pack = &loaded.pack;
+                    let view = crate::constellations::View::new(wcs);
+                    if opts.include_constellations {
+                        for (i, c) in pack.constellations.iter().enumerate() {
+                            let lines = loaded.figure(&view, i);
+                            if lines.is_empty() {
+                                continue;
+                            }
+                            let label = view.in_frame_point(c.label).or_else(|| {
+                                let inside: Vec<[f64; 2]> = lines
+                                    .iter()
+                                    .flatten()
+                                    .copied()
+                                    .filter(|&p| view.contains(p))
+                                    .collect();
+                                (!inside.is_empty()).then(|| {
+                                    let n = inside.len() as f64;
+                                    [
+                                        inside.iter().map(|p| p[0]).sum::<f64>() / n,
+                                        inside.iter().map(|p| p[1]).sum::<f64>() / n,
+                                    ]
+                                })
+                            });
+                            constellations.push(crate::constellations::ConstellationAnnotation {
+                                abbr: c.abbr.clone(),
+                                name: self
+                                    .localized(&format!("CON {}", c.abbr), lang, Some(&c.name))
+                                    .unwrap_or_else(|| c.name.clone()),
+                                label,
+                                lines,
+                            });
+                        }
+                    }
+                    if opts.constellation_boundaries {
+                        for (i, points) in loaded.boundaries(&view) {
+                            boundaries.push(crate::constellations::BoundaryAnnotation {
+                                between: pack.boundaries[i]
+                                    .between
+                                    .map(|k| pack.constellations[k as usize].abbr.clone()),
+                                points,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         Annotations {
             stars,
             named_stars,
             objects,
             solar,
             satellites,
+            constellations,
+            boundaries,
             layers,
         }
     }

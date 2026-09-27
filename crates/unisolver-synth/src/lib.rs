@@ -7,6 +7,8 @@ use rand_distr::{Distribution, Normal};
 use std::sync::{Mutex, OnceLock};
 use tetra3::{Centroid, GenerateDatabaseConfig, SolverDatabase, Star};
 
+pub mod exif;
+
 pub fn random_sky(n: usize, seed: u64, mag_min: f32, mag_max: f32) -> Vec<Star> {
     let mut rng = StdRng::seed_from_u64(seed);
     (0..n)

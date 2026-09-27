@@ -4,6 +4,7 @@
 #                    names, the tests that assert them, examples in docs)
 #   line <glob> <text>  one exact line
 file tools/namesgen/data/objects-names.json
+file tools/namesgen/data/constellation-names.json
 file README.zh-CN.md
 file scripts/ci/cjk-allowlist.txt
 literals tools/namesgen/src/main.rs

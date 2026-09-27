@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:unisolver_flutter/unisolver_flutter.dart';
 
@@ -76,166 +78,223 @@ Offset outlineLabelAnchor(
   return Offset(x, y);
 }
 
-/// Solve and annotation overlay. Coordinates are source-image pixels (top-left origin);
-/// the outer FittedBox scales, so the painter does no coordinate conversion.
-class SolveOverlayPainter extends CustomPainter {
-  SolveOverlayPainter({required this.outcome, required this.annotations});
+/// The viewer's zoom, read from the x axis: `getMaxScaleOnAxis` also counts z, which a 2D
+/// fit may leave at 1.
+double viewerScale(Matrix4 m) =>
+    math.sqrt(m.storage[0] * m.storage[0] + m.storage[1] * m.storage[1]);
 
+/// Grid label text: the compass point first when there is one (`S 180°`); the horizon by name.
+String gridLabelText(GridLineDto g) => switch (g.kind) {
+  GridKindDto.horizon => 'Horizon',
+  _ => g.cardinal == null ? g.text : '${g.cardinal} ${g.text}',
+};
+
+/// Where to put a label's top-left corner so the text sits just inside the visible edge the
+/// engine anchored it on.
+Offset gridLabelOffset(GridEdgeDto edge, Size text) => switch (edge) {
+  GridEdgeDto.left => Offset(4, -text.height / 2),
+  GridEdgeDto.right => Offset(-text.width - 4, -text.height / 2),
+  GridEdgeDto.top => Offset(-text.width / 2, 4),
+  GridEdgeDto.bottom => Offset(-text.width / 2, -text.height - 4),
+  GridEdgeDto.inside => Offset(-text.width / 2, -text.height / 2),
+};
+
+/// Solve and annotation overlay, drawn in **screen** space. The engine returns image-pixel
+/// geometry; [transform] (the viewer's image → screen matrix) moves the points, while strokes,
+/// markers and text keep their screen size at any zoom. Sizes the sky gives (a nebula's
+/// extent, the moon's disc) scale with the image.
+///
+/// The detection and match rings are diagnostics, off unless [diagnostics]: with them on, a
+/// bright named star wears four rings (detected, matched, catalogued, named).
+class SolveOverlayPainter extends CustomPainter {
+  SolveOverlayPainter({
+    required this.transform,
+    required this.outcome,
+    required this.annotations,
+    this.diagnostics = false,
+  }) : super(repaint: transform);
+
+  final TransformationController transform;
   final SolveOutcomeDto? outcome;
   final AnnotationsDto? annotations;
+  final bool diagnostics;
 
-  static final _detected = Paint()
+  static Paint _stroke(Color c, double w) => Paint()
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.5
-    ..color = const Color(0xFF40FF40);
-  static final _matched = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.5
-    ..color = const Color(0xFFFF5050);
-  static final _catalog = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.0
-    ..color = const Color(0xFFFFD23C);
-  static final _named = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 2.0
-    ..color = const Color(0xFF50C8FF);
-  static final _dso = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.5
-    ..color = const Color(0xFFC878FF);
-  static final _figure = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.5
-    ..color = const Color(0xA080B4FF);
-  static final _boundary = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.0
-    ..color = const Color(0x55FFFFFF);
-  static final _solar = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 2.0
-    ..color = const Color(0xFFFFA040);
-  // Outline levels 1..3: the faint outer edge is drawn faintest
-  static final _outline = [0x70, 0xA8, 0xE0]
-      .map(
-        (a) => Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..color = Color.fromARGB(a, 0xC8, 0x78, 0xFF),
-      )
-      .toList();
+    ..strokeWidth = w
+    ..color = c;
+  static final _detected = _stroke(const Color(0xFF40FF40), 1.2);
+  static final _matched = _stroke(const Color(0xFFFF5050), 1.2);
+  static final _catalog = Paint()..color = const Color(0xCCFFD23C);
+  static final _named = _stroke(const Color(0xFF50C8FF), 1.5);
+  static final _dso = _stroke(const Color(0xFFC878FF), 1.2);
+  // Lines are opaque mid-tones rather than translucent: thin translucent strokes blend
+  // unevenly on some renderers (up to fully opaque where a line runs along a pixel row)
+  static final _outline = [
+    const Color(0xFF7A5A99),
+    const Color(0xFF9E68CC),
+    const Color(0xFFC878FF),
+  ].map((c) => _stroke(c, 1.2)).toList();
+  static final _figure = _stroke(const Color(0xFF5E7FB8), 1.2);
+  static final _boundary = _stroke(const Color(0xFF7C7C86), 1.0);
+  static final _eqGrid = _stroke(const Color(0xFF3FA392), 1.0);
+  static final _hzGrid = _stroke(const Color(0xFFB57A3E), 1.0);
+  static final _horizon = _stroke(const Color(0xFFFF6E3C), 2.0);
+  static final _solar = _stroke(const Color(0xFFFFA040), 1.5);
+  static final _satellite = _stroke(const Color(0xFF78FFFF), 1.2);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final o = outcome;
-    if (o != null) {
-      for (final c in o.centroids) {
-        canvas.drawCircle(Offset(c.x, c.y), 9, _detected);
-      }
-      final g = o.solution;
-      if (g != null) {
-        for (final m in g.matched) {
-          canvas.drawCircle(Offset(m.x, m.y), 12, _matched);
-        }
-      }
-    }
+    final m = transform.value;
+    final scale = viewerScale(m);
+    Offset at(double x, double y) =>
+        MatrixUtils.transformPoint(m, Offset(x, y));
+    void path(Path p, Paint paint) =>
+        canvas.drawPath(p.transform(m.storage), paint);
+
     final a = annotations;
     if (a != null) {
-      // Boundaries and figures first, under everything else; the canvas clips what runs past
-      // the frame edge
+      for (final g in a.grid) {
+        final paint = g.kind == GridKindDto.horizon
+            ? _horizon
+            : g.system == GridSystemDto.equatorial
+            ? _eqGrid
+            : _hzGrid;
+        for (final l in g.lines) {
+          path(polylinePath(l), paint);
+        }
+      }
       for (final b in a.boundaries) {
-        canvas.drawPath(polylinePath(b.points), _boundary);
+        path(polylinePath(b.points), _boundary);
       }
       for (final c in a.constellations) {
         for (final l in c.lines) {
-          canvas.drawPath(polylinePath(l), _figure);
+          path(polylinePath(l), _figure);
         }
-        if (c.labelX != null && c.labelY != null) {
-          _label(canvas, c.name, c.labelX!, c.labelY!, const Color(0xC080B4FF));
-        }
-      }
-      for (final s in a.stars) {
-        canvas.drawCircle(Offset(s.x, s.y), 5, _catalog);
       }
       for (final o in a.objects) {
         if (o.outlines.isNotEmpty) {
           for (final lv in o.outlines) {
-            final paint = _outline[(lv.level.clamp(1, 3)) - 1];
             for (final c in lv.contours) {
-              canvas.drawPath(outlinePath(c), paint);
+              path(outlinePath(c), _outline[(lv.level.clamp(1, 3)) - 1]);
             }
           }
-          final at = outlineLabelAnchor(o.x, o.y, o.outlines, size);
-          _label(
-            canvas,
-            o.commonName ?? o.designation,
-            at.dx,
-            at.dy + 4,
-            const Color(0xFFC878FF),
-          );
-          continue;
-        }
-        final shape = dsoRenderShape(
-          semiMajorPx: o.semiMajorPx,
-          semiMinorPx: o.semiMinorPx,
-          angleDeg: o.angleDeg,
-        );
-        final r = shape.radius.clamp(14.0, 4000.0);
-        if (shape.isCircle) {
-          canvas.drawCircle(Offset(o.x, o.y), r, _dso);
         } else {
-          canvas.save();
-          canvas.translate(o.x, o.y);
-          // Image angles are counter-clockwise while screen y points down: rotate the canvas by the negative
-          canvas.rotate(-shape.angleRad);
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: Offset.zero,
-              width: 2 * r,
-              height: 2 * shape.semiMinor.clamp(14.0, 4000.0),
-            ),
-            _dso,
+          final shape = dsoRenderShape(
+            semiMajorPx: o.semiMajorPx,
+            semiMinorPx: o.semiMinorPx,
+            angleDeg: o.angleDeg,
           );
-          canvas.restore();
+          final r = (shape.radius * scale).clamp(8.0, 4000.0);
+          final c = at(o.x, o.y);
+          if (shape.isCircle) {
+            canvas.drawCircle(c, r, _dso);
+          } else {
+            canvas.save();
+            canvas.translate(c.dx, c.dy);
+            // Image angles are counter-clockwise while screen y points down
+            canvas.rotate(-shape.angleRad);
+            canvas.drawOval(
+              Rect.fromCenter(
+                center: Offset.zero,
+                width: 2 * r,
+                height: 2 * (shape.semiMinor * scale).clamp(8.0, 4000.0),
+              ),
+              _dso,
+            );
+            canvas.restore();
+          }
         }
-        _label(
+      }
+      // A catalogued star that is also named gets only the named marker
+      final named = [for (final n in a.namedStars) at(n.x, n.y)];
+      for (final s in a.stars) {
+        final p = at(s.x, s.y);
+        if (named.any((q) => (q - p).distance < 4)) continue;
+        canvas.drawCircle(p, 2.5, _catalog);
+      }
+      for (final b in a.solar) {
+        final r = ((b.angularRadiusPx ?? 0) * scale).clamp(7.0, 4000.0);
+        canvas.drawCircle(at(b.x, b.y), r, _solar);
+      }
+      for (final s in a.satellites) {
+        canvas.drawCircle(at(s.x, s.y), 5, _satellite);
+      }
+      for (final p in named) {
+        canvas.drawCircle(p, 7, _named);
+      }
+    }
+    final o = outcome;
+    if (diagnostics && o != null) {
+      for (final c in o.centroids) {
+        canvas.drawCircle(at(c.x, c.y), 6, _detected);
+      }
+      for (final mt in o.solution?.matched ?? const <MatchDto>[]) {
+        canvas.drawCircle(at(mt.x, mt.y), 9, _matched);
+      }
+    }
+    // Text last, above every line
+    if (a != null) {
+      for (final g in a.grid) {
+        final l = g.label;
+        if (l == null) continue;
+        final color = g.system == GridSystemDto.equatorial
+            ? const Color(0xFF50E6C8)
+            : const Color(0xFFFFAA50);
+        final tp = _text(gridLabelText(g), color, 11);
+        tp.paint(canvas, at(l.x, l.y) + gridLabelOffset(l.edge, tp.size));
+      }
+      for (final c in a.constellations) {
+        if (c.labelX == null || c.labelY == null) continue;
+        final tp = _text(c.name, const Color(0xC080B4FF), 13);
+        tp.paint(
           canvas,
-          o.commonName ?? o.designation,
-          o.x,
-          o.y + r + 2,
-          const Color(0xFFC878FF),
+          at(c.labelX!, c.labelY!) - tp.size.center(Offset.zero),
         );
+      }
+      final wcs = outcome?.solution?.wcs;
+      final image = wcs == null
+          ? Size.infinite
+          : Size(wcs.width.toDouble(), wcs.height.toDouble());
+      for (final o in a.objects) {
+        final tp = _text(
+          o.commonName ?? o.designation,
+          const Color(0xFFC878FF),
+          11,
+        );
+        // An outlined object's centre may be off the image: label its first visible vertex
+        final anchor = o.outlines.isEmpty
+            ? Offset(o.x, o.y)
+            : outlineLabelAnchor(o.x, o.y, o.outlines, image);
+        tp.paint(canvas, at(anchor.dx, anchor.dy) + Offset(-tp.width / 2, 10));
       }
       for (final n in a.namedStars) {
-        canvas.drawCircle(Offset(n.x, n.y), 16, _named);
-        _label(canvas, n.name, n.x, n.y + 18, const Color(0xFF50C8FF));
+        final tp = _text(n.name, const Color(0xFF50C8FF), 12);
+        tp.paint(canvas, at(n.x, n.y) + Offset(-tp.width / 2, 9));
       }
-      // Planets, the moon and the sun (present only when the solve reported a time)
       for (final b in a.solar) {
-        final r = (b.angularRadiusPx ?? 0).clamp(14.0, 4000.0);
-        canvas.drawCircle(Offset(b.x, b.y), r, _solar);
-        _label(canvas, b.name, b.x, b.y + r + 2, const Color(0xFFFFA040));
+        final tp = _text(b.name, const Color(0xFFFFA040), 12);
+        tp.paint(canvas, at(b.x, b.y) + Offset(-tp.width / 2, 9));
       }
     }
   }
 
-  void _label(Canvas canvas, String text, double x, double y, Color color) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: 14,
-          shadows: const [Shadow(blurRadius: 3, color: Colors.black)],
-        ),
+  TextPainter _text(String text, Color color, double size) => TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        color: color,
+        fontSize: size,
+        shadows: const [Shadow(blurRadius: 3, color: Colors.black)],
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(x - tp.width / 2, y));
-  }
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
 
   @override
   bool shouldRepaint(SolveOverlayPainter old) =>
-      old.outcome != outcome || old.annotations != annotations;
+      old.outcome != outcome ||
+      old.annotations != annotations ||
+      old.diagnostics != diagnostics ||
+      old.transform != transform;
 }

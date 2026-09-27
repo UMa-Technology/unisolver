@@ -10,6 +10,7 @@ import 'package:unisolver_flutter/asset_installer.dart';
 import 'package:unisolver_flutter/src/rust/api/logging.dart' as rust_log;
 import 'package:unisolver_flutter/src/rust/api/solver.dart';
 import 'package:unisolver_flutter/src/rust/api/types.dart';
+import 'package:unisolver_flutter/src/rust/api/wcs.dart';
 import 'package:unisolver_flutter/src/rust/frb_generated.dart';
 
 void main() {
@@ -93,6 +94,37 @@ void main() {
     expect(sco.single.name, '天蝎座');
     expect(sco.single.lines, isNotEmpty);
     expect(a.boundaries.any((b) => b.between.contains('Sco')), isTrue);
+
+    // A grid for a zoomed view: finer lines, labels on the view's edges; and the batch
+    // transform agrees with the solution's boresight
+    final w = g.wcs;
+    final grid = await ann.annotate(
+      wcs: w,
+      opts: AnnotateOptionsDto(
+        starMaxMag: base.starMaxMag,
+        maxStars: base.maxStars,
+        includeStarNames: false,
+        includeDso: false,
+        dsoOutlines: false,
+        maxOutlineLevel: 3,
+        language: 'en',
+        includeSolarSystem: false,
+        equatorialGrid: true,
+        viewport: ViewportDto(
+          x: w.width / 2 - 200,
+          y: w.height / 2 - 100,
+          width: 400,
+          height: 200,
+          scale: 4,
+        ),
+      ),
+    );
+    expect(grid.layers.grid, isTrue);
+    expect(grid.grid.where((l) => l.kind == GridKindDto.dec), isNotEmpty);
+    expect(grid.grid.every((l) => l.label?.edge != null), isTrue);
+    final px = wcsSkyToPixels(wcs: w, radec: [g.raDeg, g.decDeg]);
+    expect(px[0], closeTo((w.width - 1) / 2, 0.5));
+    expect(px[1], closeTo((w.height - 1) / 2, 0.5));
     // In the authoritative name data, Chinese star names carry the Latin name ("心宿二 Antares")
     expect(
       a.namedStars.any((n) => n.name.contains('心宿二')),

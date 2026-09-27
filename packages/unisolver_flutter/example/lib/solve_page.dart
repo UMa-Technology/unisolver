@@ -71,6 +71,9 @@ class _SolvePageState extends State<SolvePage> {
     super.didUpdateWidget(old);
     // A names pack installed later needs new annotators
     if (old.namesPath != widget.namesPath) _dropAnnotators();
+    if (old.language != widget.language || old.namesPath != widget.namesPath) {
+      _annotate();
+    }
   }
 
   void _dropAnnotators() {
@@ -83,6 +86,7 @@ class _SolvePageState extends State<SolvePage> {
   @override
   void dispose() {
     _dropAnnotators();
+    _viewer.dispose();
     super.dispose();
   }
 
@@ -153,37 +157,9 @@ class _SolvePageState extends State<SolvePage> {
       _solvedBy = res.db;
       sw.stop();
 
-      AnnotationsDto? ann;
-      if (out.solution != null) {
-        // Annotate with the tier that solved the frame (narrow tiers are denser); annotators are cached per tier
-        final annotator = await _annotatorFor(res.db);
-        final base = AnnotateOptionsDto.defaults();
-        ann = await annotator.annotate(
-          wcs: out.solution!.wcs,
-          opts: AnnotateOptionsDto(
-            starMaxMag: 5.0,
-            maxStars: 120,
-            includeStarNames: true,
-            includeDso: true,
-            dsoMaxMag: 8.0,
-            dsoOutlines: true,
-            maxOutlineLevel: 3,
-            language: widget.language,
-            // A photo's EXIF (with its zone) or a FITS header gives the time, and EXIF GPS the
-            // place: the solve reports both, so the solar-system layer needs no input here
-            includeSolarSystem: out.observationUnixMs != null,
-            observationUnixMs: out.observationUnixMs,
-            observer: out.observer,
-            includeConstellations: true,
-            constellationBoundaries: true,
-          ),
-        );
-        assert(base.maxStars > 0);
-      }
-
       setState(() {
         _outcome = out;
-        _annotations = ann;
+        _annotations = null;
         _attempts = attempts;
         final g = out.solution;
         _status = g == null
@@ -196,11 +172,96 @@ class _SolvePageState extends State<SolvePage> {
                   '${_usedCalibratedCamera ? ' (calibrated)' : ''}'
                   '${_solvedBy == null ? '' : '  ← $_solvedBy'}';
       });
+      await _annotate();
     } catch (e) {
       setState(() => _status = 'Error: $e');
     } finally {
       setState(() => _busy = false);
     }
+  }
+
+  // ── Viewer: pinch-zoom the photo; the overlay follows in screen space ──
+
+  final _viewer = TransformationController();
+  Size _viewSize = Size.zero;
+
+  /// What the fit was computed for; a new image or view size refits
+  (ui.Image, Size)? _fittedFor;
+
+  bool _raDecGrid = true;
+  bool _altAzGrid = false;
+  bool _diagnostics = false;
+
+  /// Annotations are requested for one viewport at a time; a reply for an older one is dropped
+  int _annotateSeq = 0;
+
+  /// Fit the photo to the view (as BoxFit.contain), then annotate for that view
+  void _fit(ui.Image image, Size view) {
+    final s = math.min(view.width / image.width, view.height / image.height);
+    _viewer.value = Matrix4.identity()
+      ..translateByDouble(
+        (view.width - image.width * s) / 2,
+        (view.height - image.height * s) / 2,
+        0,
+        1,
+      )
+      ..scaleByDouble(s, s, s, 1);
+    _fittedFor = (image, view);
+    _annotate();
+  }
+
+  /// The visible part of the image in image pixels, and the zoom: the engine fits grid
+  /// spacing, line sampling and label positions to it
+  ViewportDto _viewport() {
+    final m = _viewer.value;
+    final s = viewerScale(m);
+    return ViewportDto(
+      x: -m.storage[12] / s,
+      y: -m.storage[13] / s,
+      width: _viewSize.width / s,
+      height: _viewSize.height / s,
+      scale: s,
+    );
+  }
+
+  /// The horizontal grid needs when and where the photo was taken (EXIF time with its zone
+  /// and GPS position, reported by the solve)
+  bool get _canAltAz =>
+      _outcome?.observationUnixMs != null && _outcome?.observer != null;
+
+  /// Annotate for the current view. Cheap (about a millisecond), so it runs again after every
+  /// pinch: the grid gets finer as you zoom in and labels stay on the visible edges.
+  Future<void> _annotate() async {
+    final out = _outcome;
+    final g = out?.solution;
+    if (out == null || g == null || _viewSize.isEmpty) return;
+    final seq = ++_annotateSeq;
+    // Annotate with the tier that solved the frame (narrow tiers are denser); annotators are cached per tier
+    final annotator = await _annotatorFor(_solvedBy);
+    final ann = await annotator.annotate(
+      wcs: g.wcs,
+      opts: AnnotateOptionsDto(
+        starMaxMag: 5.0,
+        maxStars: 120,
+        includeStarNames: true,
+        includeDso: true,
+        dsoMaxMag: 8.0,
+        dsoOutlines: true,
+        maxOutlineLevel: 3,
+        language: widget.language,
+        // A photo's EXIF (with its zone) or a FITS header gives the time, and EXIF GPS the
+        // place: the solve reports both, so the solar-system layer needs no input here
+        includeSolarSystem: out.observationUnixMs != null,
+        observationUnixMs: out.observationUnixMs,
+        observer: out.observer,
+        includeConstellations: true,
+        constellationBoundaries: true,
+        equatorialGrid: _raDecGrid,
+        horizontalGrid: _altAzGrid && _canAltAz,
+        viewport: _viewport(),
+      ),
+    );
+    if (seq == _annotateSeq && mounted) setState(() => _annotations = ann);
   }
 
   Future<void> _solveSample() async {
@@ -225,26 +286,86 @@ class _SolvePageState extends State<SolvePage> {
         Expanded(
           child: d == null
               ? const Center(child: Text('Pick the sample or a photo to solve'))
-              : FittedBox(
-                  fit: BoxFit.contain,
-                  child: SizedBox(
-                    width: d.width.toDouble(),
-                    height: d.height.toDouble(),
-                    child: Stack(
-                      children: [
-                        RawImage(image: d),
-                        CustomPaint(
-                          size: Size(d.width.toDouble(), d.height.toDouble()),
-                          painter: SolveOverlayPainter(
-                            outcome: _outcome,
-                            annotations: _annotations,
+              : LayoutBuilder(
+                  builder: (context, box) {
+                    _viewSize = box.biggest;
+                    if (_fittedFor != (d, _viewSize)) {
+                      // The controller notifies the viewer: set it after this frame
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _fit(d, _viewSize),
+                      );
+                    }
+                    return ClipRect(
+                      child: Stack(
+                        children: [
+                          // The photo zooms; the overlay is drawn on top in screen space, so
+                          // strokes and text keep their size at any zoom
+                          InteractiveViewer(
+                            transformationController: _viewer,
+                            constrained: false,
+                            minScale: 0.01,
+                            maxScale: 64,
+                            boundaryMargin: const EdgeInsets.all(
+                              double.infinity,
+                            ),
+                            onInteractionEnd: (_) => _annotate(),
+                            child: SizedBox(
+                              width: d.width.toDouble(),
+                              height: d.height.toDouble(),
+                              child: RawImage(image: d),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
+                          IgnorePointer(
+                            child: CustomPaint(
+                              size: _viewSize,
+                              painter: SolveOverlayPainter(
+                                transform: _viewer,
+                                outcome: _outcome,
+                                annotations: _annotations,
+                                diagnostics: _diagnostics,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
         ),
+        if (_outcome?.solution != null)
+          Wrap(
+            spacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('RA/Dec grid'),
+                selected: _raDecGrid,
+                onSelected: (v) {
+                  setState(() => _raDecGrid = v);
+                  _annotate();
+                },
+              ),
+              Tooltip(
+                message: _canAltAz
+                    ? 'Altitude and azimuth where and when the photo was taken'
+                    : 'Needs the capture time and GPS position (EXIF)',
+                child: FilterChip(
+                  label: const Text('Alt/Az grid'),
+                  selected: _altAzGrid && _canAltAz,
+                  onSelected: _canAltAz
+                      ? (v) {
+                          setState(() => _altAzGrid = v);
+                          _annotate();
+                        }
+                      : null,
+                ),
+              ),
+              FilterChip(
+                label: const Text('Detections'),
+                selected: _diagnostics,
+                onSelected: (v) => setState(() => _diagnostics = v),
+              ),
+            ],
+          ),
         if (_status != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

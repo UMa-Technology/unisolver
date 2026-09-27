@@ -7,6 +7,26 @@ import 'package:unisolver_flutter_example/fov_presets.dart';
 import 'package:unisolver_flutter_example/overlay_painter.dart';
 
 void main() {
+  test('grid labels read like a chart and sit inside the visible edge', () {
+    GridLineDto line(GridKindDto kind, String text, [String? cardinal]) =>
+        GridLineDto(
+          system: kind == GridKindDto.ra || kind == GridKindDto.dec
+              ? GridSystemDto.equatorial
+              : GridSystemDto.horizontal,
+          kind: kind,
+          valueDeg: 0,
+          text: text,
+          cardinal: cardinal,
+          lines: const [],
+        );
+    expect(gridLabelText(line(GridKindDto.ra, '16h30m')), '16h30m');
+    expect(gridLabelText(line(GridKindDto.az, '180°', 'S')), 'S 180°');
+    expect(gridLabelText(line(GridKindDto.horizon, '0°')), 'Horizon');
+    const text = Size(40, 12);
+    expect(gridLabelOffset(GridEdgeDto.left, text), const Offset(4, -6));
+    expect(gridLabelOffset(GridEdgeDto.bottom, text), const Offset(-20, -16));
+    expect(gridLabelOffset(GridEdgeDto.right, text).dx, -44);
+  });
   test('constellation polylines stay open', () {
     final path = polylinePath([0, 0, 10, 0, 10, 10]);
     final b = path.getBounds();

@@ -18,6 +18,15 @@
    horizontal bands converted straight from the frame's pixels, without a full-frame f32 copy:
    solving a 26 Mpx astro frame peaks at 290 MB instead of 630 MB (with a narrow tier loaded)
    and gives the same solutions. Smaller frames are extracted as before.
+5. **Constellations.** A new constellation pack, `unisolver_constellations.bin` (bundled,
+   CC BY-SA 4.0), carries the 88 IAU constellations' figures from the IAU charts and their
+   official boundaries. Annotation draws them on request (`includeConstellations`,
+   `constellationBoundaries`; C `include_constellations`, `constellation_boundaries`) as
+   pixel polylines with names and label positions; load the pack with
+   `annotator(constellationsPath: ...)` and `UnisolverAssets.installConstellations()`
+   (C `unisolver_annotator_load_constellations`, Rust `Annotator::with_constellations`). The
+   names pack now names the constellations in its 13 languages, and `dataAttributions()`
+   lists the new source. `annotator()` gains the optional `constellationsPath` parameter.
 
 ## 2026-09-28 — v0.2.0
 

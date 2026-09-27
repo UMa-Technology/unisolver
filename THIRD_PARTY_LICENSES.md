@@ -57,19 +57,32 @@ hand-drawn outlines of extended objects, plus curated Chinese common names. The 
 distributed under CC BY-SA 4.0. Attribution:
 "Deep-sky object data from OpenNGC by Mattia Verga (CC BY-SA 4.0)."
 
+### Constellation pack `unisolver_constellations.bin` (CC BY-SA 4.0)
+Source: Stellarium's `skycultures/modern_iau/index.json` (CC BY-SA 4.0): the constellation
+figures of the IAU charts by Sky & Telescope (Roger Sinnott, Rick Fienberg, Alan MacRobert)
+and the IAU boundaries (Delporte 1930, digitized by Pierre Barbier, epoch B1875, precessed
+to J2000 here); figure stars at Hipparcos positions (van Leeuwen 2007). The pack is
+distributed under CC BY-SA 4.0. Attribution: "Constellation figures from the IAU charts by
+Sky & Telescope (Roger Sinnott, Rick Fienberg, Alan MacRobert) and boundaries after Delporte
+(1930), as digitized by Pierre Barbier, via Stellarium's modern (IAU) sky culture
+(CC BY-SA 4.0)."
+
 ### Named stars (geometry and English names)
 IAU Working Group on Star Names (WGSN) catalog. Attribution: IAU.
 
 ### Multilingual names pack `unisolver_names.bin` — GPL-2.0-or-later
 Source: **Stellarium** (GPL-2.0-or-later): `nebulae/default/names.dat`,
 `skycultures/common_star_names.fab` and the `po/stellarium-sky/*.po` translations,
-merged into `tools/namesgen/data/objects-names.json` and compiled by `tools/namesgen`
-(13 languages, 1026 objects).
+merged into `tools/namesgen/data/objects-names.json`, plus the IAU constellation names from
+the `po/stellarium-skycultures/*.po` translations in
+`tools/namesgen/data/constellation-names.json`; compiled by `tools/namesgen` (13 languages,
+1114 keys).
 
 This is the only GPL item in the repository:
 - The names pack, and anything distributing it, is subject to GPL-2.0-or-later: keep
   Stellarium's copyright notice and license, and make the corresponding source available
-  (`tools/namesgen` and `tools/namesgen/data/objects-names.json` in this repository).
+  (`tools/namesgen`, `tools/namesgen/data/objects-names.json` and
+  `tools/namesgen/data/constellation-names.json` in this repository).
 - It is a separate, opt-in data asset (`packages/unisolver_flutter/lib/optional/`), not
   bundled by default. The engine links no GPL code and annotates without it (English
   names plus the catalog's Chinese names).

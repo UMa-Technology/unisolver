@@ -154,7 +154,10 @@ moves the moon by half a degree.
 ### 1.4 Annotation
 
 ```dart
-final annotator = await pool.annotator(db: res.db, dsoPath: paths.dsoPath, namesPath: namesPath);
+final annotator = await pool.annotator(
+  db: res.db, dsoPath: paths.dsoPath, namesPath: namesPath,
+  constellationsPath: await UnisolverAssets.installConstellations(),
+);
 final ann = await annotator.annotate(
   wcs: solution.wcs,
   opts: AnnotateOptionsDto(
@@ -164,9 +167,12 @@ final ann = await annotator.annotate(
     observer: ObserverDto(latDeg: 31.2, lonDeg: 121.5, altM: 10), // see below
     satelliteTle: tleText,                    // see below; null when unused
     language: 'zh_cn',
+    includeConstellations: true,              // figures and names (off by default)
+    constellationBoundaries: true,            // IAU boundaries (off by default)
   ),
 );
 // ann.stars / ann.namedStars / ann.objects (DSO) / ann.solar / ann.satellites
+// ann.constellations / ann.boundaries
 // ann.layers: availability per layer plus **why** a layer is unavailable or degraded
 ```
 
@@ -194,14 +200,29 @@ the frame while part of its outline is inside, and outlined objects are kept reg
 `dsoOutlines: false`, or cap the levels with `maxOutlineLevel` (1 keeps only the outer
 edge). The C and Rust surfaces carry the same data, with `points` as `[x, y]` pairs.
 
+**Constellations.** The constellation pack `unisolver_constellations.bin` (bundled with the
+plugin; `UnisolverAssets.installConstellations()` returns its path) holds the 88 IAU
+constellations: the line figures of the IAU charts (drawn by Sky & Telescope) and the
+official boundaries (Delporte 1930, in J2000). With `includeConstellations`, each
+`ConstellationAnnotationDto` in the frame has its IAU abbreviation, a name (from the names
+pack in the requested language, else the IAU name such as "Orion"), a label position
+(`labelX`/`labelY`, null when no star of the figure is in the frame) and its figure as
+polylines (`lines`, interleaved pixels). With `constellationBoundaries`, each
+`BoundaryAnnotationDto` is a boundary stretch (`points`) with the constellations on either
+side (`between`). Polylines follow great circles through the lens model, may run past the
+frame edge (let the canvas clip them) and break where the sky leaves the camera's view.
+Both options are off by default. Without the pack the layers report themselves unavailable
+in `layers.reasons`.
+
 **Build the annotator once and keep it.** Construction reads and parses the DSO catalog
-(771 KB) and the names pack (215 KB):
+(771 KB), the names pack (215 KB) and, when given, the constellation pack (195 KB):
 
 | Operation | Measured (Apple M2 Max, 73.2° phone frame, 734 annotated objects, 20 outlined) |
 |---|---|
 | Solve | 350–550 ms |
 | Annotate a frame | **0.96 ms** |
-| Build an annotator | **2.12 ms** |
+| … plus constellation figures and boundaries | **1.2 ms** (73.7° field; under 0.1 ms at 8°) |
+| Build an annotator | **2.12 ms**, plus 1.2 ms with the constellation pack |
 
 Rebuilding it per solve triples the cost of annotation (more on phones). With a pool keep
 one per **tier that solved the frame** (narrow tiers have denser catalogs). The language
@@ -222,8 +243,8 @@ page) is an **error**, not zero satellites, which would read as "no passes today
 
 **Multilingual names**: `language` is a language code. The names pack
 `unisolver_names.bin` provides **13 languages** (`en` `zh_cn` `zh_tw` `ja` `ko` `fr` `de`
-`es` `it` `ru` `pl` `hu` `ro`) for **411 named stars and 615 deep-sky and solar-system
-objects**. It is licensed **GPL-2.0-or-later**, so it is **not bundled by default**; opt in
+`es` `it` `ru` `pl` `hu` `ro`) for **411 named stars, 615 deep-sky and solar-system
+objects and the 88 constellations**. It is licensed **GPL-2.0-or-later**, so it is **not bundled by default**; opt in
 one of two ways:
 
 - **Bundle it with your app**: declare
@@ -378,6 +399,7 @@ databases are not attached (section 4).
 | `unisolver_satellites_json(tle, unix_ms, lat, lon, alt, &err)` | TLE + SGP4 → topocentric positions (JSON array) |
 | `unisolver_annotator_open(solver, dso, names, &err)` | Build an annotator (both paths may be NULL); **build once and keep it** |
 | `unisolver_pool_annotator_open(pool, db_name, dso, names, &err)` | The same from one tier of a pool (`db_name` = the solve JSON's `db`) |
+| `unisolver_annotator_load_constellations(annotator, path, &err)` | Load the constellation pack (figures and IAU boundaries) → true when loaded |
 | `unisolver_annotate_json(annotator, wcs_json, opts_json, &err)` | Annotate a frame from the solve JSON's `wcs` → annotation JSON |
 | `unisolver_annotator_languages_json(annotator, &err)` | Languages in the names pack (JSON array) |
 | `unisolver_annotator_close(annotator)` | Release an annotator |
@@ -439,7 +461,9 @@ unisolver_annotator_close(ann);
 
 `opts_json` may be NULL or `{}` for all defaults. Common fields: `language`,
 `observation_unix_ms` (required by the solar-system and satellite layers), `observer` (moon
-parallax; required by satellites) and `satellite_tle`.
+parallax; required by satellites), `satellite_tle`, and `include_constellations` /
+`constellation_boundaries` (after `unisolver_annotator_load_constellations`; the JSON then
+has `constellations` and `boundaries`).
 
 ### Known FOV and tracking (the telescope-driver case)
 
@@ -534,6 +558,7 @@ runtime, so only these count (**databases excluded**, see the next table):
 | Windows x64 / arm64 DLL | not measured | needs a Windows host; expected to be similar |
 | Dart AOT | ~150 KB | `unisolver_flutter` + `flutter_rust_bridge` |
 | `unisolver_dso.bin` (bundled asset) | 753 KiB (~457 KiB compressed in the APK) | DSO annotation catalog with outlines; omit it if you do not annotate |
+| `unisolver_constellations.bin` (bundled asset) | 195 KiB (~169 KiB compressed) | constellation figures and IAU boundaries |
 
 **About 3.3 MiB installed / 3.0 MiB download per architecture** (Android arm64, without
 databases). Shipping both arm64-v8a and x86_64 doubles the native part (x86_64 is only for
@@ -547,7 +572,8 @@ tracing-subscriber layer.
 |---|---|---|---|
 | `unisolver_10_80.db` | wide field 10–80° (phones) | 16 MB / 61 MB | bundled with the plugin |
 | `unisolver_dso.bin` | DSO catalog (NGC / IC / Messier) with outlines | 771 KB | bundled with the plugin |
-| `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 210 KB | opt-in: declared by the app, or downloaded |
+| `unisolver_constellations.bin` | 88 IAU constellation figures and boundaries | 200 KB | bundled with the plugin |
+| `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 229 KB | opt-in: declared by the app, or downloaded |
 
 - Databases use the `UNISOLV2` mmap container; the engine still reads old postcard v1 files.
 - Only the wide tier is bundled; narrower tiers are yours to generate and host (see
@@ -558,8 +584,9 @@ tracing-subscriber layer.
   CC BY-SA 3.0 IGO). Keep this in your app's About page, for example:
   *This work has made use of data from the European Space Agency (ESA) mission Gaia,
   processed by the Gaia Data Processing and Analysis Consortium (DPAC).*
-  The DSO catalog derives from OpenNGC (CC BY-SA 4.0) and the names pack from Stellarium
-  (GPL-2.0-or-later); see `THIRD_PARTY_LICENSES.md`.
+  The DSO catalog derives from OpenNGC (CC BY-SA 4.0), the constellation pack from the IAU
+  charts and boundaries via Stellarium's modern (IAU) sky culture (CC BY-SA 4.0), and the
+  names pack from Stellarium (GPL-2.0-or-later); see `THIRD_PARTY_LICENSES.md`.
 
 ### Showing attributions
 

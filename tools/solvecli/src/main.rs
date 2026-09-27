@@ -59,9 +59,13 @@ struct Cli {
     #[arg(long)]
     tle: Option<PathBuf>,
     /// Observation time (Unix ms), required by the solar-system and satellite layers. **Defaults to
-    /// the header's DATE-OBS** (FITS/XISF have it; photo EXIF time is not read yet, so pass it)
+    /// the header's time**: FITS/XISF DATE-AVG or DATE-OBS plus half the exposure, EXIF
+    /// DateTimeOriginal when it carries its zone
     #[arg(long)]
     at_unix_ms: Option<i64>,
+    /// Constellation pack (UCON): draws figures and IAU boundaries in the annotated PNGs
+    #[arg(long)]
+    constellations: Option<PathBuf>,
     /// Multi-tier routing: register every *.db in this directory, no database named (exclusive with
     /// --db). Ladder rungs are dispatched by tier range; the solving tier goes into the JSON `db` field.
     #[arg(long)]
@@ -177,38 +181,6 @@ fn load_frame(
 }
 mod anyhow_like {
     pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-}
-
-/// `DATE-OBS` (`YYYY-MM-DDThh:mm:ss[.sss]`, UTC) → Unix ms. The time only feeds annotation,
-/// not the solve, so a parse failure means "no time"; not worth a date library.
-fn date_obs_to_unix_ms(s: &str) -> Option<i64> {
-    let (date, time) = s.trim().split_once(['T', ' '])?;
-    let d: Vec<i64> = date
-        .split('-')
-        .map(|t| t.parse().ok())
-        .collect::<Option<_>>()?;
-    let t: Vec<f64> = time
-        .trim_end_matches('Z')
-        .split(':')
-        .map(|t| t.parse().ok())
-        .collect::<Option<_>>()?;
-    if d.len() != 3 || t.len() != 3 {
-        return None;
-    }
-    let (y, m, day) = (d[0], d[1], d[2]);
-    if !(1..=12).contains(&m) || !(1..=31).contains(&day) {
-        return None;
-    }
-    // Howard Hinnant's days_from_civil (proleptic Gregorian, 1970-01-01 = 0)
-    let y = y - i64::from(m <= 2);
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
-    let secs = days as f64 * 86_400.0 + t[0] * 3600.0 + t[1] * 60.0 + t[2];
-    Some((secs * 1000.0) as i64)
 }
 
 /// `lat,lon[,alt_m]` → Observer (core's validate checks ranges; this only checks the shape)
@@ -390,10 +362,12 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         base.timeout_ms = Some(4_000);
         base.thorough = cli.thorough;
 
-        // Annotation time: the command line first, then the header's DATE-OBS (common in astro formats)
-        let at_unix_ms = cli
-            .at_unix_ms
-            .or_else(|| meta.date_obs.as_deref().and_then(date_obs_to_unix_ms));
+        // Observation time and place: the command line first, then the header (FITS/XISF time,
+        // EXIF time with its zone and GPS position), as the library's file entries do
+        base.observation_unix_ms = cli.at_unix_ms;
+        meta.apply_time(&mut base);
+        let at_unix_ms = base.observation_unix_ms;
+        let observer = observer.or(meta.observer);
         let track_hint = if cli.track { prev } else { None };
         let mut db_used: Option<String> = None;
         let (out, attempts) = if let Some(p) = &pool {
@@ -499,7 +473,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         if !annotators.contains_key(&ann_key) {
             annotators.insert(
                 ann_key.clone(),
-                solver_of(db_used.as_deref()).annotator(dso_arg, names_arg)?,
+                solver_of(db_used.as_deref())
+                    .annotator(dso_arg, names_arg)?
+                    .with_constellations(cli.constellations.as_ref().and_then(|p| p.to_str())),
             );
         }
         let annotator = &annotators[&ann_key];
@@ -611,9 +587,21 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     observation_unix_ms: at_unix_ms,
                     observer,
                     satellite_tle: tle_text.clone(),
+                    include_constellations: cli.constellations.is_some(),
+                    constellation_boundaries: cli.constellations.is_some(),
                     ..Default::default()
                 },
             );
+            for b in &ann.boundaries {
+                for s in b.points.windows(2) {
+                    draw_line(&mut rgb, s[0], s[1], [110, 110, 130]);
+                }
+            }
+            for c in &ann.constellations {
+                for s in c.lines.iter().flat_map(|l| l.windows(2)) {
+                    draw_line(&mut rgb, s[0], s[1], [120, 170, 255]);
+                }
+            }
             for s in &ann.stars {
                 draw_circle(&mut rgb, s.x, s.y, 5, [255, 210, 60]);
             }
@@ -702,42 +690,4 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let ok = results.iter().filter(|r| r.status == "Ok").count();
     eprintln!("solved {ok}/{} images", results.len());
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::date_obs_to_unix_ms;
-
-    #[test]
-    fn date_obs_parses_the_shapes_fits_actually_uses() {
-        // Known anchor: 2026-08-31T00:00:00Z = 1788134400000 ms
-        assert_eq!(
-            date_obs_to_unix_ms("2026-08-31T00:00:00"),
-            Some(1_788_134_400_000)
-        );
-        assert_eq!(
-            date_obs_to_unix_ms("2026-08-31T00:00:00.000Z"),
-            Some(1_788_134_400_000)
-        );
-        assert_eq!(date_obs_to_unix_ms("1970-01-01T00:00:00"), Some(0));
-        assert_eq!(
-            date_obs_to_unix_ms("2024-01-01 12:00:00"),
-            Some(1_704_110_400_000)
-        );
-        // Leap day and fractional seconds
-        assert_eq!(
-            date_obs_to_unix_ms("2024-02-29T12:00:00.5"),
-            Some(1_709_208_000_500)
-        );
-        // Lying or truncated headers count as no time (it only feeds annotation; not worth a date library)
-        for bad in [
-            "",
-            "2026-08-31",
-            "not a date",
-            "2026-13-01T00:00:00",
-            "2026-08-31T00:00",
-        ] {
-            assert_eq!(date_obs_to_unix_ms(bad), None, "should reject {bad}");
-        }
-    }
 }

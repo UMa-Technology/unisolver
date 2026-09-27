@@ -60,6 +60,7 @@ flutter:
   assets:
     - assets/unisolver_10_80.db.zst
     - assets/unisolver_dso.bin
+    - assets/unisolver_constellations.bin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

@@ -86,15 +86,20 @@ impl UniSolver {
         })
     }
 
+    /// Annotator. Each file is optional: a missing one leaves its layer unavailable, with the
+    /// reason in `layers.reasons`. `constellationsPath` is the constellation pack
+    /// (`UnisolverAssets.installConstellations()`).
     pub fn annotator(
         &self,
         dso_path: Option<String>,
         names_path: Option<String>,
+        constellations_path: Option<String>,
     ) -> Result<UniAnnotator> {
         Ok(UniAnnotator {
             inner: self
                 .inner
-                .annotator(dso_path.as_deref(), names_path.as_deref())?,
+                .annotator(dso_path.as_deref(), names_path.as_deref())?
+                .with_constellations(constellations_path.as_deref()),
         })
     }
 
@@ -206,12 +211,14 @@ impl UniSolverPool {
     }
 
     /// Annotator. Pass the tier that solved the frame (`PoolOutcomeDto.db`), since narrow tiers
-    /// are denser; without it the widest tier is used.
+    /// are denser; without it the widest tier is used. The files are as in
+    /// [`UniSolver::annotator`].
     pub fn annotator(
         &self,
         db: Option<String>,
         dso_path: Option<String>,
         names_path: Option<String>,
+        constellations_path: Option<String>,
     ) -> Result<UniAnnotator> {
         let g = self
             .inner
@@ -229,7 +236,9 @@ impl UniSolverPool {
             .solver(&name)
             .ok_or_else(|| anyhow::anyhow!("no such tier in pool: {name}"))?;
         Ok(UniAnnotator {
-            inner: solver.annotator(dso_path.as_deref(), names_path.as_deref())?,
+            inner: solver
+                .annotator(dso_path.as_deref(), names_path.as_deref())?
+                .with_constellations(constellations_path.as_deref()),
         })
     }
 }
@@ -347,7 +356,7 @@ mod tests {
         let g = out.solution.unwrap();
         assert!((g.ra_deg - 120.0).abs() < 0.1 && (g.dec_deg - 40.0).abs() < 0.1);
         // annotate round-trips through WcsDto
-        let ann = s.annotator(None, None).unwrap();
+        let ann = s.annotator(None, None, None).unwrap();
         let a = ann.annotate(g.wcs, AnnotateOptionsDto::defaults()).unwrap();
         assert!(a.layers.catalog_stars && a.stars.len() > 5);
     }
@@ -408,7 +417,7 @@ mod tests {
         assert!((g.ra_deg - 250.0).abs() < 0.1 && (g.dec_deg + 20.0).abs() < 0.1);
 
         // Annotate with the tier that solved it (narrow tiers are denser)
-        let ann = pool.annotator(r.db.clone(), None, None).unwrap();
+        let ann = pool.annotator(r.db.clone(), None, None, None).unwrap();
         let a = ann.annotate(g.wcs, AnnotateOptionsDto::defaults()).unwrap();
         assert!(a.layers.catalog_stars && a.stars.len() > 5);
         // Registration is idempotent

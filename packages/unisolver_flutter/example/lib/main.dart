@@ -41,6 +41,7 @@ class _HomeState extends State<_Home> {
   String? _dbDir;
   String? _dsoPath;
   String? _namesPath;
+  String? _constellationsPath;
   String? _error;
 
   /// Annotation language (whatever the names pack offers)
@@ -59,6 +60,8 @@ class _HomeState extends State<_Home> {
       // The names pack is opt-in (GPL): this example declares the optional asset in its
       // pubspec; without it the Databases page can download it from a manifest host
       final namesPath = await UnisolverAssets.installNames();
+      // IAU constellation figures and boundaries: bundled with the plugin (CC BY-SA 4.0)
+      final constellationsPath = await UnisolverAssets.installConstellations();
       // Once the bundled wide tier is decompressed the directory has at least one tier; the pool
       // scans it (narrow tiers the user installed are there too)
       final dir = File(paths.dbPath).parent.path;
@@ -72,6 +75,7 @@ class _HomeState extends State<_Home> {
         _dbDir = dir;
         _dsoPath = paths.dsoPath;
         _namesPath = namesPath;
+        _constellationsPath = constellationsPath;
         _languages = languages;
       });
     } catch (e) {
@@ -161,6 +165,7 @@ class _HomeState extends State<_Home> {
             pool: _pool!,
             dsoPath: _dsoPath!,
             namesPath: _namesPath,
+            constellationsPath: _constellationsPath,
             language: _lang,
           ),
           CalibratePage(solver: solver),

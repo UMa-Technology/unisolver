@@ -61,6 +61,7 @@ void main() {
     final ann = await solver.annotator(
       dsoPath: paths.dsoPath,
       namesPath: namesPath,
+      constellationsPath: await UnisolverAssets.installConstellations(),
     );
     expect(ann.languages().length, greaterThanOrEqualTo(10));
     final base = AnnotateOptionsDto.defaults();
@@ -76,9 +77,22 @@ void main() {
         maxOutlineLevel: 3,
         language: 'zh_cn',
         includeSolarSystem: false,
+        includeConstellations: true,
+        constellationBoundaries: true,
       ),
     );
     expect(a.layers.dso, isTrue);
+    // The sample is Scorpius: its figure, its Chinese name and the boundaries around it
+    expect(a.layers.constellations, isTrue);
+    final sco = a.constellations.where((c) => c.abbr == 'Sco').toList();
+    expect(
+      sco,
+      hasLength(1),
+      reason: a.constellations.map((c) => c.abbr).join(' '),
+    );
+    expect(sco.single.name, '天蝎座');
+    expect(sco.single.lines, isNotEmpty);
+    expect(a.boundaries.any((b) => b.between.contains('Sco')), isTrue);
     // In the authoritative name data, Chinese star names carry the Latin name ("心宿二 Antares")
     expect(
       a.namedStars.any((n) => n.name.contains('心宿二')),

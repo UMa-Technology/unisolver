@@ -17,6 +17,7 @@ class SolvePage extends StatefulWidget {
     required this.pool,
     required this.dsoPath,
     required this.namesPath,
+    required this.constellationsPath,
     required this.language,
   });
 
@@ -26,6 +27,9 @@ class SolvePage extends StatefulWidget {
 
   /// Multilingual names pack (13 languages); null when the app has none (English names)
   final String? namesPath;
+
+  /// Constellation pack (figures and IAU boundaries); null draws neither
+  final String? constellationsPath;
 
   /// Current annotation language code (`zh_cn` / `ja` / …)
   final String language;
@@ -56,6 +60,7 @@ class _SolvePageState extends State<SolvePage> {
       db: db,
       dsoPath: widget.dsoPath,
       namesPath: widget.namesPath,
+      constellationsPath: widget.constellationsPath,
     );
     _annotators[key] = made;
     return made;
@@ -169,6 +174,8 @@ class _SolvePageState extends State<SolvePage> {
             includeSolarSystem: out.observationUnixMs != null,
             observationUnixMs: out.observationUnixMs,
             observer: out.observer,
+            includeConstellations: true,
+            constellationBoundaries: true,
           ),
         );
         assert(base.maxStars > 0);

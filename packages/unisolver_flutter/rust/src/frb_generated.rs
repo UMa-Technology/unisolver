@@ -338,6 +338,7 @@ fn wire__crate__api__solver__UniSolverPool_annotator_impl(
             let api_db = <Option<String>>::sse_decode(&mut deserializer);
             let api_dso_path = <Option<String>>::sse_decode(&mut deserializer);
             let api_names_path = <Option<String>>::sse_decode(&mut deserializer);
+            let api_constellations_path = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
@@ -361,6 +362,7 @@ fn wire__crate__api__solver__UniSolverPool_annotator_impl(
                             api_db,
                             api_dso_path,
                             api_names_path,
+                            api_constellations_path,
                         )?;
                         std::result::Result::Ok(output_ok)
                     })(),
@@ -732,6 +734,7 @@ fn wire__crate__api__solver__UniSolver_annotator_impl(
             >>::sse_decode(&mut deserializer);
             let api_dso_path = <Option<String>>::sse_decode(&mut deserializer);
             let api_names_path = <Option<String>>::sse_decode(&mut deserializer);
+            let api_constellations_path = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
@@ -754,6 +757,7 @@ fn wire__crate__api__solver__UniSolver_annotator_impl(
                             &*api_that_guard,
                             api_dso_path,
                             api_names_path,
+                            api_constellations_path,
                         )?;
                         std::result::Result::Ok(output_ok)
                     })(),
@@ -1611,6 +1615,8 @@ impl SseDecode for crate::api::types::AnnotateOptionsDto {
         let mut var_observer = <Option<crate::api::types::ObserverDto>>::sse_decode(deserializer);
         let mut var_satelliteTle = <Option<String>>::sse_decode(deserializer);
         let mut var_language = <String>::sse_decode(deserializer);
+        let mut var_includeConstellations = <bool>::sse_decode(deserializer);
+        let mut var_constellationBoundaries = <bool>::sse_decode(deserializer);
         return crate::api::types::AnnotateOptionsDto {
             star_max_mag: var_starMaxMag,
             max_stars: var_maxStars,
@@ -1624,6 +1630,8 @@ impl SseDecode for crate::api::types::AnnotateOptionsDto {
             observer: var_observer,
             satellite_tle: var_satelliteTle,
             language: var_language,
+            include_constellations: var_includeConstellations,
+            constellation_boundaries: var_constellationBoundaries,
         };
     }
 }
@@ -1638,6 +1646,10 @@ impl SseDecode for crate::api::types::AnnotationsDto {
         let mut var_solar = <Vec<crate::api::types::SolarAnnotationDto>>::sse_decode(deserializer);
         let mut var_satellites =
             <Vec<crate::api::types::SatelliteAnnotationDto>>::sse_decode(deserializer);
+        let mut var_constellations =
+            <Vec<crate::api::types::ConstellationAnnotationDto>>::sse_decode(deserializer);
+        let mut var_boundaries =
+            <Vec<crate::api::types::BoundaryAnnotationDto>>::sse_decode(deserializer);
         let mut var_layers = <crate::api::types::LayerAvailabilityDto>::sse_decode(deserializer);
         return crate::api::types::AnnotationsDto {
             stars: var_stars,
@@ -1645,6 +1657,8 @@ impl SseDecode for crate::api::types::AnnotationsDto {
             objects: var_objects,
             solar: var_solar,
             satellites: var_satellites,
+            constellations: var_constellations,
+            boundaries: var_boundaries,
             layers: var_layers,
         };
     }
@@ -1654,6 +1668,18 @@ impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_u8().unwrap() != 0
+    }
+}
+
+impl SseDecode for crate::api::types::BoundaryAnnotationDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_between = <Vec<String>>::sse_decode(deserializer);
+        let mut var_points = <Vec<f64>>::sse_decode(deserializer);
+        return crate::api::types::BoundaryAnnotationDto {
+            between: var_between,
+            points: var_points,
+        };
     }
 }
 
@@ -1726,6 +1752,24 @@ impl SseDecode for crate::api::types::CentroidDto {
             y: var_y,
             mass: var_mass,
             elongation: var_elongation,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::ConstellationAnnotationDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_abbr = <String>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_labelX = <Option<f64>>::sse_decode(deserializer);
+        let mut var_labelY = <Option<f64>>::sse_decode(deserializer);
+        let mut var_lines = <Vec<Vec<f64>>>::sse_decode(deserializer);
+        return crate::api::types::ConstellationAnnotationDto {
+            abbr: var_abbr,
+            name: var_name,
+            label_x: var_labelX,
+            label_y: var_labelY,
+            lines: var_lines,
         };
     }
 }
@@ -2020,6 +2064,7 @@ impl SseDecode for crate::api::types::LayerAvailabilityDto {
         let mut var_dso = <bool>::sse_decode(deserializer);
         let mut var_solarSystem = <bool>::sse_decode(deserializer);
         let mut var_satellites = <bool>::sse_decode(deserializer);
+        let mut var_constellations = <bool>::sse_decode(deserializer);
         let mut var_reasons = <Vec<(String, String)>>::sse_decode(deserializer);
         return crate::api::types::LayerAvailabilityDto {
             catalog_stars: var_catalogStars,
@@ -2027,6 +2072,7 @@ impl SseDecode for crate::api::types::LayerAvailabilityDto {
             dso: var_dso,
             solar_system: var_solarSystem,
             satellites: var_satellites,
+            constellations: var_constellations,
             reasons: var_reasons,
         };
     }
@@ -2044,6 +2090,20 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::BoundaryAnnotationDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::BoundaryAnnotationDto>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::CentroidDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2051,6 +2111,20 @@ impl SseDecode for Vec<crate::api::types::CentroidDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::types::CentroidDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::ConstellationAnnotationDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::ConstellationAnnotationDto>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -2115,6 +2189,18 @@ impl SseDecode for Vec<crate::api::types::FovPresetDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::types::FovPresetDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<Vec<f64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<Vec<f64>>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -2993,6 +3079,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::AnnotateOptionsDto {
             self.observer.into_into_dart().into_dart(),
             self.satellite_tle.into_into_dart().into_dart(),
             self.language.into_into_dart().into_dart(),
+            self.include_constellations.into_into_dart().into_dart(),
+            self.constellation_boundaries.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3017,6 +3105,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::AnnotationsDto {
             self.objects.into_into_dart().into_dart(),
             self.solar.into_into_dart().into_dart(),
             self.satellites.into_into_dart().into_dart(),
+            self.constellations.into_into_dart().into_dart(),
+            self.boundaries.into_into_dart().into_dart(),
             self.layers.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -3030,6 +3120,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::AnnotationsDto>
     for crate::api::types::AnnotationsDto
 {
     fn into_into_dart(self) -> crate::api::types::AnnotationsDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::BoundaryAnnotationDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.between.into_into_dart().into_dart(),
+            self.points.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::BoundaryAnnotationDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::BoundaryAnnotationDto>
+    for crate::api::types::BoundaryAnnotationDto
+{
+    fn into_into_dart(self) -> crate::api::types::BoundaryAnnotationDto {
         self
     }
 }
@@ -3127,6 +3238,30 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::CentroidDto>
     for crate::api::types::CentroidDto
 {
     fn into_into_dart(self) -> crate::api::types::CentroidDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::ConstellationAnnotationDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.abbr.into_into_dart().into_dart(),
+            self.name.into_into_dart().into_dart(),
+            self.label_x.into_into_dart().into_dart(),
+            self.label_y.into_into_dart().into_dart(),
+            self.lines.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::ConstellationAnnotationDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::ConstellationAnnotationDto>
+    for crate::api::types::ConstellationAnnotationDto
+{
+    fn into_into_dart(self) -> crate::api::types::ConstellationAnnotationDto {
         self
     }
 }
@@ -3446,6 +3581,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::LayerAvailabilityDto {
             self.dso.into_into_dart().into_dart(),
             self.solar_system.into_into_dart().into_dart(),
             self.satellites.into_into_dart().into_dart(),
+            self.constellations.into_into_dart().into_dart(),
             self.reasons.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4023,6 +4159,8 @@ impl SseEncode for crate::api::types::AnnotateOptionsDto {
         <Option<crate::api::types::ObserverDto>>::sse_encode(self.observer, serializer);
         <Option<String>>::sse_encode(self.satellite_tle, serializer);
         <String>::sse_encode(self.language, serializer);
+        <bool>::sse_encode(self.include_constellations, serializer);
+        <bool>::sse_encode(self.constellation_boundaries, serializer);
     }
 }
 
@@ -4034,6 +4172,11 @@ impl SseEncode for crate::api::types::AnnotationsDto {
         <Vec<crate::api::types::DsoAnnotationDto>>::sse_encode(self.objects, serializer);
         <Vec<crate::api::types::SolarAnnotationDto>>::sse_encode(self.solar, serializer);
         <Vec<crate::api::types::SatelliteAnnotationDto>>::sse_encode(self.satellites, serializer);
+        <Vec<crate::api::types::ConstellationAnnotationDto>>::sse_encode(
+            self.constellations,
+            serializer,
+        );
+        <Vec<crate::api::types::BoundaryAnnotationDto>>::sse_encode(self.boundaries, serializer);
         <crate::api::types::LayerAvailabilityDto>::sse_encode(self.layers, serializer);
     }
 }
@@ -4042,6 +4185,14 @@ impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::types::BoundaryAnnotationDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<String>>::sse_encode(self.between, serializer);
+        <Vec<f64>>::sse_encode(self.points, serializer);
     }
 }
 
@@ -4093,6 +4244,17 @@ impl SseEncode for crate::api::types::CentroidDto {
         <f64>::sse_encode(self.y, serializer);
         <Option<f32>>::sse_encode(self.mass, serializer);
         <Option<f32>>::sse_encode(self.elongation, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::ConstellationAnnotationDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.abbr, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <Option<f64>>::sse_encode(self.label_x, serializer);
+        <Option<f64>>::sse_encode(self.label_y, serializer);
+        <Vec<Vec<f64>>>::sse_encode(self.lines, serializer);
     }
 }
 
@@ -4346,6 +4508,7 @@ impl SseEncode for crate::api::types::LayerAvailabilityDto {
         <bool>::sse_encode(self.dso, serializer);
         <bool>::sse_encode(self.solar_system, serializer);
         <bool>::sse_encode(self.satellites, serializer);
+        <bool>::sse_encode(self.constellations, serializer);
         <Vec<(String, String)>>::sse_encode(self.reasons, serializer);
     }
 }
@@ -4360,12 +4523,32 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::BoundaryAnnotationDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::BoundaryAnnotationDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::CentroidDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::types::CentroidDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::ConstellationAnnotationDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::ConstellationAnnotationDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -4416,6 +4599,16 @@ impl SseEncode for Vec<crate::api::types::FovPresetDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::types::FovPresetDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<Vec<f64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <Vec<f64>>::sse_encode(item, serializer);
         }
     }
 }

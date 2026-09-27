@@ -113,6 +113,7 @@ abstract class RustLibApi extends BaseApi {
     String? db,
     String? dsoPath,
     String? namesPath,
+    String? constellationsPath,
   });
 
   Future<UniSolverPool> crateApiSolverUniSolverPoolEmpty();
@@ -150,6 +151,7 @@ abstract class RustLibApi extends BaseApi {
     required UniSolver that,
     String? dsoPath,
     String? namesPath,
+    String? constellationsPath,
   });
 
   Future<UniSolver> crateApiSolverUniSolverNew({required String dbPath});
@@ -443,6 +445,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     String? db,
     String? dsoPath,
     String? namesPath,
+    String? constellationsPath,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -455,6 +458,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_opt_String(db, serializer);
           sse_encode_opt_String(dsoPath, serializer);
           sse_encode_opt_String(namesPath, serializer);
+          sse_encode_opt_String(constellationsPath, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -468,7 +472,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiSolverUniSolverPoolAnnotatorConstMeta,
-        argValues: [that, db, dsoPath, namesPath],
+        argValues: [that, db, dsoPath, namesPath, constellationsPath],
         apiImpl: this,
       ),
     );
@@ -477,7 +481,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiSolverUniSolverPoolAnnotatorConstMeta =>
       const TaskConstMeta(
         debugName: "UniSolverPool_annotator",
-        argNames: ["that", "db", "dsoPath", "namesPath"],
+        argNames: ["that", "db", "dsoPath", "namesPath", "constellationsPath"],
       );
 
   @override
@@ -729,6 +733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required UniSolver that,
     String? dsoPath,
     String? namesPath,
+    String? constellationsPath,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -740,6 +745,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_opt_String(dsoPath, serializer);
           sse_encode_opt_String(namesPath, serializer);
+          sse_encode_opt_String(constellationsPath, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -753,7 +759,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiSolverUniSolverAnnotatorConstMeta,
-        argValues: [that, dsoPath, namesPath],
+        argValues: [that, dsoPath, namesPath, constellationsPath],
         apiImpl: this,
       ),
     );
@@ -762,7 +768,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiSolverUniSolverAnnotatorConstMeta =>
       const TaskConstMeta(
         debugName: "UniSolver_annotator",
-        argNames: ["that", "dsoPath", "namesPath"],
+        argNames: ["that", "dsoPath", "namesPath", "constellationsPath"],
       );
 
   @override
@@ -1484,8 +1490,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnnotateOptionsDto dco_decode_annotate_options_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return AnnotateOptionsDto(
       starMaxMag: dco_decode_opt_box_autoadd_f_32(arr[0]),
       maxStars: dco_decode_u_32(arr[1]),
@@ -1499,6 +1505,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       observer: dco_decode_opt_box_autoadd_observer_dto(arr[9]),
       satelliteTle: dco_decode_opt_String(arr[10]),
       language: dco_decode_String(arr[11]),
+      includeConstellations: dco_decode_bool(arr[12]),
+      constellationBoundaries: dco_decode_bool(arr[13]),
     );
   }
 
@@ -1506,15 +1514,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnnotationsDto dco_decode_annotations_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return AnnotationsDto(
       stars: dco_decode_list_star_annotation_dto(arr[0]),
       namedStars: dco_decode_list_named_star_annotation_dto(arr[1]),
       objects: dco_decode_list_dso_annotation_dto(arr[2]),
       solar: dco_decode_list_solar_annotation_dto(arr[3]),
       satellites: dco_decode_list_satellite_annotation_dto(arr[4]),
-      layers: dco_decode_layer_availability_dto(arr[5]),
+      constellations: dco_decode_list_constellation_annotation_dto(arr[5]),
+      boundaries: dco_decode_list_boundary_annotation_dto(arr[6]),
+      layers: dco_decode_layer_availability_dto(arr[7]),
     );
   }
 
@@ -1522,6 +1532,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  BoundaryAnnotationDto dco_decode_boundary_annotation_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return BoundaryAnnotationDto(
+      between: dco_decode_list_String(arr[0]),
+      points: dco_decode_list_prim_f_64_strict(arr[1]),
+    );
   }
 
   @protected
@@ -1657,6 +1679,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       y: dco_decode_f_64(arr[1]),
       mass: dco_decode_opt_box_autoadd_f_32(arr[2]),
       elongation: dco_decode_opt_box_autoadd_f_32(arr[3]),
+    );
+  }
+
+  @protected
+  ConstellationAnnotationDto dco_decode_constellation_annotation_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return ConstellationAnnotationDto(
+      abbr: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      labelX: dco_decode_opt_box_autoadd_f_64(arr[2]),
+      labelY: dco_decode_opt_box_autoadd_f_64(arr[3]),
+      lines: dco_decode_list_list_prim_f_64_strict(arr[4]),
     );
   }
 
@@ -1874,15 +1913,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LayerAvailabilityDto dco_decode_layer_availability_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return LayerAvailabilityDto(
       catalogStars: dco_decode_bool(arr[0]),
       namedStars: dco_decode_bool(arr[1]),
       dso: dco_decode_bool(arr[2]),
       solarSystem: dco_decode_bool(arr[3]),
       satellites: dco_decode_bool(arr[4]),
-      reasons: dco_decode_list_record_string_string(arr[5]),
+      constellations: dco_decode_bool(arr[5]),
+      reasons: dco_decode_list_record_string_string(arr[6]),
     );
   }
 
@@ -1893,9 +1933,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<BoundaryAnnotationDto> dco_decode_list_boundary_annotation_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_boundary_annotation_dto)
+        .toList();
+  }
+
+  @protected
   List<CentroidDto> dco_decode_list_centroid_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_centroid_dto).toList();
+  }
+
+  @protected
+  List<ConstellationAnnotationDto> dco_decode_list_constellation_annotation_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_constellation_annotation_dto)
+        .toList();
   }
 
   @protected
@@ -1926,6 +1986,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<FovPresetDto> dco_decode_list_fov_preset_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_fov_preset_dto).toList();
+  }
+
+  @protected
+  List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_list_prim_f_64_strict)
+        .toList();
   }
 
   @protected
@@ -2573,6 +2641,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_observer = sse_decode_opt_box_autoadd_observer_dto(deserializer);
     var var_satelliteTle = sse_decode_opt_String(deserializer);
     var var_language = sse_decode_String(deserializer);
+    var var_includeConstellations = sse_decode_bool(deserializer);
+    var var_constellationBoundaries = sse_decode_bool(deserializer);
     return AnnotateOptionsDto(
       starMaxMag: var_starMaxMag,
       maxStars: var_maxStars,
@@ -2586,6 +2656,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       observer: var_observer,
       satelliteTle: var_satelliteTle,
       language: var_language,
+      includeConstellations: var_includeConstellations,
+      constellationBoundaries: var_constellationBoundaries,
     );
   }
 
@@ -2599,6 +2671,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_objects = sse_decode_list_dso_annotation_dto(deserializer);
     var var_solar = sse_decode_list_solar_annotation_dto(deserializer);
     var var_satellites = sse_decode_list_satellite_annotation_dto(deserializer);
+    var var_constellations = sse_decode_list_constellation_annotation_dto(
+      deserializer,
+    );
+    var var_boundaries = sse_decode_list_boundary_annotation_dto(deserializer);
     var var_layers = sse_decode_layer_availability_dto(deserializer);
     return AnnotationsDto(
       stars: var_stars,
@@ -2606,6 +2682,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       objects: var_objects,
       solar: var_solar,
       satellites: var_satellites,
+      constellations: var_constellations,
+      boundaries: var_boundaries,
       layers: var_layers,
     );
   }
@@ -2614,6 +2692,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  BoundaryAnnotationDto sse_decode_boundary_annotation_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_between = sse_decode_list_String(deserializer);
+    var var_points = sse_decode_list_prim_f_64_strict(deserializer);
+    return BoundaryAnnotationDto(between: var_between, points: var_points);
   }
 
   @protected
@@ -2772,6 +2860,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       y: var_y,
       mass: var_mass,
       elongation: var_elongation,
+    );
+  }
+
+  @protected
+  ConstellationAnnotationDto sse_decode_constellation_annotation_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_abbr = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_labelX = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_labelY = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_lines = sse_decode_list_list_prim_f_64_strict(deserializer);
+    return ConstellationAnnotationDto(
+      abbr: var_abbr,
+      name: var_name,
+      labelX: var_labelX,
+      labelY: var_labelY,
+      lines: var_lines,
     );
   }
 
@@ -3023,6 +3130,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_dso = sse_decode_bool(deserializer);
     var var_solarSystem = sse_decode_bool(deserializer);
     var var_satellites = sse_decode_bool(deserializer);
+    var var_constellations = sse_decode_bool(deserializer);
     var var_reasons = sse_decode_list_record_string_string(deserializer);
     return LayerAvailabilityDto(
       catalogStars: var_catalogStars,
@@ -3030,6 +3138,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dso: var_dso,
       solarSystem: var_solarSystem,
       satellites: var_satellites,
+      constellations: var_constellations,
       reasons: var_reasons,
     );
   }
@@ -3047,6 +3156,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<BoundaryAnnotationDto> sse_decode_list_boundary_annotation_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <BoundaryAnnotationDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_boundary_annotation_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<CentroidDto> sse_decode_list_centroid_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -3054,6 +3177,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <CentroidDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_centroid_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<ConstellationAnnotationDto> sse_decode_list_constellation_annotation_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ConstellationAnnotationDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_constellation_annotation_dto(deserializer));
     }
     return ans_;
   }
@@ -3124,6 +3261,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <FovPresetDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_fov_preset_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<Float64List> sse_decode_list_list_prim_f_64_strict(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Float64List>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_list_prim_f_64_strict(deserializer));
     }
     return ans_;
   }
@@ -3972,6 +4123,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_observer_dto(self.observer, serializer);
     sse_encode_opt_String(self.satelliteTle, serializer);
     sse_encode_String(self.language, serializer);
+    sse_encode_bool(self.includeConstellations, serializer);
+    sse_encode_bool(self.constellationBoundaries, serializer);
   }
 
   @protected
@@ -3985,6 +4138,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_dso_annotation_dto(self.objects, serializer);
     sse_encode_list_solar_annotation_dto(self.solar, serializer);
     sse_encode_list_satellite_annotation_dto(self.satellites, serializer);
+    sse_encode_list_constellation_annotation_dto(
+      self.constellations,
+      serializer,
+    );
+    sse_encode_list_boundary_annotation_dto(self.boundaries, serializer);
     sse_encode_layer_availability_dto(self.layers, serializer);
   }
 
@@ -3992,6 +4150,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_boundary_annotation_dto(
+    BoundaryAnnotationDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_String(self.between, serializer);
+    sse_encode_list_prim_f_64_strict(self.points, serializer);
   }
 
   @protected
@@ -4145,6 +4313,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.y, serializer);
     sse_encode_opt_box_autoadd_f_32(self.mass, serializer);
     sse_encode_opt_box_autoadd_f_32(self.elongation, serializer);
+  }
+
+  @protected
+  void sse_encode_constellation_annotation_dto(
+    ConstellationAnnotationDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.abbr, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.labelX, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.labelY, serializer);
+    sse_encode_list_list_prim_f_64_strict(self.lines, serializer);
   }
 
   @protected
@@ -4360,6 +4541,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.dso, serializer);
     sse_encode_bool(self.solarSystem, serializer);
     sse_encode_bool(self.satellites, serializer);
+    sse_encode_bool(self.constellations, serializer);
     sse_encode_list_record_string_string(self.reasons, serializer);
   }
 
@@ -4373,6 +4555,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_boundary_annotation_dto(
+    List<BoundaryAnnotationDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_boundary_annotation_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_centroid_dto(
     List<CentroidDto> self,
     SseSerializer serializer,
@@ -4381,6 +4575,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_centroid_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_constellation_annotation_dto(
+    List<ConstellationAnnotationDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_constellation_annotation_dto(item, serializer);
     }
   }
 
@@ -4441,6 +4647,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_fov_preset_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_list_prim_f_64_strict(
+    List<Float64List> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_list_prim_f_64_strict(item, serializer);
     }
   }
 
@@ -5060,12 +5278,19 @@ class UniSolverImpl extends RustOpaque implements UniSolver {
         RustLib.instance.api.rust_arc_decrement_strong_count_UniSolverPtr,
   );
 
-  Future<UniAnnotator> annotator({String? dsoPath, String? namesPath}) =>
-      RustLib.instance.api.crateApiSolverUniSolverAnnotator(
-        that: this,
-        dsoPath: dsoPath,
-        namesPath: namesPath,
-      );
+  /// Annotator. Each file is optional: a missing one leaves its layer unavailable, with the
+  /// reason in `layers.reasons`. `constellationsPath` is the constellation pack
+  /// (`UnisolverAssets.installConstellations()`).
+  Future<UniAnnotator> annotator({
+    String? dsoPath,
+    String? namesPath,
+    String? constellationsPath,
+  }) => RustLib.instance.api.crateApiSolverUniSolverAnnotator(
+    that: this,
+    dsoPath: dsoPath,
+    namesPath: namesPath,
+    constellationsPath: constellationsPath,
+  );
 
   Future<UniCalibration> newCalibration() =>
       RustLib.instance.api.crateApiSolverUniSolverNewCalibration(that: this);
@@ -5137,16 +5362,19 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
   );
 
   /// Annotator. Pass the tier that solved the frame (`PoolOutcomeDto.db`), since narrow tiers
-  /// are denser; without it the widest tier is used.
+  /// are denser; without it the widest tier is used. The files are as in
+  /// [`UniSolver::annotator`].
   Future<UniAnnotator> annotator({
     String? db,
     String? dsoPath,
     String? namesPath,
+    String? constellationsPath,
   }) => RustLib.instance.api.crateApiSolverUniSolverPoolAnnotator(
     that: this,
     db: db,
     dsoPath: dsoPath,
     namesPath: namesPath,
+    constellationsPath: constellationsPath,
   );
 
   /// Registers one more tier (after an install). Registering the same file again is idempotent.

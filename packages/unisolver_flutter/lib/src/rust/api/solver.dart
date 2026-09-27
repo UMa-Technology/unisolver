@@ -48,7 +48,14 @@ abstract class UniCalibration implements RustOpaqueInterface {
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UniSolver>>
 abstract class UniSolver implements RustOpaqueInterface {
-  Future<UniAnnotator> annotator({String? dsoPath, String? namesPath});
+  /// Annotator. Each file is optional: a missing one leaves its layer unavailable, with the
+  /// reason in `layers.reasons`. `constellationsPath` is the constellation pack
+  /// (`UnisolverAssets.installConstellations()`).
+  Future<UniAnnotator> annotator({
+    String? dsoPath,
+    String? namesPath,
+    String? constellationsPath,
+  });
 
   // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
   static Future<UniSolver> newInstance({required String dbPath}) =>
@@ -88,11 +95,13 @@ abstract class UniSolver implements RustOpaqueInterface {
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UniSolverPool>>
 abstract class UniSolverPool implements RustOpaqueInterface {
   /// Annotator. Pass the tier that solved the frame (`PoolOutcomeDto.db`), since narrow tiers
-  /// are denser; without it the widest tier is used.
+  /// are denser; without it the widest tier is used. The files are as in
+  /// [`UniSolver::annotator`].
   Future<UniAnnotator> annotator({
     String? db,
     String? dsoPath,
     String? namesPath,
+    String? constellationsPath,
   });
 
   /// Empty pool: for a first launch with nothing installed; then [`Self::register`] tier by tier.

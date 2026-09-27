@@ -532,6 +532,7 @@ pub struct SatellitePosDto {
     pub above_horizon: bool,
 }
 
+#[frb]
 pub struct AnnotateOptionsDto {
     pub star_max_mag: Option<f32>,
     pub max_stars: u32,
@@ -556,6 +557,13 @@ pub struct AnnotateOptionsDto {
     /// `ru` / `pl` / `hu` / `ro` (as in the names pack; `UniAnnotator.languages()` lists them).
     /// Lenient: `zh-CN`, `zh_Hans` and `zh` map to Simplified Chinese; English when missing.
     pub language: String,
+    /// Constellation figures (the IAU charts' lines) with their names
+    /// (`AnnotationsDto.constellations`); needs the constellation pack
+    #[frb(default = false)]
+    pub include_constellations: bool,
+    /// IAU constellation boundaries (`AnnotationsDto.boundaries`); needs the constellation pack
+    #[frb(default = false)]
+    pub constellation_boundaries: bool,
 }
 
 impl AnnotateOptionsDto {
@@ -574,6 +582,8 @@ impl AnnotateOptionsDto {
             observer: None,
             satellite_tle: None,
             language: "en".to_string(),
+            include_constellations: false,
+            constellation_boundaries: false,
         }
     }
 }
@@ -593,6 +603,8 @@ impl From<AnnotateOptionsDto> for core::AnnotateOptions {
             observer: d.observer.map(Into::into),
             satellite_tle: d.satellite_tle,
             language: d.language,
+            include_constellations: d.include_constellations,
+            constellation_boundaries: d.constellation_boundaries,
         }
     }
 }
@@ -681,9 +693,32 @@ pub struct LayerAvailabilityDto {
     pub dso: bool,
     pub solar_system: bool,
     pub satellites: bool,
+    /// Constellation figures and boundaries
+    pub constellations: bool,
     /// Why a layer is unavailable or degraded, as `(layer, message)`: show it rather than an
     /// empty layer
     pub reasons: Vec<(String, String)>,
+}
+
+/// A constellation with part of its figure in the frame.
+pub struct ConstellationAnnotationDto {
+    /// IAU abbreviation (`Ori`)
+    pub abbr: String,
+    /// Name in the requested language (from the names pack), else the IAU name
+    pub name: String,
+    /// Label position; null when no vertex of the figure is in the frame
+    pub label_x: Option<f64>,
+    pub label_y: Option<f64>,
+    /// Figure polylines in pixels, interleaved x, y. They may run past the frame edge.
+    pub lines: Vec<Vec<f64>>,
+}
+
+/// A stretch of IAU boundary in the frame.
+pub struct BoundaryAnnotationDto {
+    /// IAU abbreviations of the constellations on either side
+    pub between: Vec<String>,
+    /// Interleaved x, y
+    pub points: Vec<f64>,
 }
 
 pub struct SolarAnnotationDto {
@@ -707,6 +742,8 @@ pub struct AnnotationsDto {
     pub objects: Vec<DsoAnnotationDto>,
     pub solar: Vec<SolarAnnotationDto>,
     pub satellites: Vec<SatelliteAnnotationDto>,
+    pub constellations: Vec<ConstellationAnnotationDto>,
+    pub boundaries: Vec<BoundaryAnnotationDto>,
     pub layers: LayerAvailabilityDto,
 }
 
@@ -784,12 +821,36 @@ impl From<core::Annotations> for AnnotationsDto {
                     range_km: s.range_km,
                 })
                 .collect(),
+            constellations: a
+                .constellations
+                .into_iter()
+                .map(|c| ConstellationAnnotationDto {
+                    abbr: c.abbr,
+                    name: c.name,
+                    label_x: c.label.map(|p| p[0]),
+                    label_y: c.label.map(|p| p[1]),
+                    lines: c
+                        .lines
+                        .into_iter()
+                        .map(|l| l.into_iter().flatten().collect())
+                        .collect(),
+                })
+                .collect(),
+            boundaries: a
+                .boundaries
+                .into_iter()
+                .map(|b| BoundaryAnnotationDto {
+                    between: b.between.to_vec(),
+                    points: b.points.into_iter().flatten().collect(),
+                })
+                .collect(),
             layers: LayerAvailabilityDto {
                 catalog_stars: a.layers.catalog_stars,
                 named_stars: a.layers.named_stars,
                 dso: a.layers.dso,
                 solar_system: a.layers.solar_system,
                 satellites: a.layers.satellites,
+                constellations: a.layers.constellations,
                 reasons: a.layers.reasons,
             },
         }

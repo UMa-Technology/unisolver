@@ -7,15 +7,21 @@ import 'package:path_provider/path_provider.dart';
 import 'src/rust/api/install.dart' as rust;
 
 /// First launch: install the bundled assets into the app support directory (database
-/// decompressed by Rust's zstd, DSO catalog copied). Idempotent.
+/// decompressed by Rust's zstd, DSO catalog copied). Idempotent. The constellation pack is
+/// bundled too; [installConstellations] copies it out.
 ///
 /// The multilingual names pack is **opt-in** because it is GPL-2.0-or-later: either
 /// declare `packages/unisolver_flutter/optional/unisolver_names.bin` in your app's
 /// pubspec assets and call [installNames], or download it with `DbManager.installAsset`.
 class UnisolverAssets {
-  static const _dbAsset = 'packages/unisolver_flutter/assets/unisolver_10_80.db.zst';
-  static const _dsoAsset = 'packages/unisolver_flutter/assets/unisolver_dso.bin';
-  static const _namesAsset = 'packages/unisolver_flutter/optional/unisolver_names.bin';
+  static const _dbAsset =
+      'packages/unisolver_flutter/assets/unisolver_10_80.db.zst';
+  static const _dsoAsset =
+      'packages/unisolver_flutter/assets/unisolver_dso.bin';
+  static const _namesAsset =
+      'packages/unisolver_flutter/optional/unisolver_names.bin';
+  static const _constellationsAsset =
+      'packages/unisolver_flutter/assets/unisolver_constellations.bin';
 
   static Future<({String dbPath, String dsoPath})> ensureInstalled() async {
     final dir = await getApplicationSupportDirectory();
@@ -32,6 +38,15 @@ class UnisolverAssets {
     }
     await _copyIfChanged(_dsoAsset, dsoPath);
     return (dbPath: dbPath, dsoPath: dsoPath);
+  }
+
+  /// Installs the bundled constellation pack (IAU figures and boundaries, CC BY-SA 4.0: show
+  /// `dataAttributions()`) and returns its path, for `annotator(constellationsPath: ...)`.
+  static Future<String> installConstellations() async {
+    final dir = await getApplicationSupportDirectory();
+    final path = '${dir.path}/unisolver_constellations.bin';
+    await _copyIfChanged(_constellationsAsset, path);
+    return path;
   }
 
   /// Installs the names pack from the app's own assets and returns its path, or null

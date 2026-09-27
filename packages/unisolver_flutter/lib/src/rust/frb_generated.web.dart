@@ -138,6 +138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  BoundaryAnnotationDto dco_decode_boundary_annotation_dto(dynamic raw);
+
+  @protected
   AnnotateOptionsDto dco_decode_box_autoadd_annotate_options_dto(dynamic raw);
 
   @protected
@@ -187,6 +190,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CentroidDto dco_decode_centroid_dto(dynamic raw);
+
+  @protected
+  ConstellationAnnotationDto dco_decode_constellation_annotation_dto(
+    dynamic raw,
+  );
 
   @protected
   DataAttributionDto dco_decode_data_attribution_dto(dynamic raw);
@@ -246,7 +254,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<BoundaryAnnotationDto> dco_decode_list_boundary_annotation_dto(
+    dynamic raw,
+  );
+
+  @protected
   List<CentroidDto> dco_decode_list_centroid_dto(dynamic raw);
+
+  @protected
+  List<ConstellationAnnotationDto> dco_decode_list_constellation_annotation_dto(
+    dynamic raw,
+  );
 
   @protected
   List<DataAttributionDto> dco_decode_list_data_attribution_dto(dynamic raw);
@@ -262,6 +280,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FovPresetDto> dco_decode_list_fov_preset_dto(dynamic raw);
+
+  @protected
+  List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw);
 
   @protected
   List<MatchDto> dco_decode_list_match_dto(dynamic raw);
@@ -508,6 +529,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  BoundaryAnnotationDto sse_decode_boundary_annotation_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AnnotateOptionsDto sse_decode_box_autoadd_annotate_options_dto(
     SseDeserializer deserializer,
   );
@@ -569,6 +595,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CentroidDto sse_decode_centroid_dto(SseDeserializer deserializer);
+
+  @protected
+  ConstellationAnnotationDto sse_decode_constellation_annotation_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DataAttributionDto sse_decode_data_attribution_dto(
@@ -634,7 +665,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<BoundaryAnnotationDto> sse_decode_list_boundary_annotation_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<CentroidDto> sse_decode_list_centroid_dto(SseDeserializer deserializer);
+
+  @protected
+  List<ConstellationAnnotationDto> sse_decode_list_constellation_annotation_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<DataAttributionDto> sse_decode_list_data_attribution_dto(
@@ -658,6 +699,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FovPresetDto> sse_decode_list_fov_preset_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<Float64List> sse_decode_list_list_prim_f_64_strict(
     SseDeserializer deserializer,
   );
 
@@ -956,6 +1002,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_boundary_annotation_dto(
+    BoundaryAnnotationDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_annotate_options_dto(
     AnnotateOptionsDto self,
     SseSerializer serializer,
@@ -1037,6 +1089,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_centroid_dto(CentroidDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_constellation_annotation_dto(
+    ConstellationAnnotationDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_data_attribution_dto(
     DataAttributionDto self,
     SseSerializer serializer,
@@ -1112,8 +1170,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_boundary_annotation_dto(
+    List<BoundaryAnnotationDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_centroid_dto(
     List<CentroidDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_constellation_annotation_dto(
+    List<ConstellationAnnotationDto> self,
     SseSerializer serializer,
   );
 
@@ -1144,6 +1214,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_fov_preset_dto(
     List<FovPresetDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_list_prim_f_64_strict(
+    List<Float64List> self,
     SseSerializer serializer,
   );
 

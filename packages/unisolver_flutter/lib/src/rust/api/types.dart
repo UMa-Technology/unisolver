@@ -43,6 +43,13 @@ class AnnotateOptionsDto {
   /// Lenient: `zh-CN`, `zh_Hans` and `zh` map to Simplified Chinese; English when missing.
   final String language;
 
+  /// Constellation figures (the IAU charts' lines) with their names
+  /// (`AnnotationsDto.constellations`); needs the constellation pack
+  final bool includeConstellations;
+
+  /// IAU constellation boundaries (`AnnotationsDto.boundaries`); needs the constellation pack
+  final bool constellationBoundaries;
+
   const AnnotateOptionsDto({
     this.starMaxMag,
     required this.maxStars,
@@ -56,6 +63,8 @@ class AnnotateOptionsDto {
     this.observer,
     this.satelliteTle,
     required this.language,
+    this.includeConstellations = false,
+    this.constellationBoundaries = false,
   });
 
   static AnnotateOptionsDto defaults() =>
@@ -74,7 +83,9 @@ class AnnotateOptionsDto {
       observationUnixMs.hashCode ^
       observer.hashCode ^
       satelliteTle.hashCode ^
-      language.hashCode;
+      language.hashCode ^
+      includeConstellations.hashCode ^
+      constellationBoundaries.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -92,7 +103,9 @@ class AnnotateOptionsDto {
           observationUnixMs == other.observationUnixMs &&
           observer == other.observer &&
           satelliteTle == other.satelliteTle &&
-          language == other.language;
+          language == other.language &&
+          includeConstellations == other.includeConstellations &&
+          constellationBoundaries == other.constellationBoundaries;
 }
 
 class AnnotationsDto {
@@ -101,6 +114,8 @@ class AnnotationsDto {
   final List<DsoAnnotationDto> objects;
   final List<SolarAnnotationDto> solar;
   final List<SatelliteAnnotationDto> satellites;
+  final List<ConstellationAnnotationDto> constellations;
+  final List<BoundaryAnnotationDto> boundaries;
   final LayerAvailabilityDto layers;
 
   const AnnotationsDto({
@@ -109,6 +124,8 @@ class AnnotationsDto {
     required this.objects,
     required this.solar,
     required this.satellites,
+    required this.constellations,
+    required this.boundaries,
     required this.layers,
   });
 
@@ -119,6 +136,8 @@ class AnnotationsDto {
       objects.hashCode ^
       solar.hashCode ^
       satellites.hashCode ^
+      constellations.hashCode ^
+      boundaries.hashCode ^
       layers.hashCode;
 
   @override
@@ -131,7 +150,31 @@ class AnnotationsDto {
           objects == other.objects &&
           solar == other.solar &&
           satellites == other.satellites &&
+          constellations == other.constellations &&
+          boundaries == other.boundaries &&
           layers == other.layers;
+}
+
+/// A stretch of IAU boundary in the frame.
+class BoundaryAnnotationDto {
+  /// IAU abbreviations of the constellations on either side
+  final List<String> between;
+
+  /// Interleaved x, y
+  final Float64List points;
+
+  const BoundaryAnnotationDto({required this.between, required this.points});
+
+  @override
+  int get hashCode => between.hashCode ^ points.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BoundaryAnnotationDto &&
+          runtimeType == other.runtimeType &&
+          between == other.between &&
+          points == other.points;
 }
 
 @freezed
@@ -245,6 +288,49 @@ class CentroidDto {
           y == other.y &&
           mass == other.mass &&
           elongation == other.elongation;
+}
+
+/// A constellation with part of its figure in the frame.
+class ConstellationAnnotationDto {
+  /// IAU abbreviation (`Ori`)
+  final String abbr;
+
+  /// Name in the requested language (from the names pack), else the IAU name
+  final String name;
+
+  /// Label position; null when no vertex of the figure is in the frame
+  final double? labelX;
+  final double? labelY;
+
+  /// Figure polylines in pixels, interleaved x, y. They may run past the frame edge.
+  final List<Float64List> lines;
+
+  const ConstellationAnnotationDto({
+    required this.abbr,
+    required this.name,
+    this.labelX,
+    this.labelY,
+    required this.lines,
+  });
+
+  @override
+  int get hashCode =>
+      abbr.hashCode ^
+      name.hashCode ^
+      labelX.hashCode ^
+      labelY.hashCode ^
+      lines.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConstellationAnnotationDto &&
+          runtimeType == other.runtimeType &&
+          abbr == other.abbr &&
+          name == other.name &&
+          labelX == other.labelX &&
+          labelY == other.labelY &&
+          lines == other.lines;
 }
 
 class DbPropertiesDto {
@@ -521,6 +607,9 @@ class LayerAvailabilityDto {
   final bool solarSystem;
   final bool satellites;
 
+  /// Constellation figures and boundaries
+  final bool constellations;
+
   /// Why a layer is unavailable or degraded, as `(layer, message)`: show it rather than an
   /// empty layer
   final List<(String, String)> reasons;
@@ -531,6 +620,7 @@ class LayerAvailabilityDto {
     required this.dso,
     required this.solarSystem,
     required this.satellites,
+    required this.constellations,
     required this.reasons,
   });
 
@@ -541,6 +631,7 @@ class LayerAvailabilityDto {
       dso.hashCode ^
       solarSystem.hashCode ^
       satellites.hashCode ^
+      constellations.hashCode ^
       reasons.hashCode;
 
   @override
@@ -553,6 +644,7 @@ class LayerAvailabilityDto {
           dso == other.dso &&
           solarSystem == other.solarSystem &&
           satellites == other.satellites &&
+          constellations == other.constellations &&
           reasons == other.reasons;
 }
 

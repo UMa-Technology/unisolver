@@ -40,6 +40,20 @@ Path outlinePath(OutlineContourDto c) {
   return path;
 }
 
+/// An open polyline from interleaved image pixels (x0, y0, x1, y1, ...): constellation
+/// figures and boundaries.
+Path polylinePath(List<double> p) {
+  final path = Path();
+  for (var i = 0; i + 1 < p.length; i += 2) {
+    if (i == 0) {
+      path.moveTo(p[i], p[i + 1]);
+    } else {
+      path.lineTo(p[i], p[i + 1]);
+    }
+  }
+  return path;
+}
+
 /// Label anchor for an outlined object: its centre when inside the image, otherwise the
 /// first in-image vertex of its outermost outline (the centre may lie off-frame).
 Offset outlineLabelAnchor(
@@ -90,6 +104,14 @@ class SolveOverlayPainter extends CustomPainter {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.5
     ..color = const Color(0xFFC878FF);
+  static final _figure = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..color = const Color(0xA080B4FF);
+  static final _boundary = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = const Color(0x55FFFFFF);
   static final _solar = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2.0
@@ -120,6 +142,19 @@ class SolveOverlayPainter extends CustomPainter {
     }
     final a = annotations;
     if (a != null) {
+      // Boundaries and figures first, under everything else; the canvas clips what runs past
+      // the frame edge
+      for (final b in a.boundaries) {
+        canvas.drawPath(polylinePath(b.points), _boundary);
+      }
+      for (final c in a.constellations) {
+        for (final l in c.lines) {
+          canvas.drawPath(polylinePath(l), _figure);
+        }
+        if (c.labelX != null && c.labelY != null) {
+          _label(canvas, c.name, c.labelX!, c.labelY!, const Color(0xC080B4FF));
+        }
+      }
       for (final s in a.stars) {
         canvas.drawCircle(Offset(s.x, s.y), 5, _catalog);
       }

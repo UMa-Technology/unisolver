@@ -21,10 +21,11 @@ x86_64-pc-windows-msvc aarch64-pc-windows-msvc`.
 
 ```bash
 cargo test --workspace --release --features "imageio satellites"
-cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli \
+cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask \
   --all-targets --features "imageio satellites" -- -D warnings
 python3 scripts/ci/check_public_text.py      # English-only public text
 bash scripts/ci/check_windows.sh             # Windows cross-check from macOS
+cargo xtask upstream check                   # third_party/tetra3 = pinned upstream + patch queue
 (cd packages/unisolver_flutter && flutter test)
 (cd packages/unisolver_flutter/example && flutter test test/ && flutter test integration_test/solve_e2e_test.dart -d macos)
 ```

@@ -30,6 +30,12 @@
    (default 3); `AnnotateOptionsDto` gains both fields. The example app and
    `solvecli --annotate-dir` draw them. The catalog grows from 528 KB to 771 KB; files
    written by older versions still load.
+6. **The tetra3rs copy is a patch queue.** `third_party/tetra3` is now generated from the
+   pinned upstream release (`third_party/tetra3.lock`) plus `git format-patch` files in
+   `third_party/tetra3-patches/`. `cargo xtask upstream check` verifies it byte for byte (it
+   runs in the local gate and CI), and `edit` / `export` / `sync` change the patches or rebase
+   them onto a new upstream release (docs/upstream.md). Upstream's CLAUDE.md, CONTRIBUTING.md
+   and .gitignore are no longer vendored.
 
 ## 2026-09-27 — Repository baseline
 

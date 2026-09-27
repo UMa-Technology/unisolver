@@ -8,7 +8,7 @@ unisolver's own code is licensed under MIT OR Apache-2.0 (see `LICENSE-MIT` and
 ### tetra3rs v0.13.0 — vendored at `third_party/tetra3`
 MIT AND Apache-2.0. Copyright the tetra3rs authors (Steven Michael) and the upstream
 tetra3 / cedar-solve authors (Gustav Pettersson / ESA, Steven Rosenthal).
-Full text: `third_party/tetra3/LICENSE`. Local changes: `third_party/tetra3/PATCHES.md`.
+Full text: `third_party/tetra3/LICENSE`. Local changes: `third_party/tetra3-patches/` (see `docs/upstream.md`).
 
 ### Cargokit — vendored at `packages/unisolver_flutter/cargokit`
 MIT or Apache-2.0. Copyright 2022 Matej Knopp. Full text:

@@ -42,10 +42,13 @@ unisolver/
 │   ├── unisolver-cabi/         # C ABI（INDI / ASCOM / 桌面原生 / Python）
 │   └── unisolver-synth/        # 测试用合成星场
 ├── packages/unisolver_flutter/ # Flutter 插件（flutter_rust_bridge 绑定）与示例 App
-├── third_party/tetra3/         # vendored 上游 tetra3rs（含本地补丁）
+├── third_party/
+│   ├── tetra3/                 # vendored 上游 tetra3rs，由补丁队列生成
+│   └── tetra3-patches/         # 对它的本地补丁（docs/upstream.md）
 ├── tools/
 │   ├── solvecli/               # 解算 CLI：批量解算、σ 网格统计、跟踪、标定
-│   └── namesgen/               # 生成多语言名称包（13 种语言）
+│   ├── namesgen/               # 生成多语言名称包（13 种语言）
+│   └── xtask/                  # `cargo xtask upstream`：维护补丁队列
 ├── scripts/
 │   ├── ci/                     # 检查：公开文字、Windows 交叉检查、本机清单服务
 │   └── verify/                 # 对 astropy 的精度核验
@@ -89,10 +92,11 @@ unisolver/
 
 ### third_party/tetra3
 
-上游 **v0.13.0** 的拷贝。**所有本地补丁都登记在
-[third_party/tetra3/PATCHES.md](third_party/tetra3/PATCHES.md)**：两条 Cargo.toml 调整，
-以及 `UNISOLV2` mmap 存储（`src/solver/storage.rs`，把模式表留在磁盘按需分页，深库常驻
-内存从 1.1 GB 降到 124 MB）。动它之前先读里面的 rebase 注意事项。
+上游 **v0.13.0** 加上 [third_party/tetra3-patches/](third_party/tetra3-patches/README.md)
+里的补丁队列：两条 Cargo.toml 调整，以及 `UNISOLV2` mmap 存储（`src/solver/storage.rs`，
+把模式表留在磁盘按需分页，深库常驻内存从 1.1 GB 降到 124 MB）。这棵树是生成的：只能经
+`cargo xtask upstream edit` / `export` 修改，动手前先读 rebase 注意事项
+（[docs/upstream.md](docs/upstream.md)）。
 
 ### packages/unisolver_flutter
 
@@ -119,10 +123,11 @@ unisolver/
 ```bash
 git config core.hooksPath .githooks     # 一次：提交信息与推送前检查
 cargo test --workspace --release --features "imageio satellites"
-cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli \
+cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask \
   --all-targets --features "imageio satellites" -- -D warnings
 python3 scripts/ci/check_public_text.py
 bash scripts/ci/check_windows.sh
+cargo xtask upstream check
 (cd packages/unisolver_flutter && flutter test && flutter analyze)
 ```
 
@@ -139,7 +144,7 @@ chore revert），不写正文与 trailer，由钩子强制。用户可感知的
 | 新标注图层 | `crates/unisolver-core/src/annotate.rs` |
 | Flutter 新 API | `packages/unisolver_flutter/rust/src/api/`，然后重新生成绑定 |
 | C ABI 新符号 | `crates/unisolver-cabi/src/lib.rs`（cbindgen 重出头文件） |
-| 上游算法本身 | `third_party/tetra3/`，**登记在 PATCHES.md** |
+| 上游算法本身 | `third_party/tetra3-patches/` 里的补丁（`cargo xtask upstream edit`，见 docs/upstream.md） |
 
 ## 许可
 

@@ -1,6 +1,7 @@
 //! UNISOLV2 mmap container: v2 write/read equivalence, v1 compatibility, corrupt files.
-//! Background in third_party/tetra3/PATCHES.md #3: a deep database loaded whole with postcard
-//! stays resident at 1.1 GB; v2 leaves the pattern table (nearly all of it) on disk, paged on demand.
+//! Background in third_party/tetra3-patches/README.md (0003): a deep database loaded whole
+//! with postcard stays resident at 1.1 GB; v2 leaves the pattern table (nearly all of it) on
+//! disk, paged on demand.
 use tetra3::solver::SolverDatabase;
 use unisolver_core::{Frame, PixelData, SolveOptions, SolveStatus, SolvedGeometry, Solver};
 use unisolver_synth as synth;

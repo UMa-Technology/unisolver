@@ -1,0 +1,47 @@
+# CI matrix (GitHub Actions). The day-to-day gate is scripts/ci/ci-local.sh; this runs when
+# main is mirrored to GitHub.
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-14, ubuntu-24.04, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "clippy, rustfmt" }
+      - name: fmt
+        run: cargo fmt -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli --check
+      - name: clippy
+        run: cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli --all-targets --features "imageio satellites" -- -D warnings
+        # unisolver_frb needs the Flutter toolchain (dart-sys); the flutter job covers it
+      - name: test
+        run: cargo test --workspace --exclude unisolver_frb --release --features "imageio satellites"
+        # Private test material is not in the repository: tests that need it print skipped and pass
+
+  windows-dll:
+    # Full Windows build for both architectures (macOS can only cross-check)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add aarch64-pc-windows-msvc
+      - run: cargo build -p unisolver-cabi --release --target x86_64-pc-windows-msvc
+      - run: cargo build -p unisolver-cabi --release --target aarch64-pc-windows-msvc
+
+  flutter-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: "3.47.0" }
+      - name: build example (cargokit compiles rust)
+        run: cd packages/unisolver_flutter/example && flutter build macos --debug
+      - name: dart unit tests
+        run: cd packages/unisolver_flutter/example && flutter test test/

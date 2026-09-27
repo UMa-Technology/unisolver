@@ -1,0 +1,17 @@
+# Where CJK text may appear in the public tree; everything else must be CJK-free.
+#   file <glob>      the whole file (localized data)
+#   literals <glob>  only inside string literals or Markdown code spans (localized
+#                    names, the tests that assert them, examples in docs)
+#   line <glob> <text>  one exact line
+file tools/namesgen/data/objects-names.json
+file README.zh-CN.md
+file scripts/ci/cjk-allowlist.txt
+literals tools/namesgen/src/main.rs
+literals crates/unisolver-core/src/ephemeris.rs
+literals crates/unisolver-core/src/dso.rs
+literals crates/unisolver-core/src/names_pack.rs
+literals crates/unisolver-core/tests/annotate_test.rs
+literals crates/unisolver-cabi/src/lib.rs
+literals packages/unisolver_flutter/example/integration_test/solve_e2e_test.dart
+literals docs/integration.md
+line README.md English | [简体中文](README.zh-CN.md)

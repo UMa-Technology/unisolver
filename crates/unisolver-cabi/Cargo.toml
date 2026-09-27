@@ -1,0 +1,24 @@
+[package]
+name = "unisolver-cabi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# cdylib for Windows/.NET and dynamic linking, staticlib for iOS and embedding, rlib for Rust tests
+[lib]
+name = "unisolver_cabi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+unisolver-core = { path = "../unisolver-core", features = ["imageio", "satellites"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+unisolver-synth = { path = "../unisolver-synth" }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+cbindgen = "0.29"

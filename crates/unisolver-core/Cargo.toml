@@ -1,0 +1,43 @@
+[package]
+name = "unisolver-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
+numeris = "0.5"
+thiserror = "2"
+rayon = "1"
+tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", features = ["alloc"] }
+# imageio: multi-format astronomical image input (FITS, XISF, PNG, JPEG, TIFF)
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff"], optional = true }
+quick-xml = { version = "0.41", optional = true }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"], optional = true }
+lz4_flex = { version = "0.11", optional = true }
+ruzstd = { version = "0.8", optional = true }
+sgp4 = { version = "2", optional = true }
+
+[features]
+imageio = ["dep:image", "dep:quick-xml", "dep:flate2", "dep:lz4_flex", "dep:ruzstd"]
+# Satellite pass annotation (TLE + SGP4 + topocentric conversion)
+satellites = ["dep:sgp4"]
+
+[dev-dependencies]
+# Integration tests are separate crates: to `use` tetra3/numeris directly they must
+# be declared again here even though they are regular dependencies
+unisolver-synth = { path = "../unisolver-synth" }
+tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
+numeris = "0.5"
+# Decodes JPEG frames in the golden regression (tests only)
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# Decompresses the bundled database for the golden regression (tests only; pure Rust)
+ruzstd = "0.8"
+
+[[test]]
+name = "imageio_local_test"
+required-features = ["imageio"]

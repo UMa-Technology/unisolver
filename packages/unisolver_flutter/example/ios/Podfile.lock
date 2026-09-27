@@ -1,0 +1,22 @@
+PODS:
+  - Flutter (1.0.0)
+  - unisolver_flutter (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - unisolver_flutter (from `.symlinks/plugins/unisolver_flutter/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  unisolver_flutter:
+    :path: ".symlinks/plugins/unisolver_flutter/ios"
+
+SPEC CHECKSUMS:
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  unisolver_flutter: 4148573f7ea24f9ee9126f5e869fdf2e88d9a935
+
+PODFILE CHECKSUM: 3ba3a73b1b12adcf321a227a745625fe0888cc82
+
+COCOAPODS: 1.16.2

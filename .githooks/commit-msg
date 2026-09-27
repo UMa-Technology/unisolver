@@ -1,0 +1,15 @@
+#!/bin/sh
+# One-line conventional commit: `type(scope): summary`. No body, no trailers.
+# Enable once per clone: git config core.hooksPath .githooks
+f="$1"
+# Drop comment lines and everything below git's verbose-mode scissors line.
+lines=$(sed '/^# -\{24\} >8 -\{24\}$/,$d' "$f" | grep -v '^#' | sed '/^[[:space:]]*$/d')
+n=$(printf '%s\n' "$lines" | grep -c .)
+if [ "$n" -ne 1 ]; then
+  echo "commit-msg: exactly one line, no body or trailers (got $n non-empty lines)" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$lines" | grep -Eq '^(feat|fix|perf|refactor|docs|test|data|ci|chore|revert)(\([a-z0-9-]+\))?: .{1,100}$'; then
+  echo "commit-msg: want 'type(scope): summary' (types: feat fix perf refactor docs test data ci chore revert; summary <= 100 chars)" >&2
+  exit 1
+fi

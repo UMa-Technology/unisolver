@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["third_party/tetra3", "crates/unisolver-synth", "crates/unisolver-core", "tools/namesgen", "tools/solvecli", "packages/unisolver_flutter/rust", "crates/unisolver-cabi"]
+exclude = ["internal"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/UMa-Technology/unisolver"
+
+# Profiles from upstream tetra3rs's Cargo.toml (stripped when vendoring, since profiles only
+# take effect at the workspace root). Never add panic = "abort": FFI callers rely on unwinding.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[profile.test]
+opt-level = 3

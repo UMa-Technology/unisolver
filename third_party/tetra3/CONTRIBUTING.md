@@ -1,0 +1,64 @@
+# Contributing to tetra3rs
+
+Contributions are welcome! Whether it's bug reports, feature requests, documentation improvements, or code changes to improve speed and robustness
+
+## Getting started
+
+1. Fork the repository and clone your fork
+2. Install Rust (stable toolchain)
+3. Download the star catalog (needed for integration tests):
+   ```sh
+   mkdir -p data
+   curl -o data/gaia_merged.bin "https://storage.googleapis.com/tetra3rs-testvecs/gaia_merged.bin"
+   ```
+   > The catalog is also downloaded automatically when running integration tests.
+4. Run the tests:
+   ```sh
+   cargo test                          # unit tests
+   cargo test --features image         # integration tests (downloads test data on first run)
+   ```
+
+## Submitting changes
+
+1. Create a branch for your changes
+2. Make your changes and ensure all tests pass
+3. Open a pull request against `main` with a clear description of what you changed and why
+
+## Checking a refactor for identical behavior
+
+`tests/golden_dump.rs` solves 1500 deterministic synthetic fields (plain,
+spurious, FOV sweep, parity, tracking, aberration) and writes one line per
+solution. Run it before and after a change and diff the two files:
+
+```sh
+TETRA3_GOLDEN_OUT=/tmp/before.txt cargo test --release --test golden_dump -- --ignored --nocapture
+# ... make the change ...
+TETRA3_GOLDEN_OUT=/tmp/after.txt  cargo test --release --test golden_dump -- --ignored --nocapture
+diff /tmp/before.txt /tmp/after.txt
+```
+
+A pure refactor should produce no diff at all. A change to the verification
+statistic changes only the `prob=` column (strip it with
+`sed 's/prob=[^ ]* //'` before diffing). It needs `data/gaia_merged.bin`
+(downloaded on the first `--features image` integration-test run).
+
+## Reporting issues
+
+Open an issue on GitHub. For bugs, please include:
+
+- What you expected to happen
+- What actually happened
+- Steps to reproduce
+- Rust version (`rustc --version`)
+
+## Areas where help is appreciated
+
+- Support for additional star catalogs
+- Distortion model support (SIP, polynomial) in the solver
+- Performance improvements
+- Documentation and examples
+- Python binding improvements
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the same terms as the project (MIT and Apache 2.0).

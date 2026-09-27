@@ -1,0 +1,78 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock — committed for reproducible Python sdist builds
+# Cargo.lock
+
+# Python build
+wheel/
+dist/
+*.egg-info/
+
+
+# test files
+*.fits
+*.tiff
+*.png
+*.ipynb
+!docs/tutorials/*.ipynb
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database files (large binary files)
+*.bin
+*.rkyv
+/data/*.bin
+/data/*.gz
+/data/*.dat
+/data/*.rkyv
+*.csv
+*.npy
+
+# Backup files
+*.bak
+*.old
+
+# Temporary files
+*.tmp
+flycheck*
+
+# Sample images
+*.tiff
+
+# Python files
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+wheel/
+
+# Claude files
+.claude
+
+# Local scratch / issue investigation
+ghissue/
+
+# Data files
+data
+
+# Generated python libraries
+*.so
+
+# Build directory for python
+wheel
+build
+
+# MkDocs build output
+site/
+
+# mkdocs-jupyter executed-notebook cache
+.cache/

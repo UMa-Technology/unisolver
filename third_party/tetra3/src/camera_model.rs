@@ -1,0 +1,405 @@
+//! Camera intrinsics model: focal length, optical center, parity, and distortion.
+//!
+//! `CameraModel` cleanly separates per-camera intrinsics from per-image extrinsics
+//! (pointing + roll). It provides the mapping between pixel coordinates and
+//! tangent-plane coordinates used by the solver.
+//!
+//! # Coordinate conventions
+//!
+//! - **Pixel coordinates**: origin at image center, +X right, +Y down (same as centroids).
+//! - **Tangent-plane coordinates** `(ξ, η)`: small-angle radians on the gnomonic projection
+//!   plane, with ξ = East and η = North when parity is not flipped.
+//!
+//! # Pipeline
+//!
+//! ```text
+//! pixel → subtract crpix → undistort → apply parity → divide by f → tangent plane
+//! tangent plane → multiply by f → apply parity → distort → add crpix → pixel
+//! ```
+
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+
+use crate::distortion::Distortion;
+
+/// Camera intrinsics model.
+///
+/// Encapsulates focal length, sensor dimensions, optical center offset, parity,
+/// and lens distortion into a single struct that maps between pixel and
+/// tangent-plane coordinates.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraModel {
+    /// Focal length in pixels: `f = (width/2) / tan(fov/2)`.
+    pub focal_length_px: f64,
+    /// Sensor width in pixels.
+    pub image_width: u32,
+    /// Sensor height in pixels.
+    pub image_height: u32,
+    /// Optical center offset from the geometric image center, in pixels `[x, y]`.
+    /// For most cameras this is `[0.0, 0.0]`.
+    pub crpix: [f64; 2],
+    /// Whether the image x-axis is flipped (e.g. FITS images with CDELT1 < 0).
+    pub parity_flip: bool,
+    /// Lens distortion model (applied in pixel space, after crpix subtraction).
+    pub distortion: Distortion,
+}
+
+impl CameraModel {
+    /// Create a camera model from a horizontal field of view and image dimensions.
+    ///
+    /// Sets crpix to `[0, 0]`, no parity flip, no distortion.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `fov_rad` lies in `(0, π)` — outside that range the focal
+    /// length is non-positive, infinite, or NaN, which silently poisons every
+    /// pixel scale downstream. (Was a debug-only check before 0.9; release
+    /// builds accepted the garbage.)
+    pub fn from_fov(fov_rad: f64, image_width: u32, image_height: u32) -> Self {
+        assert!(
+            fov_rad.is_finite() && fov_rad > 0.0 && fov_rad < std::f64::consts::PI,
+            "from_fov: fov_rad must be in (0, π), got {fov_rad}"
+        );
+        let f = (image_width as f64 / 2.0) / (fov_rad / 2.0).tan();
+        Self {
+            focal_length_px: f,
+            image_width,
+            image_height,
+            crpix: [0.0, 0.0],
+            parity_flip: false,
+            distortion: Distortion::None,
+        }
+    }
+
+    /// Pixel scale in radians per pixel (approximate, at image center).
+    ///
+    /// This is `1 / focal_length_px` and equals the tangent-plane scale.
+    pub fn pixel_scale(&self) -> f64 {
+        1.0 / self.focal_length_px
+    }
+
+    /// Horizontal field of view in degrees, using the stored `image_width`.
+    pub fn fov_deg(&self) -> f64 {
+        self.fov_rad().to_degrees()
+    }
+
+    /// Horizontal field of view in radians, using the stored `image_width`.
+    pub fn fov_rad(&self) -> f64 {
+        2.0 * ((self.image_width as f64 / 2.0) / self.focal_length_px).atan()
+    }
+
+    /// Convert pixel coordinates to tangent-plane coordinates.
+    ///
+    /// Pipeline: subtract crpix → undistort → apply parity → divide by focal length.
+    pub fn pixel_to_tanplane(&self, px: f64, py: f64) -> (f64, f64) {
+        // 1. Subtract optical center offset
+        let x = px - self.crpix[0];
+        let y = py - self.crpix[1];
+
+        // 2. Undistort (distorted pixel → ideal pixel)
+        let (ux, uy) = self.distortion.undistort(x, y);
+
+        // 3. Apply parity flip
+        let ux = if self.parity_flip { -ux } else { ux };
+
+        // 4. Divide by focal length → tangent-plane radians
+        (ux / self.focal_length_px, uy / self.focal_length_px)
+    }
+
+    /// Convert tangent-plane coordinates to pixel coordinates.
+    ///
+    /// Pipeline: multiply by focal length → apply parity → distort → add crpix.
+    pub fn tanplane_to_pixel(&self, xi: f64, eta: f64) -> (f64, f64) {
+        // 1. Multiply by focal length
+        let x = xi * self.focal_length_px;
+        let y = eta * self.focal_length_px;
+
+        // 2. Apply parity flip (inverse = same operation)
+        let x = if self.parity_flip { -x } else { x };
+
+        // 3. Distort (ideal pixel → distorted pixel)
+        let (dx, dy) = self.distortion.distort(x, y);
+
+        // 4. Add optical center offset
+        (dx + self.crpix[0], dy + self.crpix[1])
+    }
+
+    /// Check the invariants a well-formed camera model must satisfy: finite
+    /// positive focal length, non-zero image dimensions, finite CRPIX, and a
+    /// self-consistent distortion model.
+    ///
+    /// Postcard/serde deserialization checks structure, not semantics — a
+    /// bit-flipped saved model can decode cleanly and then divide by a zero
+    /// focal length or index past a truncated coefficient vector. Called by
+    /// [`Self::load_from_file`]; call it yourself after any other untrusted
+    /// deserialization (e.g. pickle bytes).
+    pub fn validate(&self) -> crate::Result<()> {
+        use crate::Error::InvalidInput;
+        if !(self.focal_length_px.is_finite() && self.focal_length_px > 0.0) {
+            return Err(InvalidInput(format!(
+                "CameraModel: focal_length_px must be finite and > 0, got {}",
+                self.focal_length_px
+            )));
+        }
+        if self.image_width == 0 || self.image_height == 0 {
+            return Err(InvalidInput(format!(
+                "CameraModel: image dimensions must be non-zero, got {}x{}",
+                self.image_width, self.image_height
+            )));
+        }
+        if !(self.crpix[0].is_finite() && self.crpix[1].is_finite()) {
+            return Err(InvalidInput(format!(
+                "CameraModel: crpix must be finite, got [{}, {}]",
+                self.crpix[0], self.crpix[1]
+            )));
+        }
+        self.distortion.validate()
+    }
+
+    /// Save the camera model to a file using postcard.
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> crate::Result<()> {
+        let bytes = postcard::to_allocvec(self)?;
+        std::fs::write(&path, &bytes)?;
+        Ok(())
+    }
+
+    /// Load a camera model from a postcard file.
+    ///
+    /// The decoded model is checked with [`Self::validate`] so a corrupt or
+    /// truncated file fails here with [`crate::Error::InvalidInput`] instead
+    /// of panicking (or silently producing NaN) on first use.
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
+        let bytes = std::fs::read(&path)?;
+        let model = postcard::from_bytes::<Self>(&bytes)?;
+        model.validate()?;
+        Ok(model)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_fov_and_recovery() {
+        let fov_deg = 10.0_f64;
+        let fov_rad = fov_deg.to_radians();
+        let width = 2048u32;
+
+        let cam = CameraModel::from_fov(fov_rad, width, 1536);
+
+        // Recover FOV
+        let recovered_fov = cam.fov_rad();
+        assert!(
+            (recovered_fov - fov_rad).abs() < 1e-12,
+            "FOV recovery: expected {:.6}, got {:.6}",
+            fov_rad,
+            recovered_fov,
+        );
+
+        // Pixel scale should be approximately fov / width for small angles
+        let ps = cam.pixel_scale();
+        let expected_ps = fov_rad / width as f64;
+        assert!(
+            (ps - expected_ps).abs() / expected_ps < 0.01,
+            "pixel scale: expected {:.6e}, got {:.6e}",
+            expected_ps,
+            ps,
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_no_distortion() {
+        let cam = CameraModel::from_fov(10.0_f64.to_radians(), 1024, 768);
+
+        let test_points = [(0.0, 0.0), (100.0, 200.0), (-300.0, 150.0), (512.0, -400.0)];
+
+        for &(px, py) in &test_points {
+            let (xi, eta) = cam.pixel_to_tanplane(px, py);
+            let (px2, py2) = cam.tanplane_to_pixel(xi, eta);
+            assert!(
+                (px - px2).abs() < 1e-10 && (py - py2).abs() < 1e-10,
+                "Roundtrip failed for ({}, {}): got ({}, {})",
+                px,
+                py,
+                px2,
+                py2,
+            );
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_with_crpix() {
+        let cam = CameraModel {
+            focal_length_px: 5000.0,
+            image_width: 1024,
+            image_height: 768,
+            crpix: [10.0, -5.0],
+            parity_flip: false,
+            distortion: Distortion::None,
+        };
+
+        let test_points = [(0.0, 0.0), (100.0, 200.0), (-50.0, 75.0)];
+
+        for &(px, py) in &test_points {
+            let (xi, eta) = cam.pixel_to_tanplane(px, py);
+            let (px2, py2) = cam.tanplane_to_pixel(xi, eta);
+            assert!(
+                (px - px2).abs() < 1e-10 && (py - py2).abs() < 1e-10,
+                "Roundtrip with crpix failed for ({}, {}): got ({}, {})",
+                px,
+                py,
+                px2,
+                py2,
+            );
+        }
+
+        // Center pixel should map to crpix offset in tanplane
+        let (xi0, eta0) = cam.pixel_to_tanplane(10.0, -5.0);
+        assert!(
+            xi0.abs() < 1e-12 && eta0.abs() < 1e-12,
+            "Optical center should map to tanplane origin: ({}, {})",
+            xi0,
+            eta0,
+        );
+    }
+
+    #[test]
+    fn test_parity_flip() {
+        let cam_normal = CameraModel {
+            focal_length_px: 5000.0,
+            image_width: 1024,
+            image_height: 768,
+            crpix: [0.0, 0.0],
+            parity_flip: false,
+            distortion: Distortion::None,
+        };
+        let cam_flipped = CameraModel {
+            focal_length_px: 5000.0,
+            image_width: 1024,
+            image_height: 768,
+            crpix: [0.0, 0.0],
+            parity_flip: true,
+            distortion: Distortion::None,
+        };
+
+        let (xi_n, eta_n) = cam_normal.pixel_to_tanplane(100.0, 200.0);
+        let (xi_f, eta_f) = cam_flipped.pixel_to_tanplane(100.0, 200.0);
+
+        // Parity flip negates xi, preserves eta
+        assert!(
+            (xi_n + xi_f).abs() < 1e-12,
+            "Parity should negate xi: normal={}, flipped={}",
+            xi_n,
+            xi_f,
+        );
+        assert!(
+            (eta_n - eta_f).abs() < 1e-12,
+            "Parity should preserve eta: normal={}, flipped={}",
+            eta_n,
+            eta_f,
+        );
+
+        // Roundtrip with parity
+        let (px, py) = cam_flipped.tanplane_to_pixel(xi_f, eta_f);
+        assert!(
+            (px - 100.0).abs() < 1e-10 && (py - 200.0).abs() < 1e-10,
+            "Parity roundtrip failed: got ({}, {})",
+            px,
+            py,
+        );
+    }
+
+    #[test]
+    fn test_center_pixel_maps_to_origin() {
+        let cam = CameraModel::from_fov(15.0_f64.to_radians(), 2048, 1536);
+        let (xi, eta) = cam.pixel_to_tanplane(0.0, 0.0);
+        assert!(xi.abs() < 1e-15 && eta.abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_pixel_to_tanplane_known_values() {
+        // For a 10° FOV, 1000px wide camera:
+        // A pixel at (500, 0) = right edge should map to xi ≈ tan(5°) ≈ 0.0875 rad
+        let fov_rad = 10.0_f64.to_radians();
+        let cam = CameraModel::from_fov(fov_rad, 1000, 750);
+
+        let (xi, _eta) = cam.pixel_to_tanplane(500.0, 0.0);
+        let expected_xi = (5.0_f64).to_radians().tan();
+        assert!(
+            (xi - expected_xi).abs() < 1e-10,
+            "Edge pixel xi: expected {:.6}, got {:.6}",
+            expected_xi,
+            xi,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "fov_rad must be in (0, π)")]
+    fn test_from_fov_rejects_zero_fov() {
+        // Regression: this was a debug_assert, so release builds silently
+        // produced an infinite focal length.
+        let _ = CameraModel::from_fov(0.0, 1024, 768);
+    }
+
+    #[test]
+    fn test_validate_and_load_reject_degenerate_models() {
+        let mut cam = CameraModel::from_fov(10.0_f64.to_radians(), 1024, 768);
+        assert!(cam.validate().is_ok());
+
+        cam.focal_length_px = 0.0;
+        assert!(cam.validate().is_err());
+
+        // Regression: load_from_file used to hand back whatever decoded,
+        // deferring the failure to a divide-by-zero / OOB at first use.
+        let tmp = std::env::temp_dir().join("test_camera_model_invalid.bin");
+        std::fs::write(&tmp, postcard::to_allocvec(&cam).unwrap()).unwrap();
+        assert!(CameraModel::load_from_file(&tmp).is_err());
+        std::fs::remove_file(&tmp).ok();
+
+        cam.focal_length_px = 5000.0;
+        cam.crpix = [f64::NAN, 0.0];
+        assert!(cam.validate().is_err());
+
+        // Distortion invariants are checked through the same path: a
+        // truncated coefficient vector must fail validation, not panic later.
+        cam.crpix = [0.0, 0.0];
+        let mut poly = crate::distortion::PolynomialDistortion::zero(4, 512.0);
+        poly.a_coeffs.truncate(2);
+        cam.distortion = Distortion::Polynomial(poly);
+        assert!(cam.validate().is_err());
+    }
+
+    #[test]
+    fn test_save_load_roundtrip() {
+        use crate::distortion::radial::RadialDistortion;
+
+        let cam = CameraModel {
+            focal_length_px: 5000.0,
+            image_width: 2048,
+            image_height: 1536,
+            crpix: [1.5, -2.3],
+            parity_flip: true,
+            distortion: Distortion::Radial(RadialDistortion::new(-0.1, 0.05, 0.0)),
+        };
+
+        let tmp = std::env::temp_dir().join("test_camera_model.bin");
+        cam.save_to_file(&tmp).unwrap();
+
+        let loaded = CameraModel::load_from_file(&tmp).unwrap();
+        assert_eq!(cam.focal_length_px, loaded.focal_length_px);
+        assert_eq!(cam.image_width, loaded.image_width);
+        assert_eq!(cam.image_height, loaded.image_height);
+        assert_eq!(cam.crpix, loaded.crpix);
+        assert_eq!(cam.parity_flip, loaded.parity_flip);
+
+        // Verify distortion roundtrip by checking pixel_to_tanplane
+        let (xi1, eta1) = cam.pixel_to_tanplane(100.0, 200.0);
+        let (xi2, eta2) = loaded.pixel_to_tanplane(100.0, 200.0);
+        assert!((xi1 - xi2).abs() < 1e-15);
+        assert!((eta1 - eta2).abs() < 1e-15);
+
+        std::fs::remove_file(&tmp).ok();
+    }
+}

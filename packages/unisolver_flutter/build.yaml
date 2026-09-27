@@ -1,0 +1,9 @@
+# Code generation (freezed) only reads the library. Without this, build_runner
+# follows the example's platform symlinks back into this package and trips over
+# the vendored cargokit build tool.
+targets:
+  $default:
+    sources:
+      - lib/**
+      - pubspec.yaml
+      - $package$

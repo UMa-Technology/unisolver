@@ -1,0 +1,70 @@
+[package]
+keywords = [
+    "star-plate-solver",
+    "astrometry",
+    "astronomy",
+    "image-processing",
+    "pattern-recognition",
+]
+name = "tetra3"
+version = "0.13.0"
+edition = "2021"
+description = "Rust implementation of Tetra3: Fast and robust star plate solver"
+readme = "README.md"
+license = "MIT AND Apache-2.0"
+homepage = "https://tetra3rs.dev"
+repository = "https://github.com/ssmichael1/tetra3rs"
+categories = ["aerospace", "algorithms", "mathematics", "science"]
+exclude = ["data/", "download_hip2.sh"]
+
+[lib]
+name = "tetra3"
+
+[dependencies]
+postcard = { version = "1.0", features = ["alloc"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"
+tracing = { version = "0.1.40", features = ["std"] }
+numeris = { version = "0.5.19", features = ["std", "serde", "optim"] }
+image = { version = "0.25", optional = true, default-features = false }
+rayon = { version = "1", optional = true }
+memmap2 = "0.9"
+
+# Browser wasm (wasm32-unknown-unknown) has no monotonic clock in `std`;
+# web-time provides a drop-in `Instant` backed by `performance.now()`. Only
+# pulled in on that target — see src/solver/clock.rs.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+web-time = "1"
+
+[features]
+default = []
+hipparcos = []
+# Leaf-level solver timing instrumentation (thread-local accumulators).
+# Compiles to nothing when disabled. See src/solver/profiling.rs.
+profile = []
+# Centroid extraction also pulls in numeris's imageproc (used for CCL).
+image = ["dep:image", "numeris/imageproc"]
+# Multi-threaded centroid extraction via rayon. Parallelizes the dominant
+# local-background stage (independent block medians + interpolation rows) and
+# the full-image element-wise maps; also enables numeris's rayon imageproc
+# paths (e.g. the matched-filter Gaussian blur). Bit-identical results to the
+# sequential build. Combine with `image`: `--features image,parallel`.
+parallel = ["dep:rayon", "numeris/rayon"]
+
+[dev-dependencies]
+rand = "0.10.0"
+rand_distr = "0.6.0"
+tracing-subscriber = { version = "0.3.20", features = ["fmt", "env-filter"] }
+ureq = "3"
+
+# integration tests use centroid extraction which needs the "image" feature
+# The test itself reads FITS files directly (minimal parser in-test)
+[[test]]
+name = "skyview_solve_test"
+path = "tests/skyview_solve_test.rs"
+required-features = ["image"]
+
+[[test]]
+name = "tess_solve_test"
+path = "tests/tess_solve_test.rs"
+required-features = ["image"]

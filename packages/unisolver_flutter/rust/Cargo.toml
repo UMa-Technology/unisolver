@@ -1,0 +1,30 @@
+[package]
+name = "unisolver_frb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.13.0"
+unisolver-core = { path = "../../../crates/unisolver-core", features = ["imageio", "satellites"] }
+anyhow = "1"
+ruzstd = "0.8"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+serde_json = "1"
+# Download verification: streaming sha256 (Dart need not read hundreds of MB into memory)
+sha2 = "0.10"
+
+[dev-dependencies]
+unisolver-synth = { path = "../../../crates/unisolver-synth" }
+# Only for building compressed test samples; runtime decoding uses pure-Rust ruzstd (the
+# Windows cross-check needs zero C dependencies)
+zstd = "0.13"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

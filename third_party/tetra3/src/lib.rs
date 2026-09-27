@@ -1,0 +1,230 @@
+//! # tetra3
+//!
+//! A fast, robust **lost-in-space star plate solver** written in Rust.
+//!
+//! > **Status: Alpha** — The core solver is based on well-vetted algorithms but has
+//! > only been tested against a limited set of images. The API is not yet stable and
+//! > may change between releases. Having said that, it has been made to work on both
+//! > low-SNR images taken with a backyard camera and high-star-density images from
+//! > more complex telescopes.
+//!
+//! Given a set of star centroids extracted from a camera image, `tetra3` identifies
+//! the stars against a catalog and returns the camera's pointing direction as a
+//! quaternion — no prior attitude estimate required.
+//!
+//! **Documentation:** For tutorials, concept guides, and Python API reference, see the
+//! [tetra3rs documentation](https://tetra3rs.dev/).
+//!
+//! ## Features
+//!
+//! - **Lost-in-space solving** — determines attitude from star patterns with no initial guess
+//! - **Tracking mode** — when an attitude hint is available (e.g. the previous frame's
+//!   solution), skip the 4-star pattern-hash phase and match centroids directly against
+//!   catalog stars near the hinted boresight. Set [`SolveConfig::attitude_hint`] /
+//!   [`SolveConfig::hint_uncertainty_rad`]. Succeeds with as few as 3 stars, robust to
+//!   sparse / low-SNR fields, with automatic fallback to lost-in-space unless
+//!   [`SolveConfig::strict_hint`] is set.
+//! - **Fast** — geometric hashing of 4-star patterns with breadth-first (brightest-first) search
+//! - **Robust** — statistical verification via a per-star likelihood ratio with a bounded false-positive probability
+//! - **Multiscale** — supports a range of field-of-view scales in a single database
+//! - **Proper motion** — propagates Gaia DR3 / Hipparcos catalog positions to any observation epoch
+//! - **Compact binary databases** — databases serialize with [postcard](https://docs.rs/postcard)
+//!   in a portable, lightweight binary format with no offset-size limit, so
+//!   wide-FOV-range multiscale databases of any size load cleanly.
+//! - **Centroid extraction** — detect stars from images with local background subtraction,
+//!   connected-component labeling, and quadratic sub-pixel peak refinement (`image` feature)
+//! - **Camera model** — unified [`CameraModel`] struct (focal length, optical center, parity,
+//!   distortion) used throughout the solve and calibration pipeline
+//! - **Distortion calibration** — fit SIP polynomial or radial distortion models from one or
+//!   more solved images via [`calibrate_camera`]
+//! - **WCS output** — solutions include FITS-standard WCS fields (CD matrix, CRVAL) and
+//!   [`Solution::pixel_to_world`] / [`Solution::world_to_pixel`] methods
+//! - **Stellar aberration** — optional correction for the ~20″ apparent shift in star
+//!   positions caused by the observer's barycentric velocity; set
+//!   [`SolveConfig::observer_velocity_km_s`] (use [`earth_barycentric_velocity`] for
+//!   ground-based / Earth-orbiting observers)
+//! - **Tested on real spacecraft imagery** — successfully solves NASA TESS Full Frame
+//!   Images (~12° FOV, significant optical distortion). Multi-image calibration across
+//!   10 TESS sectors achieves sub-arcsec agreement with FITS WCS solutions
+//!
+//! ## Star catalog
+//!
+//! Solving requires a merged Gaia DR3 + Hipparcos catalog (`gaia_merged.bin`).
+//! A pre-built G < 10 catalog (~17 MB) is hosted at
+//! `https://storage.googleapis.com/tetra3rs-testvecs/gaia_merged.bin`. For
+//! custom magnitude limits, two scripts in `scripts/` produce byte-compatible
+//! output:
+//!
+//! - `download_gaia_catalog.py` — ESA TAP server (canonical Gaia source;
+//!   capped at G ≈ 11.5 by the server's 3,000,000-row anonymous output limit)
+//! - `download_gaia_flatiron.py` — Flatiron Institute flathub (full Gaia DR3,
+//!   needed for G > 11.5)
+//!
+//! Both merge in Hipparcos 2 bright stars (G < 4) where Gaia saturates. See
+//! the [Star Catalog docs](https://tetra3rs.dev/getting-started/catalog/) for
+//! setup details.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! use tetra3::{GenerateDatabaseConfig, SolverDatabase, SolveConfig, Centroid};
+//!
+//! // Generate a database from the Gaia catalog
+//! let config = GenerateDatabaseConfig {
+//!     max_fov_deg: 20.0,
+//!     epoch_proper_motion_year: Some(2025.0),
+//!     ..Default::default()
+//! };
+//! let db = SolverDatabase::generate_from_gaia("data/gaia_merged.bin", &config).unwrap();
+//!
+//! // Save for fast loading later, or load a previously saved database
+//! db.save_to_file("data/my_database.bin").unwrap();
+//! let db = SolverDatabase::load_from_file("data/my_database.bin").unwrap();
+//!
+//! // Solve from image centroids (pixel coordinates, origin at image center)
+//! let centroids = vec![
+//!     Centroid { x: 100.0, y: 200.0, mass: Some(50.0), cov: None },
+//!     Centroid { x: -50.0, y: -10.0, mass: Some(45.0), cov: None },
+//!     // ... more centroids ...
+//! ];
+//!
+//! let solve_config = SolveConfig {
+//!     fov_max_error_rad: Some((2.0_f32).to_radians()),
+//!     // 15° horizontal FOV estimate, 1024×1024 image
+//!     ..SolveConfig::new((15.0_f32).to_radians(), 1024, 1024)
+//! };
+//!
+//! // The solve returns Result<Solution, SolveFailure>; a Solution's fields
+//! // are all guaranteed present.
+//! if let Ok(solution) = db.solve_from_centroids(&centroids, &solve_config) {
+//!     println!("Attitude: {}", solution.qicrs2cam);
+//!     println!("Matched {} stars in {:.1} ms",
+//!         solution.num_matches, solution.solve_time_ms);
+//! }
+//! ```
+//!
+//! ## Tracking mode
+//!
+//! For frame-to-frame solving where each solve seeds the next, pass the prior
+//! attitude as a hint to skip the 4-star pattern-hash phase:
+//!
+//! ```no_run
+//! # use tetra3::{SolveConfig, SolverDatabase, Centroid, Solution};
+//! # fn dummy(prev: Solution, db: SolverDatabase, centroids: Vec<Centroid>) {
+//! let config = SolveConfig {
+//!     attitude_hint: Some(prev.qicrs2cam),
+//!     hint_uncertainty_rad: 1.0_f32.to_radians(),
+//!     ..SolveConfig::with_camera_model(prev.camera_model.clone())
+//! };
+//! let result = db.solve_from_centroids(&centroids, &config);
+//! # }
+//! ```
+//!
+//! The solver projects catalog stars near the hinted boresight, nearest-neighbor
+//! matches them to centroids, and runs the same Wahba SVD + verification + WCS
+//! refine path as lost-in-space. Tracking succeeds with as few as 3 matched stars
+//! (LIS needs 4) and is robust to pattern-hash failures from sparse / low-SNR
+//! fields. On failure it falls back to lost-in-space automatically unless
+//! [`SolveConfig::strict_hint`] is `true`.
+//!
+//! ## Stellar aberration
+//!
+//! Stellar aberration shifts apparent star positions by up to ~20″ due to the
+//! observer's barycentric velocity (~30 km/s for Earth). The pattern-matching step
+//! is unaffected (inter-star angular separations are invariant to first order in
+//! v/c), but the final attitude quaternion is biased by ~20″ unless corrected.
+//!
+//! Pass the observer's barycentric velocity (ICRS, km/s) via
+//! [`SolveConfig::observer_velocity_km_s`]. The solver applies the classical
+//! correction `s' = (s + β) / |s + β|` to all catalog vectors before matching
+//! and refinement.
+//!
+//! For ground-based observers, [`earth_barycentric_velocity`] is the whole
+//! story. For observers on LEO spacecraft, Earth-orbital velocity (~7.5 km/s,
+//! ~5″ bias) is *not* negligible — pass the *total* barycentric velocity
+//! (Earth-around-Sun + spacecraft-around-Earth) instead of just
+//! [`earth_barycentric_velocity`] alone.
+//!
+//! ```no_run
+//! use tetra3::{earth_barycentric_velocity, SolveConfig};
+//!
+//! let v = earth_barycentric_velocity(9321.0); // days since J2000.0
+//! let config = SolveConfig {
+//!     observer_velocity_km_s: Some(v),
+//!     ..SolveConfig::new((10.0_f32).to_radians(), 1024, 1024)
+//! };
+//! ```
+//!
+//! ## Algorithm overview
+//!
+//! 1. **Pattern generation** — select combinations of 4 bright centroids; compute 6 pairwise
+//!    angular separations and normalize into 5 edge ratios (a geometric invariant)
+//! 2. **Hash lookup** — quantize the edge ratios into a key and probe a precomputed hash
+//!    table for matching catalog patterns
+//! 3. **Attitude estimation** — solve Wahba's problem via SVD to find the rotation from
+//!    catalog (ICRS) to camera frame
+//! 4. **Verification** — project nearby catalog stars into the camera frame, match them to
+//!    centroids, and accept only if the likelihood ratio bounds the false-positive
+//!    probability below threshold
+//! 5. **Refinement** — re-estimate the rotation using all matched star pairs via iterative
+//!    SVD passes
+//! 6. **WCS fit** — constrained 3-DOF tangent-plane refinement (rotation angle θ + CRVAL
+//!    offset) with sigma-clipping, producing FITS-standard WCS output
+//!
+//! ## Credits
+//!
+//! This crate is a Rust implementation of the **tetra3** / **cedar-solve** algorithm:
+//!
+//! - [**tetra3**](https://github.com/esa/tetra3) — the original Python implementation by
+//!   Gustav Pettersson at ESA
+//! - [**cedar-solve**](https://github.com/smroid/cedar-solve) — Steven Rosenthal's C++/Rust
+//!   star plate solver, which this implementation closely follows
+//! - **Paper**: G. Pettersson, "Tetra3: a fast and robust star identification algorithm,"
+//!   ESA GNC Conference, 2023
+//!
+//! This Rust implementation was developed by Steven Michael with assistance from
+//! [Claude Code](https://claude.ai/claude-code) (Anthropic).
+//!
+
+pub mod aberration;
+pub mod camera_model;
+/// Raw star catalogs (Gaia DR3, optionally Hipparcos)
+pub(crate) mod catalogs;
+mod centroid;
+#[cfg(feature = "image")]
+pub mod centroid_extraction;
+pub mod distortion;
+pub mod error;
+pub mod solver;
+pub mod star;
+pub mod starcatalog;
+pub(crate) mod stats;
+
+pub use aberration::earth_barycentric_velocity;
+pub use camera_model::CameraModel;
+pub use centroid::*;
+#[cfg(feature = "image")]
+pub use centroid_extraction::{
+    extract_centroids_fast, extract_centroids_from_image, extract_centroids_from_raw,
+    CentroidExtractionConfig, CentroidExtractionResult, CentroidExtractor, DeblendMode,
+    FastCentroidConfig,
+};
+pub use distortion::{
+    calibrate_camera, num_coeffs, CalibrateConfig, CalibrateResult, Distortion,
+    DistortionModelType, PolynomialDistortion, RadialDistortion,
+};
+pub use error::{Error, Result};
+pub use solver::{
+    DatabaseProperties, GenerateDatabaseConfig, Solution, SolveConfig, SolveFailure, SolveResult,
+    SolveStatus, SolverDatabase,
+};
+pub use star::*;
+pub use starcatalog::*;
+
+// Commonly used types
+// Note: 32-bit floats are sufficient for most of the math
+// We switch to 64-bit for the SVD used in the final solver step,
+// as 32-bit floats have shown to be insufficiently accurate for that step.
+pub type Quaternion = numeris::Quaternion<f32>;
+pub type Vector3 = numeris::Vector3<f32>;
+pub type Matrix2 = numeris::Matrix2<f32>;

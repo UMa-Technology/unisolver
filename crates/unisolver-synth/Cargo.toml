@@ -1,0 +1,17 @@
+[package]
+name = "unisolver-synth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
+numeris = "0.5"
+rand = "0.10"
+rand_distr = "0.6"
+
+[dev-dependencies]
+# examples/render_fov.rs writes 16-bit PNG and 8-bit JPEG
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

@@ -1,7 +1,8 @@
-//! `cargo xtask <command>`: repository maintenance. See docs/upstream.md.
+//! `cargo xtask <command>`: repository maintenance. See docs/upstream.md and docs/releasing.md.
 use clap::{Parser, Subcommand};
 use std::path::Path;
 use std::process::{Command, ExitCode};
+use xtask::release;
 use xtask::upstream::changelog::Flag;
 use xtask::upstream::git::numstat;
 use xtask::upstream::tree::Change;
@@ -25,6 +26,28 @@ enum Cmd {
         #[command(subcommand)]
         cmd: UpstreamCmd,
     },
+    /// Release bookkeeping (docs/releasing.md)
+    Release {
+        #[command(subcommand)]
+        cmd: ReleaseCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReleaseCmd {
+    /// On a clean develop: set every manifest to X.Y.Z, date the CHANGELOG's Unreleased entries
+    /// as vX.Y.Z, refresh Cargo.lock and commit
+    Prepare {
+        /// Version, e.g. 0.2.1
+        version: String,
+        /// Release date, YYYY-MM-DD (default: today)
+        #[arg(long)]
+        date: Option<String>,
+    },
+    /// Exit 1 unless every manifest and the CHANGELOG are ready for tag vX.Y.Z
+    Check { tag: String },
+    /// Print the CHANGELOG section of vX.Y.Z (the GitHub release notes)
+    Notes { tag: String },
 }
 
 #[derive(Subcommand)]
@@ -58,11 +81,17 @@ enum UpstreamCmd {
 }
 
 fn main() -> ExitCode {
-    let Cmd::Upstream { cmd } = Cli::parse().cmd;
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
         .expect("tools/xtask sits two levels below the repository root");
+    match Cli::parse().cmd {
+        Cmd::Upstream { cmd } => upstream_main(root, cmd),
+        Cmd::Release { cmd } => release_main(root, cmd),
+    }
+}
+
+fn upstream_main(root: &Path, cmd: UpstreamCmd) -> ExitCode {
     let ctx = match Ctx::load(root, std::env::var(upstream::REPO_ENV).ok()) {
         Ok(ctx) => ctx,
         Err(e) => return fail(e),
@@ -96,6 +125,88 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => fail(e),
     }
+}
+
+fn release_main(root: &Path, cmd: ReleaseCmd) -> ExitCode {
+    let result = match cmd {
+        ReleaseCmd::Prepare { version, date } => prepare(root, &version, date),
+        ReleaseCmd::Check { tag } => match release::check(root, &tag) {
+            Ok(problems) if problems.is_empty() => {
+                println!("{tag}: every manifest and the CHANGELOG are ready");
+                Ok(())
+            }
+            Ok(problems) => {
+                for p in &problems {
+                    println!("NOT READY: {p}");
+                }
+                return ExitCode::from(1);
+            }
+            Err(e) => Err(e),
+        },
+        ReleaseCmd::Notes { tag } => release::notes(root, &tag).map(|n| print!("{n}")),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => fail(e),
+    }
+}
+
+/// `release prepare`: on a clean develop, rewrite the manifests and the CHANGELOG, refresh
+/// Cargo.lock and commit.
+fn prepare(root: &Path, version: &str, date: Option<String>) -> anyhow::Result<()> {
+    let branch = git(root, &["branch", "--show-current"])?;
+    anyhow::ensure!(
+        branch == "develop",
+        "prepare releases on develop (on {branch})"
+    );
+    let dirty = git(root, &["status", "--porcelain"])?;
+    anyhow::ensure!(dirty.is_empty(), "the working tree is not clean");
+    let tag = format!("v{version}");
+    anyhow::ensure!(
+        git(root, &["tag", "-l", &tag])?.is_empty(),
+        "tag {tag} exists"
+    );
+    let date = match date {
+        Some(d) => d,
+        None => today()?,
+    };
+    release::prepare(root, version, &date)?;
+    anyhow::ensure!(
+        cargo(root, &["update", "--workspace", "--quiet"]),
+        "cargo update --workspace failed"
+    );
+    let mut add = vec!["add", "--"];
+    add.extend(release::prepared_files());
+    git(root, &add)?;
+    git(
+        root,
+        &["commit", "--quiet", "-m", &format!("chore(release): {tag}")],
+    )?;
+    println!("committed chore(release): {tag}");
+    println!("next: git checkout main && git merge --ff-only develop && scripts/release.sh {tag}");
+    Ok(())
+}
+
+/// git as the maintainer: their identity and hooks (the upstream clones use `Git` instead).
+fn git(root: &Path, args: &[&str]) -> anyhow::Result<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn today() -> anyhow::Result<String> {
+    let out = Command::new("date").arg("+%F").output()?;
+    anyhow::ensure!(out.status.success(), "date +%F failed");
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 fn fail(e: anyhow::Error) -> ExitCode {

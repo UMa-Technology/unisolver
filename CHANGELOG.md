@@ -14,6 +14,10 @@
    first in any ladder, for formats the engine does not decode.
 3. **HEIC is rejected with directions.** A HEIC/HEIF file now fails with an error that says to
    decode it on the platform and use a frame entry; the integration guide shows how.
+4. **Large frames take less than half the memory.** Frames above 16 Mpx are extracted in
+   horizontal bands converted straight from the frame's pixels, without a full-frame f32 copy:
+   solving a 26 Mpx astro frame peaks at 290 MB instead of 630 MB (with a narrow tier loaded)
+   and gives the same solutions. Smaller frames are extracted as before.
 
 ## 2026-09-28 — v0.2.0
 

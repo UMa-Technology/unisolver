@@ -594,9 +594,10 @@ and `stellarium` when you ship the names pack. The example app lists them all un
 5. **Frames without stars** fail in under two seconds (measured 1.7 s on real frames). Use
    `attempts` to tell the user no stars were found; do not retry in a loop. With
    `thorough: true` failures take as long as the exhaustive search (10–16 s).
-6. **Large frames**: extracting a 26 Mpx astro frame peaks around 700 MB (full-frame f32
-   buffers, unrelated to the database). On mobile downsample to ≤ 4K first, or process
-   originals on desktop.
+6. **Large frames**: frames above 16 Mpx are extracted in horizontal bands, so a 26 Mpx
+   astro frame peaks around 290 MB including a 320 MB narrow tier (630 MB before banding);
+   phone frames up to 4K take a single pass. On mobile, still prefer downsampling 48 Mpx
+   originals to ≤ 4K: fewer pixels is less work, and the FOV does not change.
 7. **Windows builds**: the DLL must be built on a Windows host (the dependency chain
    includes dart-sys); macOS can cross-check but not produce it.
 8. **macOS sandbox needs network access**: to download with `DbManager`, the host's

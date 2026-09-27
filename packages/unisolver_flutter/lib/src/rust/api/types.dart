@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
 
 class AnnotateOptionsDto {
   final double? starMaxMag;
@@ -50,6 +50,21 @@ class AnnotateOptionsDto {
   /// IAU constellation boundaries (`AnnotationsDto.boundaries`); needs the constellation pack
   final bool constellationBoundaries;
 
+  /// Equatorial grid (`AnnotationsDto.grid`, J2000 right ascension and declination)
+  final bool equatorialGrid;
+
+  /// Horizontal grid (apparent altitude and azimuth, with the horizon); needs
+  /// `observationUnixMs` and `observer`
+  final bool horizontalGrid;
+
+  /// Screen pixels between grid lines (default 150)
+  final double? gridSpacingPx;
+
+  /// What the app shows right now: pass it and lines and labels follow the zoom (grid
+  /// spacing, sampling, simplification to half a screen pixel, labels on the visible edges).
+  /// Annotate again when it changes; null means the whole image at scale 1.
+  final ViewportDto? viewport;
+
   const AnnotateOptionsDto({
     this.starMaxMag,
     required this.maxStars,
@@ -65,6 +80,10 @@ class AnnotateOptionsDto {
     required this.language,
     this.includeConstellations = false,
     this.constellationBoundaries = false,
+    this.equatorialGrid = false,
+    this.horizontalGrid = false,
+    this.gridSpacingPx,
+    this.viewport,
   });
 
   static AnnotateOptionsDto defaults() =>
@@ -85,7 +104,11 @@ class AnnotateOptionsDto {
       satelliteTle.hashCode ^
       language.hashCode ^
       includeConstellations.hashCode ^
-      constellationBoundaries.hashCode;
+      constellationBoundaries.hashCode ^
+      equatorialGrid.hashCode ^
+      horizontalGrid.hashCode ^
+      gridSpacingPx.hashCode ^
+      viewport.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -105,7 +128,11 @@ class AnnotateOptionsDto {
           satelliteTle == other.satelliteTle &&
           language == other.language &&
           includeConstellations == other.includeConstellations &&
-          constellationBoundaries == other.constellationBoundaries;
+          constellationBoundaries == other.constellationBoundaries &&
+          equatorialGrid == other.equatorialGrid &&
+          horizontalGrid == other.horizontalGrid &&
+          gridSpacingPx == other.gridSpacingPx &&
+          viewport == other.viewport;
 }
 
 class AnnotationsDto {
@@ -116,6 +143,7 @@ class AnnotationsDto {
   final List<SatelliteAnnotationDto> satellites;
   final List<ConstellationAnnotationDto> constellations;
   final List<BoundaryAnnotationDto> boundaries;
+  final List<GridLineDto> grid;
   final LayerAvailabilityDto layers;
 
   const AnnotationsDto({
@@ -126,6 +154,7 @@ class AnnotationsDto {
     required this.satellites,
     required this.constellations,
     required this.boundaries,
+    required this.grid,
     required this.layers,
   });
 
@@ -138,6 +167,7 @@ class AnnotationsDto {
       satellites.hashCode ^
       constellations.hashCode ^
       boundaries.hashCode ^
+      grid.hashCode ^
       layers.hashCode;
 
   @override
@@ -152,6 +182,7 @@ class AnnotationsDto {
           satellites == other.satellites &&
           constellations == other.constellations &&
           boundaries == other.boundaries &&
+          grid == other.grid &&
           layers == other.layers;
 }
 
@@ -582,6 +613,117 @@ class FrameDto {
           bytes == other.bytes;
 }
 
+/// The edge of the visible region a label sits on: nudge the text inward from it.
+enum GridEdgeDto {
+  left,
+  right,
+  top,
+  bottom,
+
+  /// The line stays inside the region: mid-line
+  inside,
+}
+
+enum GridKindDto {
+  ra,
+  dec,
+  alt,
+  az,
+
+  /// Altitude 0°
+  horizon,
+}
+
+class GridLabelDto {
+  final double x;
+  final double y;
+
+  /// Direction of the line there, counter-clockwise from +x (image y down), in (−90°, 90°]
+  final double angleDeg;
+  final GridEdgeDto edge;
+
+  const GridLabelDto({
+    required this.x,
+    required this.y,
+    required this.angleDeg,
+    required this.edge,
+  });
+
+  @override
+  int get hashCode =>
+      x.hashCode ^ y.hashCode ^ angleDeg.hashCode ^ edge.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GridLabelDto &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y &&
+          angleDeg == other.angleDeg &&
+          edge == other.edge;
+}
+
+/// One grid line with its value and label.
+class GridLineDto {
+  final GridSystemDto system;
+  final GridKindDto kind;
+
+  /// Right ascension or azimuth in [0, 360), declination or altitude in degrees
+  final double valueDeg;
+
+  /// The value as charts print it: `16h30m`, `−20°30′`, `180°`
+  final String text;
+
+  /// Compass point for azimuths on a multiple of 45° (`N`, `NE`, … `NW`): localize it
+  final String? cardinal;
+
+  /// Pixel polylines, interleaved x, y; they may run past the visible edge
+  final List<Float64List> lines;
+  final GridLabelDto? label;
+
+  const GridLineDto({
+    required this.system,
+    required this.kind,
+    required this.valueDeg,
+    required this.text,
+    this.cardinal,
+    required this.lines,
+    this.label,
+  });
+
+  @override
+  int get hashCode =>
+      system.hashCode ^
+      kind.hashCode ^
+      valueDeg.hashCode ^
+      text.hashCode ^
+      cardinal.hashCode ^
+      lines.hashCode ^
+      label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GridLineDto &&
+          runtimeType == other.runtimeType &&
+          system == other.system &&
+          kind == other.kind &&
+          valueDeg == other.valueDeg &&
+          text == other.text &&
+          cardinal == other.cardinal &&
+          lines == other.lines &&
+          label == other.label;
+}
+
+enum GridSystemDto {
+  /// J2000 right ascension and declination
+  equatorial,
+
+  /// Apparent altitude and azimuth (from north through east)
+  horizontal,
+}
+
 class LadderOutcomeDto {
   final SolveOutcomeDto outcome;
   final List<FovAttemptDto> attempts;
@@ -610,6 +752,9 @@ class LayerAvailabilityDto {
   /// Constellation figures and boundaries
   final bool constellations;
 
+  /// Coordinate grids
+  final bool grid;
+
   /// Why a layer is unavailable or degraded, as `(layer, message)`: show it rather than an
   /// empty layer
   final List<(String, String)> reasons;
@@ -621,6 +766,7 @@ class LayerAvailabilityDto {
     required this.solarSystem,
     required this.satellites,
     required this.constellations,
+    required this.grid,
     required this.reasons,
   });
 
@@ -632,6 +778,7 @@ class LayerAvailabilityDto {
       solarSystem.hashCode ^
       satellites.hashCode ^
       constellations.hashCode ^
+      grid.hashCode ^
       reasons.hashCode;
 
   @override
@@ -645,6 +792,7 @@ class LayerAvailabilityDto {
           solarSystem == other.solarSystem &&
           satellites == other.satellites &&
           constellations == other.constellations &&
+          grid == other.grid &&
           reasons == other.reasons;
 }
 
@@ -1217,6 +1365,45 @@ class TimingDto {
           extractMs == other.extractMs &&
           solveMs == other.solveMs &&
           totalMs == other.totalMs;
+}
+
+/// The visible part of the image and the zoom.
+class ViewportDto {
+  /// Visible region in image pixels (top-left origin)
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+
+  /// Screen pixels per image pixel
+  final double scale;
+
+  const ViewportDto({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+    required this.scale,
+  });
+
+  @override
+  int get hashCode =>
+      x.hashCode ^
+      y.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      scale.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ViewportDto &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y &&
+          width == other.width &&
+          height == other.height &&
+          scale == other.scale;
 }
 
 class WcsDto {

@@ -9,6 +9,7 @@ import 'api/logging.dart';
 import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
+import 'api/wcs.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -157,6 +158,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FrameDto dco_decode_box_autoadd_frame_dto(dynamic raw);
 
   @protected
+  GridLabelDto dco_decode_box_autoadd_grid_label_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
@@ -173,6 +177,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  ViewportDto dco_decode_box_autoadd_viewport_dto(dynamic raw);
 
   @protected
   WcsDto dco_decode_box_autoadd_wcs_dto(dynamic raw);
@@ -237,6 +244,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FrameDto dco_decode_frame_dto(dynamic raw);
 
   @protected
+  GridEdgeDto dco_decode_grid_edge_dto(dynamic raw);
+
+  @protected
+  GridKindDto dco_decode_grid_kind_dto(dynamic raw);
+
+  @protected
+  GridLabelDto dco_decode_grid_label_dto(dynamic raw);
+
+  @protected
+  GridLineDto dco_decode_grid_line_dto(dynamic raw);
+
+  @protected
+  GridSystemDto dco_decode_grid_system_dto(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -280,6 +302,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<FovPresetDto> dco_decode_list_fov_preset_dto(dynamic raw);
 
   @protected
+  List<GridLineDto> dco_decode_list_grid_line_dto(dynamic raw);
+
+  @protected
   List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw);
 
   @protected
@@ -298,6 +323,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
 
   @protected
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
@@ -350,6 +378,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
+  GridLabelDto? dco_decode_opt_box_autoadd_grid_label_dto(dynamic raw);
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
@@ -365,6 +396,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  ViewportDto? dco_decode_opt_box_autoadd_viewport_dto(dynamic raw);
 
   @protected
   F32Array4? dco_decode_opt_f_32_array_4(dynamic raw);
@@ -428,6 +462,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  ViewportDto dco_decode_viewport_dto(dynamic raw);
 
   @protected
   WcsDto dco_decode_wcs_dto(dynamic raw);
@@ -556,6 +593,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FrameDto sse_decode_box_autoadd_frame_dto(SseDeserializer deserializer);
 
   @protected
+  GridLabelDto sse_decode_box_autoadd_grid_label_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
@@ -576,6 +618,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  ViewportDto sse_decode_box_autoadd_viewport_dto(SseDeserializer deserializer);
 
   @protected
   WcsDto sse_decode_box_autoadd_wcs_dto(SseDeserializer deserializer);
@@ -646,6 +691,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FrameDto sse_decode_frame_dto(SseDeserializer deserializer);
 
   @protected
+  GridEdgeDto sse_decode_grid_edge_dto(SseDeserializer deserializer);
+
+  @protected
+  GridKindDto sse_decode_grid_kind_dto(SseDeserializer deserializer);
+
+  @protected
+  GridLabelDto sse_decode_grid_label_dto(SseDeserializer deserializer);
+
+  @protected
+  GridLineDto sse_decode_grid_line_dto(SseDeserializer deserializer);
+
+  @protected
+  GridSystemDto sse_decode_grid_system_dto(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -701,6 +761,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<GridLineDto> sse_decode_list_grid_line_dto(SseDeserializer deserializer);
+
+  @protected
   List<Float64List> sse_decode_list_list_prim_f_64_strict(
     SseDeserializer deserializer,
   );
@@ -725,6 +788,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
 
   @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
@@ -789,6 +855,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
+  GridLabelDto? sse_decode_opt_box_autoadd_grid_label_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
@@ -806,6 +877,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  ViewportDto? sse_decode_opt_box_autoadd_viewport_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   F32Array4? sse_decode_opt_f_32_array_4(SseDeserializer deserializer);
@@ -881,6 +957,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  ViewportDto sse_decode_viewport_dto(SseDeserializer deserializer);
 
   @protected
   WcsDto sse_decode_wcs_dto(SseDeserializer deserializer);
@@ -1036,6 +1115,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_grid_label_dto(
+    GridLabelDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -1064,6 +1149,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_viewport_dto(
+    ViewportDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_wcs_dto(WcsDto self, SseSerializer serializer);
@@ -1147,6 +1238,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_frame_dto(FrameDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_grid_edge_dto(GridEdgeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_grid_kind_dto(GridKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_grid_label_dto(GridLabelDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_grid_line_dto(GridLineDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_grid_system_dto(GridSystemDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -1216,6 +1322,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_grid_line_dto(
+    List<GridLineDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_list_prim_f_64_strict(
     List<Float64List> self,
     SseSerializer serializer,
@@ -1245,6 +1357,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_f_32_strict(
     Float32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
     SseSerializer serializer,
   );
 
@@ -1327,6 +1445,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_grid_label_dto(
+    GridLabelDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
     SseSerializer serializer,
@@ -1349,6 +1473,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_viewport_dto(
+    ViewportDto? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_f_32_array_4(F32Array4? self, SseSerializer serializer);
@@ -1448,6 +1578,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_viewport_dto(ViewportDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_wcs_dto(WcsDto self, SseSerializer serializer);

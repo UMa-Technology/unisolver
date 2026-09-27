@@ -4,3 +4,4 @@ pub mod logging;
 pub mod satellites;
 pub mod solver;
 pub mod types;
+pub mod wcs;

@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1023217073;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1892746407;
 
 // Section: executor
 
@@ -1476,6 +1476,72 @@ fn wire__crate__api__types__solve_options_dto_defaults_impl(
         },
     )
 }
+fn wire__crate__api__wcs__wcs_pixels_to_sky_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "wcs_pixels_to_sky",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_wcs = <crate::api::types::WcsDto>::sse_decode(&mut deserializer);
+            let api_pixels = <Vec<f64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::wcs::wcs_pixels_to_sky(api_wcs, api_pixels)?;
+                    std::result::Result::Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__wcs__wcs_sky_to_pixels_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "wcs_sky_to_pixels",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_wcs = <crate::api::types::WcsDto>::sse_decode(&mut deserializer);
+            let api_radec = <Vec<f64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::wcs::wcs_sky_to_pixels(api_wcs, api_radec)?;
+                    std::result::Result::Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 
 // Section: related_funcs
 
@@ -1617,6 +1683,10 @@ impl SseDecode for crate::api::types::AnnotateOptionsDto {
         let mut var_language = <String>::sse_decode(deserializer);
         let mut var_includeConstellations = <bool>::sse_decode(deserializer);
         let mut var_constellationBoundaries = <bool>::sse_decode(deserializer);
+        let mut var_equatorialGrid = <bool>::sse_decode(deserializer);
+        let mut var_horizontalGrid = <bool>::sse_decode(deserializer);
+        let mut var_gridSpacingPx = <Option<f64>>::sse_decode(deserializer);
+        let mut var_viewport = <Option<crate::api::types::ViewportDto>>::sse_decode(deserializer);
         return crate::api::types::AnnotateOptionsDto {
             star_max_mag: var_starMaxMag,
             max_stars: var_maxStars,
@@ -1632,6 +1702,10 @@ impl SseDecode for crate::api::types::AnnotateOptionsDto {
             language: var_language,
             include_constellations: var_includeConstellations,
             constellation_boundaries: var_constellationBoundaries,
+            equatorial_grid: var_equatorialGrid,
+            horizontal_grid: var_horizontalGrid,
+            grid_spacing_px: var_gridSpacingPx,
+            viewport: var_viewport,
         };
     }
 }
@@ -1650,6 +1724,7 @@ impl SseDecode for crate::api::types::AnnotationsDto {
             <Vec<crate::api::types::ConstellationAnnotationDto>>::sse_decode(deserializer);
         let mut var_boundaries =
             <Vec<crate::api::types::BoundaryAnnotationDto>>::sse_decode(deserializer);
+        let mut var_grid = <Vec<crate::api::types::GridLineDto>>::sse_decode(deserializer);
         let mut var_layers = <crate::api::types::LayerAvailabilityDto>::sse_decode(deserializer);
         return crate::api::types::AnnotationsDto {
             stars: var_stars,
@@ -1659,6 +1734,7 @@ impl SseDecode for crate::api::types::AnnotationsDto {
             satellites: var_satellites,
             constellations: var_constellations,
             boundaries: var_boundaries,
+            grid: var_grid,
             layers: var_layers,
         };
     }
@@ -2030,6 +2106,86 @@ impl SseDecode for crate::api::types::FrameDto {
     }
 }
 
+impl SseDecode for crate::api::types::GridEdgeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::GridEdgeDto::Left,
+            1 => crate::api::types::GridEdgeDto::Right,
+            2 => crate::api::types::GridEdgeDto::Top,
+            3 => crate::api::types::GridEdgeDto::Bottom,
+            4 => crate::api::types::GridEdgeDto::Inside,
+            _ => unreachable!("Invalid variant for GridEdgeDto: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::GridKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::GridKindDto::Ra,
+            1 => crate::api::types::GridKindDto::Dec,
+            2 => crate::api::types::GridKindDto::Alt,
+            3 => crate::api::types::GridKindDto::Az,
+            4 => crate::api::types::GridKindDto::Horizon,
+            _ => unreachable!("Invalid variant for GridKindDto: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::GridLabelDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <f64>::sse_decode(deserializer);
+        let mut var_y = <f64>::sse_decode(deserializer);
+        let mut var_angleDeg = <f64>::sse_decode(deserializer);
+        let mut var_edge = <crate::api::types::GridEdgeDto>::sse_decode(deserializer);
+        return crate::api::types::GridLabelDto {
+            x: var_x,
+            y: var_y,
+            angle_deg: var_angleDeg,
+            edge: var_edge,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::GridLineDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_system = <crate::api::types::GridSystemDto>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::types::GridKindDto>::sse_decode(deserializer);
+        let mut var_valueDeg = <f64>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_cardinal = <Option<String>>::sse_decode(deserializer);
+        let mut var_lines = <Vec<Vec<f64>>>::sse_decode(deserializer);
+        let mut var_label = <Option<crate::api::types::GridLabelDto>>::sse_decode(deserializer);
+        return crate::api::types::GridLineDto {
+            system: var_system,
+            kind: var_kind,
+            value_deg: var_valueDeg,
+            text: var_text,
+            cardinal: var_cardinal,
+            lines: var_lines,
+            label: var_label,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::GridSystemDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::GridSystemDto::Equatorial,
+            1 => crate::api::types::GridSystemDto::Horizontal,
+            _ => unreachable!("Invalid variant for GridSystemDto: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2065,6 +2221,7 @@ impl SseDecode for crate::api::types::LayerAvailabilityDto {
         let mut var_solarSystem = <bool>::sse_decode(deserializer);
         let mut var_satellites = <bool>::sse_decode(deserializer);
         let mut var_constellations = <bool>::sse_decode(deserializer);
+        let mut var_grid = <bool>::sse_decode(deserializer);
         let mut var_reasons = <Vec<(String, String)>>::sse_decode(deserializer);
         return crate::api::types::LayerAvailabilityDto {
             catalog_stars: var_catalogStars,
@@ -2073,6 +2230,7 @@ impl SseDecode for crate::api::types::LayerAvailabilityDto {
             solar_system: var_solarSystem,
             satellites: var_satellites,
             constellations: var_constellations,
+            grid: var_grid,
             reasons: var_reasons,
         };
     }
@@ -2189,6 +2347,18 @@ impl SseDecode for Vec<crate::api::types::FovPresetDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::types::FovPresetDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::GridLineDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::GridLineDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -2484,6 +2654,17 @@ impl SseDecode for Option<f64> {
     }
 }
 
+impl SseDecode for Option<crate::api::types::GridLabelDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::GridLabelDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<i64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2535,6 +2716,17 @@ impl SseDecode for Option<u64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<u64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::types::ViewportDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::ViewportDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -2859,6 +3051,24 @@ impl SseDecode for usize {
     }
 }
 
+impl SseDecode for crate::api::types::ViewportDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <f64>::sse_decode(deserializer);
+        let mut var_y = <f64>::sse_decode(deserializer);
+        let mut var_width = <f64>::sse_decode(deserializer);
+        let mut var_height = <f64>::sse_decode(deserializer);
+        let mut var_scale = <f64>::sse_decode(deserializer);
+        return crate::api::types::ViewportDto {
+            x: var_x,
+            y: var_y,
+            width: var_width,
+            height: var_height,
+            scale: var_scale,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::WcsDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2997,6 +3207,8 @@ fn pde_ffi_dispatcher_sync_impl(
         }
         25 => wire__crate__api__attribution__data_attributions_impl(ptr, rust_vec_len, data_len),
         31 => wire__crate__api__types__solve_options_dto_defaults_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3081,6 +3293,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::AnnotateOptionsDto {
             self.language.into_into_dart().into_dart(),
             self.include_constellations.into_into_dart().into_dart(),
             self.constellation_boundaries.into_into_dart().into_dart(),
+            self.equatorial_grid.into_into_dart().into_dart(),
+            self.horizontal_grid.into_into_dart().into_dart(),
+            self.grid_spacing_px.into_into_dart().into_dart(),
+            self.viewport.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3107,6 +3323,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::AnnotationsDto {
             self.satellites.into_into_dart().into_dart(),
             self.constellations.into_into_dart().into_dart(),
             self.boundaries.into_into_dart().into_dart(),
+            self.grid.into_into_dart().into_dart(),
             self.layers.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -3552,6 +3769,124 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::FrameDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::GridEdgeDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Left => 0.into_dart(),
+            Self::Right => 1.into_dart(),
+            Self::Top => 2.into_dart(),
+            Self::Bottom => 3.into_dart(),
+            Self::Inside => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::GridEdgeDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::GridEdgeDto>
+    for crate::api::types::GridEdgeDto
+{
+    fn into_into_dart(self) -> crate::api::types::GridEdgeDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::GridKindDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Ra => 0.into_dart(),
+            Self::Dec => 1.into_dart(),
+            Self::Alt => 2.into_dart(),
+            Self::Az => 3.into_dart(),
+            Self::Horizon => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::GridKindDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::GridKindDto>
+    for crate::api::types::GridKindDto
+{
+    fn into_into_dart(self) -> crate::api::types::GridKindDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::GridLabelDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.angle_deg.into_into_dart().into_dart(),
+            self.edge.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::GridLabelDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::GridLabelDto>
+    for crate::api::types::GridLabelDto
+{
+    fn into_into_dart(self) -> crate::api::types::GridLabelDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::GridLineDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.system.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+            self.value_deg.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+            self.cardinal.into_into_dart().into_dart(),
+            self.lines.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::GridLineDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::GridLineDto>
+    for crate::api::types::GridLineDto
+{
+    fn into_into_dart(self) -> crate::api::types::GridLineDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::GridSystemDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Equatorial => 0.into_dart(),
+            Self::Horizontal => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::GridSystemDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::GridSystemDto>
+    for crate::api::types::GridSystemDto
+{
+    fn into_into_dart(self) -> crate::api::types::GridSystemDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::LadderOutcomeDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -3582,6 +3917,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::LayerAvailabilityDto {
             self.solar_system.into_into_dart().into_dart(),
             self.satellites.into_into_dart().into_dart(),
             self.constellations.into_into_dart().into_dart(),
+            self.grid.into_into_dart().into_dart(),
             self.reasons.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4028,6 +4364,30 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TimingDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::ViewportDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.scale.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::ViewportDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::ViewportDto>
+    for crate::api::types::ViewportDto
+{
+    fn into_into_dart(self) -> crate::api::types::ViewportDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::WcsDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -4161,6 +4521,10 @@ impl SseEncode for crate::api::types::AnnotateOptionsDto {
         <String>::sse_encode(self.language, serializer);
         <bool>::sse_encode(self.include_constellations, serializer);
         <bool>::sse_encode(self.constellation_boundaries, serializer);
+        <bool>::sse_encode(self.equatorial_grid, serializer);
+        <bool>::sse_encode(self.horizontal_grid, serializer);
+        <Option<f64>>::sse_encode(self.grid_spacing_px, serializer);
+        <Option<crate::api::types::ViewportDto>>::sse_encode(self.viewport, serializer);
     }
 }
 
@@ -4177,6 +4541,7 @@ impl SseEncode for crate::api::types::AnnotationsDto {
             serializer,
         );
         <Vec<crate::api::types::BoundaryAnnotationDto>>::sse_encode(self.boundaries, serializer);
+        <Vec<crate::api::types::GridLineDto>>::sse_encode(self.grid, serializer);
         <crate::api::types::LayerAvailabilityDto>::sse_encode(self.layers, serializer);
     }
 }
@@ -4478,6 +4843,83 @@ impl SseEncode for crate::api::types::FrameDto {
     }
 }
 
+impl SseEncode for crate::api::types::GridEdgeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::GridEdgeDto::Left => 0,
+                crate::api::types::GridEdgeDto::Right => 1,
+                crate::api::types::GridEdgeDto::Top => 2,
+                crate::api::types::GridEdgeDto::Bottom => 3,
+                crate::api::types::GridEdgeDto::Inside => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::types::GridKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::GridKindDto::Ra => 0,
+                crate::api::types::GridKindDto::Dec => 1,
+                crate::api::types::GridKindDto::Alt => 2,
+                crate::api::types::GridKindDto::Az => 3,
+                crate::api::types::GridKindDto::Horizon => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::types::GridLabelDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.x, serializer);
+        <f64>::sse_encode(self.y, serializer);
+        <f64>::sse_encode(self.angle_deg, serializer);
+        <crate::api::types::GridEdgeDto>::sse_encode(self.edge, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::GridLineDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::types::GridSystemDto>::sse_encode(self.system, serializer);
+        <crate::api::types::GridKindDto>::sse_encode(self.kind, serializer);
+        <f64>::sse_encode(self.value_deg, serializer);
+        <String>::sse_encode(self.text, serializer);
+        <Option<String>>::sse_encode(self.cardinal, serializer);
+        <Vec<Vec<f64>>>::sse_encode(self.lines, serializer);
+        <Option<crate::api::types::GridLabelDto>>::sse_encode(self.label, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::GridSystemDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::GridSystemDto::Equatorial => 0,
+                crate::api::types::GridSystemDto::Horizontal => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4509,6 +4951,7 @@ impl SseEncode for crate::api::types::LayerAvailabilityDto {
         <bool>::sse_encode(self.solar_system, serializer);
         <bool>::sse_encode(self.satellites, serializer);
         <bool>::sse_encode(self.constellations, serializer);
+        <bool>::sse_encode(self.grid, serializer);
         <Vec<(String, String)>>::sse_encode(self.reasons, serializer);
     }
 }
@@ -4599,6 +5042,16 @@ impl SseEncode for Vec<crate::api::types::FovPresetDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::types::FovPresetDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::GridLineDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::GridLineDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -4822,6 +5275,16 @@ impl SseEncode for Option<f64> {
     }
 }
 
+impl SseEncode for Option<crate::api::types::GridLabelDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::GridLabelDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<i64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4868,6 +5331,16 @@ impl SseEncode for Option<u64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <u64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::types::ViewportDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::ViewportDto>::sse_encode(value, serializer);
         }
     }
 }
@@ -5101,6 +5574,17 @@ impl SseEncode for usize {
             .cursor
             .write_u64::<NativeEndian>(self as _)
             .unwrap();
+    }
+}
+
+impl SseEncode for crate::api::types::ViewportDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.x, serializer);
+        <f64>::sse_encode(self.y, serializer);
+        <f64>::sse_encode(self.width, serializer);
+        <f64>::sse_encode(self.height, serializer);
+        <f64>::sse_encode(self.scale, serializer);
     }
 }
 

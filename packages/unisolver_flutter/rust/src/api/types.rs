@@ -564,6 +564,42 @@ pub struct AnnotateOptionsDto {
     /// IAU constellation boundaries (`AnnotationsDto.boundaries`); needs the constellation pack
     #[frb(default = false)]
     pub constellation_boundaries: bool,
+    /// Equatorial grid (`AnnotationsDto.grid`, J2000 right ascension and declination)
+    #[frb(default = false)]
+    pub equatorial_grid: bool,
+    /// Horizontal grid (apparent altitude and azimuth, with the horizon); needs
+    /// `observationUnixMs` and `observer`
+    #[frb(default = false)]
+    pub horizontal_grid: bool,
+    /// Screen pixels between grid lines (default 150)
+    pub grid_spacing_px: Option<f64>,
+    /// What the app shows right now: pass it and lines and labels follow the zoom (grid
+    /// spacing, sampling, simplification to half a screen pixel, labels on the visible edges).
+    /// Annotate again when it changes; null means the whole image at scale 1.
+    pub viewport: Option<ViewportDto>,
+}
+
+/// The visible part of the image and the zoom.
+pub struct ViewportDto {
+    /// Visible region in image pixels (top-left origin)
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    /// Screen pixels per image pixel
+    pub scale: f64,
+}
+
+impl From<ViewportDto> for core::Viewport {
+    fn from(v: ViewportDto) -> Self {
+        Self {
+            x: v.x,
+            y: v.y,
+            width: v.width,
+            height: v.height,
+            scale: v.scale,
+        }
+    }
 }
 
 impl AnnotateOptionsDto {
@@ -584,6 +620,10 @@ impl AnnotateOptionsDto {
             language: "en".to_string(),
             include_constellations: false,
             constellation_boundaries: false,
+            equatorial_grid: false,
+            horizontal_grid: false,
+            grid_spacing_px: None,
+            viewport: None,
         }
     }
 }
@@ -605,6 +645,10 @@ impl From<AnnotateOptionsDto> for core::AnnotateOptions {
             language: d.language,
             include_constellations: d.include_constellations,
             constellation_boundaries: d.constellation_boundaries,
+            equatorial_grid: d.equatorial_grid,
+            horizontal_grid: d.horizontal_grid,
+            grid_spacing_px: d.grid_spacing_px,
+            viewport: d.viewport.map(Into::into),
         }
     }
 }
@@ -695,6 +739,8 @@ pub struct LayerAvailabilityDto {
     pub satellites: bool,
     /// Constellation figures and boundaries
     pub constellations: bool,
+    /// Coordinate grids
+    pub grid: bool,
     /// Why a layer is unavailable or degraded, as `(layer, message)`: show it rather than an
     /// empty layer
     pub reasons: Vec<(String, String)>,
@@ -711,6 +757,58 @@ pub struct ConstellationAnnotationDto {
     pub label_y: Option<f64>,
     /// Figure polylines in pixels, interleaved x, y. They may run past the frame edge.
     pub lines: Vec<Vec<f64>>,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum GridSystemDto {
+    /// J2000 right ascension and declination
+    Equatorial,
+    /// Apparent altitude and azimuth (from north through east)
+    Horizontal,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum GridKindDto {
+    Ra,
+    Dec,
+    Alt,
+    Az,
+    /// Altitude 0°
+    Horizon,
+}
+
+/// The edge of the visible region a label sits on: nudge the text inward from it.
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum GridEdgeDto {
+    Left,
+    Right,
+    Top,
+    Bottom,
+    /// The line stays inside the region: mid-line
+    Inside,
+}
+
+pub struct GridLabelDto {
+    pub x: f64,
+    pub y: f64,
+    /// Direction of the line there, counter-clockwise from +x (image y down), in (−90°, 90°]
+    pub angle_deg: f64,
+    pub edge: GridEdgeDto,
+}
+
+/// One grid line with its value and label.
+pub struct GridLineDto {
+    pub system: GridSystemDto,
+    pub kind: GridKindDto,
+    /// Right ascension or azimuth in [0, 360), declination or altitude in degrees
+    pub value_deg: f64,
+    /// The value as charts print it: `16h30m`, `−20°30′`, `180°`
+    pub text: String,
+    /// Compass point for azimuths on a multiple of 45° (`N`, `NE`, … `NW`): localize it
+    pub cardinal: Option<String>,
+    /// Pixel polylines, interleaved x, y; they may run past the visible edge
+    pub lines: Vec<Vec<f64>>,
+    pub label: Option<GridLabelDto>,
 }
 
 /// A stretch of IAU boundary in the frame.
@@ -744,6 +842,7 @@ pub struct AnnotationsDto {
     pub satellites: Vec<SatelliteAnnotationDto>,
     pub constellations: Vec<ConstellationAnnotationDto>,
     pub boundaries: Vec<BoundaryAnnotationDto>,
+    pub grid: Vec<GridLineDto>,
     pub layers: LayerAvailabilityDto,
 }
 
@@ -844,6 +943,43 @@ impl From<core::Annotations> for AnnotationsDto {
                     points: b.points.into_iter().flatten().collect(),
                 })
                 .collect(),
+            grid: a
+                .grid
+                .into_iter()
+                .map(|g| GridLineDto {
+                    system: match g.system {
+                        core::GridSystem::Equatorial => GridSystemDto::Equatorial,
+                        core::GridSystem::Horizontal => GridSystemDto::Horizontal,
+                    },
+                    kind: match g.kind {
+                        core::GridKind::Ra => GridKindDto::Ra,
+                        core::GridKind::Dec => GridKindDto::Dec,
+                        core::GridKind::Alt => GridKindDto::Alt,
+                        core::GridKind::Az => GridKindDto::Az,
+                        core::GridKind::Horizon => GridKindDto::Horizon,
+                    },
+                    value_deg: g.value_deg,
+                    text: g.text,
+                    cardinal: g.cardinal,
+                    lines: g
+                        .lines
+                        .into_iter()
+                        .map(|l| l.into_iter().flatten().collect())
+                        .collect(),
+                    label: g.label.map(|l| GridLabelDto {
+                        x: l.x,
+                        y: l.y,
+                        angle_deg: l.angle_deg,
+                        edge: match l.edge {
+                            core::GridEdge::Left => GridEdgeDto::Left,
+                            core::GridEdge::Right => GridEdgeDto::Right,
+                            core::GridEdge::Top => GridEdgeDto::Top,
+                            core::GridEdge::Bottom => GridEdgeDto::Bottom,
+                            core::GridEdge::Inside => GridEdgeDto::Inside,
+                        },
+                    }),
+                })
+                .collect(),
             layers: LayerAvailabilityDto {
                 catalog_stars: a.layers.catalog_stars,
                 named_stars: a.layers.named_stars,
@@ -851,6 +987,7 @@ impl From<core::Annotations> for AnnotationsDto {
                 solar_system: a.layers.solar_system,
                 satellites: a.layers.satellites,
                 constellations: a.layers.constellations,
+                grid: a.layers.grid,
                 reasons: a.layers.reasons,
             },
         }

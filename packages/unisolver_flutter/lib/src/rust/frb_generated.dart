@@ -9,6 +9,7 @@ import 'api/logging.dart';
 import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
+import 'api/wcs.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -73,7 +74,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1023217073;
+  int get rustContentHash => 1892746407;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -216,6 +217,16 @@ abstract class RustLibApi extends BaseApi {
 
   SolveOptionsDto crateApiTypesSolveOptionsDtoDefaults({
     required double fovEstimateDeg,
+  });
+
+  Float64List crateApiWcsWcsPixelsToSky({
+    required WcsDto wcs,
+    required List<double> pixels,
+  });
+
+  Float64List crateApiWcsWcsSkyToPixels({
+    required WcsDto wcs,
+    required List<double> radec,
   });
 
   RustArcIncrementStrongCountFnType
@@ -1326,6 +1337,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["fovEstimateDeg"],
       );
 
+  @override
+  Float64List crateApiWcsWcsPixelsToSky({
+    required WcsDto wcs,
+    required List<double> pixels,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_wcs_dto(wcs, serializer);
+          sse_encode_list_prim_f_64_loose(pixels, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_f_64_strict,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiWcsWcsPixelsToSkyConstMeta,
+        argValues: [wcs, pixels],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWcsWcsPixelsToSkyConstMeta => const TaskConstMeta(
+    debugName: "wcs_pixels_to_sky",
+    argNames: ["wcs", "pixels"],
+  );
+
+  @override
+  Float64List crateApiWcsWcsSkyToPixels({
+    required WcsDto wcs,
+    required List<double> radec,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_wcs_dto(wcs, serializer);
+          sse_encode_list_prim_f_64_loose(radec, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_f_64_strict,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiWcsWcsSkyToPixelsConstMeta,
+        argValues: [wcs, radec],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWcsWcsSkyToPixelsConstMeta => const TaskConstMeta(
+    debugName: "wcs_sky_to_pixels",
+    argNames: ["wcs", "radec"],
+  );
+
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_UniAnnotator => wire
       .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerUniAnnotator;
@@ -1490,8 +1559,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnnotateOptionsDto dco_decode_annotate_options_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return AnnotateOptionsDto(
       starMaxMag: dco_decode_opt_box_autoadd_f_32(arr[0]),
       maxStars: dco_decode_u_32(arr[1]),
@@ -1507,6 +1576,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       language: dco_decode_String(arr[11]),
       includeConstellations: dco_decode_bool(arr[12]),
       constellationBoundaries: dco_decode_bool(arr[13]),
+      equatorialGrid: dco_decode_bool(arr[14]),
+      horizontalGrid: dco_decode_bool(arr[15]),
+      gridSpacingPx: dco_decode_opt_box_autoadd_f_64(arr[16]),
+      viewport: dco_decode_opt_box_autoadd_viewport_dto(arr[17]),
     );
   }
 
@@ -1514,8 +1587,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnnotationsDto dco_decode_annotations_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return AnnotationsDto(
       stars: dco_decode_list_star_annotation_dto(arr[0]),
       namedStars: dco_decode_list_named_star_annotation_dto(arr[1]),
@@ -1524,7 +1597,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       satellites: dco_decode_list_satellite_annotation_dto(arr[4]),
       constellations: dco_decode_list_constellation_annotation_dto(arr[5]),
       boundaries: dco_decode_list_boundary_annotation_dto(arr[6]),
-      layers: dco_decode_layer_availability_dto(arr[7]),
+      grid: dco_decode_list_grid_line_dto(arr[7]),
+      layers: dco_decode_layer_availability_dto(arr[8]),
     );
   }
 
@@ -1583,6 +1657,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GridLabelDto dco_decode_box_autoadd_grid_label_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_grid_label_dto(raw);
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
@@ -1616,6 +1696,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_u_64(raw);
+  }
+
+  @protected
+  ViewportDto dco_decode_box_autoadd_viewport_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_viewport_dto(raw);
   }
 
   @protected
@@ -1886,6 +1972,55 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GridEdgeDto dco_decode_grid_edge_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return GridEdgeDto.values[raw as int];
+  }
+
+  @protected
+  GridKindDto dco_decode_grid_kind_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return GridKindDto.values[raw as int];
+  }
+
+  @protected
+  GridLabelDto dco_decode_grid_label_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return GridLabelDto(
+      x: dco_decode_f_64(arr[0]),
+      y: dco_decode_f_64(arr[1]),
+      angleDeg: dco_decode_f_64(arr[2]),
+      edge: dco_decode_grid_edge_dto(arr[3]),
+    );
+  }
+
+  @protected
+  GridLineDto dco_decode_grid_line_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return GridLineDto(
+      system: dco_decode_grid_system_dto(arr[0]),
+      kind: dco_decode_grid_kind_dto(arr[1]),
+      valueDeg: dco_decode_f_64(arr[2]),
+      text: dco_decode_String(arr[3]),
+      cardinal: dco_decode_opt_String(arr[4]),
+      lines: dco_decode_list_list_prim_f_64_strict(arr[5]),
+      label: dco_decode_opt_box_autoadd_grid_label_dto(arr[6]),
+    );
+  }
+
+  @protected
+  GridSystemDto dco_decode_grid_system_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return GridSystemDto.values[raw as int];
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1913,8 +2048,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LayerAvailabilityDto dco_decode_layer_availability_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return LayerAvailabilityDto(
       catalogStars: dco_decode_bool(arr[0]),
       namedStars: dco_decode_bool(arr[1]),
@@ -1922,7 +2057,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       solarSystem: dco_decode_bool(arr[3]),
       satellites: dco_decode_bool(arr[4]),
       constellations: dco_decode_bool(arr[5]),
-      reasons: dco_decode_list_record_string_string(arr[6]),
+      grid: dco_decode_bool(arr[6]),
+      reasons: dco_decode_list_record_string_string(arr[7]),
     );
   }
 
@@ -1989,6 +2125,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<GridLineDto> dco_decode_list_grid_line_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_grid_line_dto).toList();
+  }
+
+  @protected
   List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
@@ -2028,6 +2170,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Float32List dco_decode_list_prim_f_32_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Float32List;
+  }
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<double>;
   }
 
   @protected
@@ -2162,6 +2310,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GridLabelDto? dco_decode_opt_box_autoadd_grid_label_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_grid_label_dto(raw);
+  }
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
@@ -2191,6 +2345,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
+  ViewportDto? dco_decode_opt_box_autoadd_viewport_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_viewport_dto(raw);
   }
 
   @protected
@@ -2442,6 +2602,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ViewportDto dco_decode_viewport_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return ViewportDto(
+      x: dco_decode_f_64(arr[0]),
+      y: dco_decode_f_64(arr[1]),
+      width: dco_decode_f_64(arr[2]),
+      height: dco_decode_f_64(arr[3]),
+      scale: dco_decode_f_64(arr[4]),
+    );
+  }
+
+  @protected
   WcsDto dco_decode_wcs_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2643,6 +2818,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_language = sse_decode_String(deserializer);
     var var_includeConstellations = sse_decode_bool(deserializer);
     var var_constellationBoundaries = sse_decode_bool(deserializer);
+    var var_equatorialGrid = sse_decode_bool(deserializer);
+    var var_horizontalGrid = sse_decode_bool(deserializer);
+    var var_gridSpacingPx = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_viewport = sse_decode_opt_box_autoadd_viewport_dto(deserializer);
     return AnnotateOptionsDto(
       starMaxMag: var_starMaxMag,
       maxStars: var_maxStars,
@@ -2658,6 +2837,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       language: var_language,
       includeConstellations: var_includeConstellations,
       constellationBoundaries: var_constellationBoundaries,
+      equatorialGrid: var_equatorialGrid,
+      horizontalGrid: var_horizontalGrid,
+      gridSpacingPx: var_gridSpacingPx,
+      viewport: var_viewport,
     );
   }
 
@@ -2675,6 +2858,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       deserializer,
     );
     var var_boundaries = sse_decode_list_boundary_annotation_dto(deserializer);
+    var var_grid = sse_decode_list_grid_line_dto(deserializer);
     var var_layers = sse_decode_layer_availability_dto(deserializer);
     return AnnotationsDto(
       stars: var_stars,
@@ -2684,6 +2868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       satellites: var_satellites,
       constellations: var_constellations,
       boundaries: var_boundaries,
+      grid: var_grid,
       layers: var_layers,
     );
   }
@@ -2747,6 +2932,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GridLabelDto sse_decode_box_autoadd_grid_label_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_grid_label_dto(deserializer));
+  }
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
@@ -2786,6 +2979,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
+  ViewportDto sse_decode_box_autoadd_viewport_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_viewport_dto(deserializer));
   }
 
   @protected
@@ -3101,6 +3302,63 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GridEdgeDto sse_decode_grid_edge_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return GridEdgeDto.values[inner];
+  }
+
+  @protected
+  GridKindDto sse_decode_grid_kind_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return GridKindDto.values[inner];
+  }
+
+  @protected
+  GridLabelDto sse_decode_grid_label_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_angleDeg = sse_decode_f_64(deserializer);
+    var var_edge = sse_decode_grid_edge_dto(deserializer);
+    return GridLabelDto(
+      x: var_x,
+      y: var_y,
+      angleDeg: var_angleDeg,
+      edge: var_edge,
+    );
+  }
+
+  @protected
+  GridLineDto sse_decode_grid_line_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_system = sse_decode_grid_system_dto(deserializer);
+    var var_kind = sse_decode_grid_kind_dto(deserializer);
+    var var_valueDeg = sse_decode_f_64(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    var var_cardinal = sse_decode_opt_String(deserializer);
+    var var_lines = sse_decode_list_list_prim_f_64_strict(deserializer);
+    var var_label = sse_decode_opt_box_autoadd_grid_label_dto(deserializer);
+    return GridLineDto(
+      system: var_system,
+      kind: var_kind,
+      valueDeg: var_valueDeg,
+      text: var_text,
+      cardinal: var_cardinal,
+      lines: var_lines,
+      label: var_label,
+    );
+  }
+
+  @protected
+  GridSystemDto sse_decode_grid_system_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return GridSystemDto.values[inner];
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -3131,6 +3389,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_solarSystem = sse_decode_bool(deserializer);
     var var_satellites = sse_decode_bool(deserializer);
     var var_constellations = sse_decode_bool(deserializer);
+    var var_grid = sse_decode_bool(deserializer);
     var var_reasons = sse_decode_list_record_string_string(deserializer);
     return LayerAvailabilityDto(
       catalogStars: var_catalogStars,
@@ -3139,6 +3398,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       solarSystem: var_solarSystem,
       satellites: var_satellites,
       constellations: var_constellations,
+      grid: var_grid,
       reasons: var_reasons,
     );
   }
@@ -3266,6 +3526,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<GridLineDto> sse_decode_list_grid_line_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <GridLineDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_grid_line_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<Float64List> sse_decode_list_list_prim_f_64_strict(
     SseDeserializer deserializer,
   ) {
@@ -3338,6 +3612,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getFloat32List(len_);
+  }
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat64List(len_);
   }
 
   @protected
@@ -3541,6 +3822,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GridLabelDto? sse_decode_opt_box_autoadd_grid_label_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_grid_label_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -3594,6 +3888,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ViewportDto? sse_decode_opt_box_autoadd_viewport_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_viewport_dto(deserializer));
     } else {
       return null;
     }
@@ -3897,6 +4204,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ViewportDto sse_decode_viewport_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_width = sse_decode_f_64(deserializer);
+    var var_height = sse_decode_f_64(deserializer);
+    var var_scale = sse_decode_f_64(deserializer);
+    return ViewportDto(
+      x: var_x,
+      y: var_y,
+      width: var_width,
+      height: var_height,
+      scale: var_scale,
+    );
+  }
+
+  @protected
   WcsDto sse_decode_wcs_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_width = sse_decode_u_32(deserializer);
@@ -4125,6 +4449,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.language, serializer);
     sse_encode_bool(self.includeConstellations, serializer);
     sse_encode_bool(self.constellationBoundaries, serializer);
+    sse_encode_bool(self.equatorialGrid, serializer);
+    sse_encode_bool(self.horizontalGrid, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.gridSpacingPx, serializer);
+    sse_encode_opt_box_autoadd_viewport_dto(self.viewport, serializer);
   }
 
   @protected
@@ -4143,6 +4471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_list_boundary_annotation_dto(self.boundaries, serializer);
+    sse_encode_list_grid_line_dto(self.grid, serializer);
     sse_encode_layer_availability_dto(self.layers, serializer);
   }
 
@@ -4211,6 +4540,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_grid_label_dto(
+    GridLabelDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_grid_label_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -4256,6 +4594,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_viewport_dto(
+    ViewportDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_viewport_dto(self, serializer);
   }
 
   @protected
@@ -4509,6 +4856,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_grid_edge_dto(GridEdgeDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_grid_kind_dto(GridKindDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_grid_label_dto(GridLabelDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_f_64(self.angleDeg, serializer);
+    sse_encode_grid_edge_dto(self.edge, serializer);
+  }
+
+  @protected
+  void sse_encode_grid_line_dto(GridLineDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_grid_system_dto(self.system, serializer);
+    sse_encode_grid_kind_dto(self.kind, serializer);
+    sse_encode_f_64(self.valueDeg, serializer);
+    sse_encode_String(self.text, serializer);
+    sse_encode_opt_String(self.cardinal, serializer);
+    sse_encode_list_list_prim_f_64_strict(self.lines, serializer);
+    sse_encode_opt_box_autoadd_grid_label_dto(self.label, serializer);
+  }
+
+  @protected
+  void sse_encode_grid_system_dto(
+    GridSystemDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -4542,6 +4931,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.solarSystem, serializer);
     sse_encode_bool(self.satellites, serializer);
     sse_encode_bool(self.constellations, serializer);
+    sse_encode_bool(self.grid, serializer);
     sse_encode_list_record_string_string(self.reasons, serializer);
   }
 
@@ -4651,6 +5041,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_grid_line_dto(
+    List<GridLineDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_grid_line_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_list_prim_f_64_strict(
     List<Float64List> self,
     SseSerializer serializer,
@@ -4718,6 +5120,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putFloat32List(self);
+  }
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat64List(
+      self is Float64List ? self : Float64List.fromList(self),
+    );
   }
 
   @protected
@@ -4894,6 +5308,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_grid_label_dto(
+    GridLabelDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_grid_label_dto(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
     SseSerializer serializer,
@@ -4949,6 +5376,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_viewport_dto(
+    ViewportDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_viewport_dto(self, serializer);
     }
   }
 
@@ -5174,6 +5614,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_viewport_dto(ViewportDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_f_64(self.width, serializer);
+    sse_encode_f_64(self.height, serializer);
+    sse_encode_f_64(self.scale, serializer);
   }
 
   @protected

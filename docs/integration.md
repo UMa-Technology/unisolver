@@ -187,6 +187,41 @@ never guess an angle). What to draw and how is up to you; feed it to a `CustomPa
 (see `example/lib/overlay_painter.dart`). `solvecli --annotate-dir` is a development tool,
 not a product surface.
 
+**Draw in screen space.** Screens differ in size and users zoom, so never draw the overlay
+into the image at fixed sizes: map each point from image pixels to the screen with your
+viewer's transform, and keep stroke widths, marker sizes and font sizes in screen pixels.
+Sizes the sky gives (a nebula's `semiMajorPx`, the moon's `angularRadiusPx`) scale with the
+image. Scaling the photo and its overlay together (a `FittedBox` round both) shrinks a 14 px
+label to about 3 px when a 1920 px photo fits a phone. The example pairs an
+`InteractiveViewer` for the photo with a painter on top that reads the viewer's
+`TransformationController` (`solve_page.dart`, `overlay_painter.dart`); opaque line colors
+render more evenly than translucent ones.
+
+**Tell the engine what you show.** Pass `viewport` (the visible image rectangle in image
+pixels, and `scale`, screen pixels per image pixel) and annotate again when the user
+finishes zooming or panning: it costs about a millisecond. Lines then follow the zoom:
+grid spacing, curve sampling and simplification (to half a screen pixel), and labels on the
+visible edges. Without it the engine assumes the whole image at scale 1. Point layers
+(stars, deep-sky objects, planets) are the same either way.
+
+**Coordinate grids.** `equatorialGrid` draws J2000 right ascension and declination;
+`horizontalGrid` draws apparent altitude and azimuth with the horizon, and needs
+`observationUnixMs` and `observer` (refraction is included; the solve reports both for
+photos with EXIF). The step is the finest round value at least `gridSpacingPx` (default 150)
+screen pixels apart: 10° and 30m on a wide field, down to arcseconds when zoomed in. Each
+`GridLineDto` has its value (`valueDeg`), the value as charts print it (`text`: `16h30m`,
+`−20°30′`, `180°`), a compass point for azimuths on a multiple of 45° (`cardinal`: `S`, `NW`;
+localize it), its polylines (`lines`) and one `label` anchored on the visible edge it
+crosses (`edge` says which, so nudge the text inward; `angleDeg` is the line's direction if
+you want to align the text with it).
+
+**Your own overlays.** For what the layers do not draw (a framing box, a crosshair, the sky
+position under a tap), `wcsSkyToPixels(wcs:, radec:)` and `wcsPixelsToSky(wcs:, pixels:)`
+convert interleaved batches through the solve's lens model in one call each (C
+`unisolver_wcs_sky_to_pixels` / `unisolver_wcs_pixels_to_sky`, Rust `Wcs::sky_to_pixels` /
+`pixels_to_sky`). Points the model cannot place (behind the camera, or far outside the frame
+where the distortion polynomial folds back) come back as NaN.
+
 **Outlines of extended objects.** About 190 nebulae, clusters and cloud complexes whose
 shape an ellipse cannot describe (M42, the North America Nebula, the Veil, the Rosette, the
 Orion, Rho Ophiuchi and Cygnus X complexes, the LMC, …) come with hand-drawn outlines from
@@ -401,6 +436,8 @@ databases are not attached (section 4).
 | `unisolver_pool_annotator_open(pool, db_name, dso, names, &err)` | The same from one tier of a pool (`db_name` = the solve JSON's `db`) |
 | `unisolver_annotator_load_constellations(annotator, path, &err)` | Load the constellation pack (figures and IAU boundaries) → true when loaded |
 | `unisolver_annotate_json(annotator, wcs_json, opts_json, &err)` | Annotate a frame from the solve JSON's `wcs` → annotation JSON |
+| `unisolver_wcs_sky_to_pixels(wcs_json, in, n, out, &err)` | Batch `ra, dec` → `x, y` through the solve's lens model (NaN where it cannot place a point) |
+| `unisolver_wcs_pixels_to_sky(wcs_json, in, n, out, &err)` | Batch `x, y` → `ra, dec` |
 | `unisolver_annotator_languages_json(annotator, &err)` | Languages in the names pack (JSON array) |
 | `unisolver_annotator_close(annotator)` | Release an annotator |
 | `unisolver_calibration_open(solver, &err)` | Open a calibration session (same-size images → camera with distortion) |
@@ -461,9 +498,11 @@ unisolver_annotator_close(ann);
 
 `opts_json` may be NULL or `{}` for all defaults. Common fields: `language`,
 `observation_unix_ms` (required by the solar-system and satellite layers), `observer` (moon
-parallax; required by satellites), `satellite_tle`, and `include_constellations` /
+parallax; required by satellites), `satellite_tle`, `include_constellations` /
 `constellation_boundaries` (after `unisolver_annotator_load_constellations`; the JSON then
-has `constellations` and `boundaries`).
+has `constellations` and `boundaries`), `equatorial_grid` / `horizontal_grid` /
+`grid_spacing_px` (the JSON's `grid`), and `viewport` (`{"x", "y", "width", "height",
+"scale"}`: what you show, see §1.4).
 
 ### Known FOV and tracking (the telescope-driver case)
 

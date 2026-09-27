@@ -27,6 +27,17 @@
    (C `unisolver_annotator_load_constellations`, Rust `Annotator::with_constellations`). The
    names pack now names the constellations in its 13 languages, and `dataAttributions()`
    lists the new source. `annotator()` gains the optional `constellationsPath` parameter.
+6. **Coordinate grids, and annotation that follows the zoom.** Annotation can draw an
+   equatorial grid (J2000) and a horizontal grid (apparent altitude and azimuth with the
+   horizon, refraction included) as pixel polylines with chart-style labels anchored on the
+   visible edges (`equatorialGrid`, `horizontalGrid`, `gridSpacingPx`; C `equatorial_grid`,
+   `horizontal_grid`, `grid_spacing_px`). A new `viewport` option tells the engine what the app
+   shows (visible region and zoom), so grid spacing, curve sampling, simplification and label
+   positions follow it. `wcsSkyToPixels` / `wcsPixelsToSky` (C `unisolver_wcs_sky_to_pixels` /
+   `unisolver_wcs_pixels_to_sky`, Rust `Wcs::sky_to_pixels` / `pixels_to_sky`) convert batches
+   through the solve's lens model. The example now draws its overlay in screen space over a
+   pinch-zoomable photo, keeps the detection rings behind a toggle and no longer rings a named
+   star twice.
 
 ## 2026-09-28 — v0.2.0
 

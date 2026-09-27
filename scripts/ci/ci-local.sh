@@ -17,7 +17,7 @@ for a in "$@"; do
   esac
 done
 
-PKGS="-p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli"
+PKGS="-p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask"
 FEATURES="imageio satellites"
 
 step() {
@@ -29,12 +29,20 @@ step() {
   fi
 }
 
+# third_party/tetra3 must equal the pinned upstream plus the patch queue; exit 2 (a newer
+# upstream release exists) is reported but does not fail the gate
+upstream_check() {
+  cargo xtask upstream check
+  case $? in 0|2) return 0 ;; *) return 1 ;; esac
+}
+
 step "public text" python3 scripts/ci/check_public_text.py
 step "rust licenses" python3 scripts/ci/rust_licenses.py --check
 step "rustfmt" cargo fmt $PKGS -p unisolver_frb -- --check
 step "clippy" cargo clippy $PKGS --all-targets --features "$FEATURES" -- -D warnings
 step "tests" cargo test --workspace --release --features "$FEATURES"
 step "windows cross-check" bash scripts/ci/check_windows.sh
+step "upstream patch queue" upstream_check
 # Maintainers link the internal tree, which adds its own steps
 if [ -x internal/scripts/ci.sh ]; then
   step "internal" internal/scripts/ci.sh

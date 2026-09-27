@@ -16,13 +16,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "clippy, rustfmt" }
       - name: fmt
-        run: cargo fmt -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli --check
+        run: cargo fmt -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask --check
       - name: clippy
-        run: cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli --all-targets --features "imageio satellites" -- -D warnings
+        run: cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask --all-targets --features "imageio satellites" -- -D warnings
         # unisolver_frb needs the Flutter toolchain (dart-sys); the flutter job covers it
       - name: test
         run: cargo test --workspace --exclude unisolver_frb --release --features "imageio satellites"
         # Private test material is not in the repository: tests that need it print skipped and pass
+      - name: upstream patch queue
+        if: runner.os == 'Linux'
+        # exit 2 = a newer upstream release exists: reported, not a failure
+        run: cargo xtask upstream check || [ $? -eq 2 ]
 
   windows-dll:
     # Full Windows build for both architectures (macOS can only cross-check)

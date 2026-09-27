@@ -36,6 +36,13 @@
    runs in the local gate and CI), and `edit` / `export` / `sync` change the patches or rebase
    them onto a new upstream release (docs/upstream.md). Upstream's CLAUDE.md, CONTRIBUTING.md
    and .gitignore are no longer vendored.
+7. **Prebuilt C libraries.** GitHub releases carry `unisolver-cabi-vX.Y.Z-<platform>.zip` for
+   macOS (universal), Linux x86_64 and Windows x86_64 and aarch64: the header, the dynamic and
+   static libraries and the licenses, plus the names pack with its notice and `SHA256SUMS`
+   (docs/releasing.md).
+8. **The macOS dylib's install name is `@rpath/libunisolver_cabi.dylib`.** It used to be the
+   absolute path the library was built at, so a copied dylib did not load without
+   `install_name_tool`.
 
 ## 2026-09-27 — Repository baseline
 

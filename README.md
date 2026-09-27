@@ -141,7 +141,8 @@ cargo xtask upstream check
 
 Commit messages are one line, `type(scope): summary` (types: feat fix perf refactor docs
 test data ci chore revert), with no body or trailers; the hook enforces it. User-visible
-changes get an entry in `CHANGELOG.md`.
+changes get an entry in `CHANGELOG.md`. Releases and the GitHub mirror:
+[docs/releasing.md](docs/releasing.md).
 
 Where to change what:
 

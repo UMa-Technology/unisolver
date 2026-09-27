@@ -132,7 +132,7 @@ cargo xtask upstream check
 ```
 
 提交信息只写一行 `type(scope): summary`（type：feat fix perf refactor docs test data ci
-chore revert），不写正文与 trailer，由钩子强制。用户可感知的改动在 `CHANGELOG.md` 记一条。
+chore revert），不写正文与 trailer，由钩子强制。用户可感知的改动在 `CHANGELOG.md` 记一条。发版与 GitHub 镜像见 [docs/releasing.md](docs/releasing.md)。
 代码注释与对外文档使用英文。
 
 改动落点：

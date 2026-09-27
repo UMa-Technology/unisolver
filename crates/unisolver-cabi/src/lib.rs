@@ -103,6 +103,14 @@ struct SolveJson {
     /// Name of the tier that solved it (pool entries only)
     #[serde(skip_serializing_if = "Option::is_none")]
     db: Option<String>,
+    /// Observation time the solve used (Unix ms, UTC): `observation_unix_ms` from the
+    /// options, or for files the header's (FITS DATE-OBS, EXIF with a zone). Pass it to
+    /// annotation for the solar-system layer; null when neither gave one
+    observation_unix_ms: Option<i64>,
+    /// Where the photo was taken, for files whose EXIF has a GPS position
+    /// (`{lat_deg, lon_deg, alt_m}`): pass it to annotation with the time (the moon's
+    /// parallax); null otherwise
+    observer: Option<core::Observer>,
     attempts: Vec<AttemptJson>,
     solution: Option<SolutionJson>,
 }
@@ -164,6 +172,11 @@ struct SolveOptsJson {
     observation_unix_ms: Option<i64>,
     /// Advanced override: observer ICRS velocity in km/s
     observer_velocity_km_s: Option<[f64; 3]>,
+    /// Ladders only: EXIF FocalLengthIn35mmFilm read by the caller, for formats the engine
+    /// does not decode (HEIC: decode with the platform, then use a frame entry). Its FOV is
+    /// tried first as a hint (±15%) and the ladder still follows; ignored when `fov_deg` or
+    /// `camera` is given. Files read their own EXIF
+    focal_length_35mm: Option<f32>,
 }
 
 impl Default for SolveOptsJson {
@@ -186,6 +199,7 @@ impl Default for SolveOptsJson {
             timeout_ms: Some(4000),
             observation_unix_ms: None,
             observer_velocity_km_s: None,
+            focal_length_35mm: None,
         }
     }
 }
@@ -238,6 +252,7 @@ impl SolveOptsJson {
         o.timeout_ms = self.timeout_ms;
         o.observation_unix_ms = self.observation_unix_ms;
         o.observer_velocity_km_s = self.observer_velocity_km_s;
+        o.focal_length_35mm = self.focal_length_35mm;
         Ok((o, known))
     }
 }
@@ -263,6 +278,8 @@ fn build_solve_json(
         num_centroids: out.centroids.len(),
         median_elongation: out.median_elongation,
         db,
+        observation_unix_ms: out.observation_unix_ms,
+        observer: out.observer,
         attempts,
         solution: out.solution.map(|g| SolutionJson {
             ra_deg: g.ra_deg,
@@ -294,8 +311,9 @@ fn solve_frame_with_opts(
     base: &core::SolveOptions,
     known: bool,
     presets: &[core::FovPreset],
+    header: Option<&core::imageio::ImageMeta>,
 ) -> Result<String, String> {
-    let (out, attempts) = if known {
+    let (mut out, attempts) = if known {
         let fov = base.fov_estimate_deg;
         let out = solver.solve(frame, base).map_err(|e| e.to_string())?;
         let a = vec![AttemptJson {
@@ -312,6 +330,9 @@ fn solve_frame_with_opts(
         let a = a.iter().map(|x| attempt_json(x, None)).collect();
         (out, a)
     };
+    if let Some(m) = header {
+        m.apply_place(&mut out);
+    }
     serde_json::to_string(&build_solve_json(out, attempts, None)).map_err(|e| e.to_string())
 }
 
@@ -323,8 +344,9 @@ fn solve_file_with_opts(
     let (frame, meta) = core::imageio::load_image(path).map_err(|e| e.to_string())?;
     let (mut base, known) = opts.into_core()?;
     fit_camera_fov(&mut base, frame.width);
+    meta.apply_time(&mut base);
     let presets = core::presets_with_hints(&meta, frame.width, frame.height);
-    solve_frame_with_opts(solver, &frame, &base, known, &presets)
+    solve_frame_with_opts(solver, &frame, &base, known, &presets, Some(&meta))
 }
 
 /// Shared pool solve: with a known FOV only tiers covering it are tried, otherwise the ladder is dispatched.
@@ -333,10 +355,14 @@ fn pool_solve_frame_with_opts(
     frame: &core::Frame,
     base: &core::SolveOptions,
     hints: &[core::FovPreset],
+    header: Option<&core::imageio::ImageMeta>,
 ) -> Result<String, String> {
-    let r = pool
+    let mut r = pool
         .solve_auto(frame, base, hints)
         .map_err(|e| e.to_string())?;
+    if let Some(m) = header {
+        m.apply_place(&mut r.outcome);
+    }
     let attempts = r
         .attempts
         .iter()
@@ -375,9 +401,10 @@ fn pool_solve_file_with_opts(
     let fov_deg = opts.fov_deg;
     let (mut base, _) = opts.into_core()?;
     fit_camera_fov(&mut base, frame.width);
+    meta.apply_time(&mut base);
     let fallback = core::presets_with_hints(&meta, frame.width, frame.height);
     let hints = hints_for(fov_deg, &base, fallback);
-    pool_solve_frame_with_opts(pool, &frame, &base, &hints)
+    pool_solve_frame_with_opts(pool, &frame, &base, &hints, Some(&meta))
 }
 
 /// Raw pixel buffer → `core::Frame`. Multi-byte samples are **native-endian** (every target
@@ -508,8 +535,10 @@ pub unsafe extern "C" fn unisolver_solve_image_json_opts(
 /// - `row_stride_bytes`: bytes per source row, for padded buffers (Android `YUV_420_888`
 ///   Y-plane rowStride, iOS `bytesPerRow`); 0 when tightly packed.
 /// - `opts_json`: as [`unisolver_solve_image_json_opts`]. A raw frame has **no header**, so
-///   without `fov_deg`/`camera` the fallback is the aspect ladder, not header hints. Live and
-///   tracking use should pass `fov_deg` and `attitude_hint_wxyz` anyway.
+///   without `fov_deg`/`camera` the fallback is the aspect ladder, not header hints; a photo
+///   decoded by the platform (HEIC) passes its EXIF as `focal_length_35mm` (tried first) and
+///   `observation_unix_ms`. Live and tracking use should pass `fov_deg` and
+///   `attitude_hint_wxyz` anyway.
 ///
 /// # Safety
 /// `solver` is live; `pixels` points to at least `len` readable bytes; `kind` is a valid
@@ -534,7 +563,7 @@ pub unsafe extern "C" fn unisolver_solve_frame_json_opts(
         let (mut base, known) = SolveOptsJson::parse(opts_json)?.into_core()?;
         fit_camera_fov(&mut base, frame.width);
         let presets = core::aspect_ladder(frame.width, frame.height);
-        solve_frame_with_opts(&solver.solver, &frame, &base, known, &presets)
+        solve_frame_with_opts(&solver.solver, &frame, &base, known, &presets, None)
     };
     match run() {
         Ok(s) => to_owned_cstring(s),
@@ -758,7 +787,7 @@ pub unsafe extern "C" fn unisolver_pool_solve_frame_json_opts(
         fit_camera_fov(&mut base, frame.width);
         let fallback = core::aspect_ladder(frame.width, frame.height);
         let hints = hints_for(fov_deg, &base, fallback);
-        pool_solve_frame_with_opts(&pool.pool, &frame, &base, &hints)
+        pool_solve_frame_with_opts(&pool.pool, &frame, &base, &hints, None)
     };
     match run() {
         Ok(s) => to_owned_cstring(s),
@@ -1735,6 +1764,122 @@ mod tests {
     }
 
     /// Direct frames: no disk, four pixel kinds, padded stride, tracking hint, bad parameters are errors.
+    /// EXIF through the C surface: a JPEG's 35 mm focal length puts its rung first and its
+    /// capture time comes back in the JSON; a decoded frame (the HEIC path) gets the same from
+    /// `focal_length_35mm` and `observation_unix_ms` in the options.
+    #[test]
+    fn exif_hint_and_time_via_c_surface() {
+        use image::ImageEncoder;
+        use unisolver_synth::exif::{jpeg_with_exif, ExifFields};
+        // 65 mm equivalent on 4:3 = 29.8° horizontal, inside the 15–40° test tier
+        let (w, h, focal) = (1024u32, 768u32, 65u16);
+        // CIPA: tan(diagonal/2) = 21.633 / focal; the horizontal share follows the aspect
+        let fov = 2.0
+            * (21.633 / focal as f64 * w as f64 / ((w * w + h * h) as f64).sqrt())
+                .atan()
+                .to_degrees();
+        let q = unisolver_synth::look_at(200.0, 25.0, 30.0);
+        let img = unisolver_synth::render(
+            unisolver_synth::test_db().star_catalog.stars(),
+            &q,
+            fov as f32,
+            w,
+            h,
+            &unisolver_synth::RenderParams::default(),
+            11,
+        );
+        let maxv = img.iter().cloned().fold(0.0f32, f32::max).max(1.0);
+        let px: Vec<u8> = img.iter().map(|v| (v / maxv * 255.0) as u8).collect();
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 95)
+            .write_image(&px, w, h, image::ExtendedColorType::L8)
+            .unwrap();
+        let exif = ExifFields {
+            focal_35mm: Some(focal),
+            date_time_original: Some("2026:03:19 08:03:09".into()),
+            offset_time_original: Some("+08:00".into()),
+            gps_position: Some((
+                "N".into(),
+                [(31, 1), (12, 1), (0, 1)],
+                "E".into(),
+                [(121, 1), (30, 1), (0, 1)],
+                false,
+                (10, 1),
+            )),
+            ..Default::default()
+        };
+        let path = std::env::temp_dir().join(format!("cabi_exif_{}.jpg", std::process::id()));
+        std::fs::write(&path, jpeg_with_exif(&jpeg, &exif)).unwrap();
+
+        let mut err: *mut c_char = std::ptr::null_mut();
+        let solver = open_test_solver(&mut err);
+        let opts = CString::new(r#"{"profile":"clean"}"#).unwrap();
+        let cp = CString::new(path.to_str().unwrap()).unwrap();
+        let out = unsafe {
+            unisolver_solve_image_json_opts(solver, cp.as_ptr(), opts.as_ptr(), &mut err)
+        };
+        assert!(!out.is_null());
+        let v: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+        unsafe { unisolver_string_free(out) };
+        assert_eq!(v["status"], "Ok", "{v}");
+        assert!(
+            (v["attempts"][0]["fov_deg"].as_f64().unwrap() - fov).abs() < 0.05,
+            "{v}"
+        );
+        // 2026-03-19T00:03:09Z
+        assert_eq!(v["observation_unix_ms"], 1_773_878_589_000i64);
+        assert_eq!(v["observer"]["lon_deg"], 121.5, "{v}");
+        assert_eq!(v["observer"]["alt_m"], 10.0, "{v}");
+
+        // The frame entry of a one-tier pool, EXIF given by the caller
+        let dir = std::env::temp_dir().join(format!("cabi_exif_pool_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::copy(
+            unisolver_synth::test_db_file("unisolver_core_test.db"),
+            dir.join("unisolver_15_40.db"),
+        )
+        .unwrap();
+        let cdir = CString::new(dir.to_str().unwrap()).unwrap();
+        let pool = unsafe { unisolver_pool_open(cdir.as_ptr(), &mut err) };
+        assert!(!pool.is_null());
+        let kind = CString::new("luma8").unwrap();
+        let opts = CString::new(
+            r#"{"profile":"clean","focal_length_35mm":65,"observation_unix_ms":1773878589000}"#,
+        )
+        .unwrap();
+        let out = unsafe {
+            unisolver_pool_solve_frame_json_opts(
+                pool,
+                px.as_ptr(),
+                px.len(),
+                w,
+                h,
+                kind.as_ptr(),
+                0,
+                opts.as_ptr(),
+                &mut err,
+            )
+        };
+        assert!(!out.is_null());
+        let v: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+        unsafe { unisolver_string_free(out) };
+        assert_eq!(v["status"], "Ok", "{v}");
+        assert_eq!(v["attempts"].as_array().unwrap().len(), 1, "{v}");
+        assert!(
+            (v["attempts"][0]["fov_deg"].as_f64().unwrap() - fov).abs() < 0.05,
+            "{v}"
+        );
+        assert_eq!(v["observation_unix_ms"], 1_773_878_589_000i64);
+        unsafe {
+            unisolver_pool_close(pool);
+            unisolver_close(solver);
+        }
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn solve_frame_buffer_via_c_surface() {
         let mut err: *mut c_char = std::ptr::null_mut();

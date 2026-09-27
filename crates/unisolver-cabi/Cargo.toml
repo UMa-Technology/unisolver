@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 unisolver-synth = { path = "../unisolver-synth" }
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [build-dependencies]
 cbindgen = "0.29"

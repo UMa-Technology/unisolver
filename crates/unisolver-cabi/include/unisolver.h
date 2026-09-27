@@ -129,8 +129,10 @@ char *unisolver_solve_image_json_opts(const UnisolverSolver *solver,
  * - `row_stride_bytes`: bytes per source row, for padded buffers (Android `YUV_420_888`
  *   Y-plane rowStride, iOS `bytesPerRow`); 0 when tightly packed.
  * - `opts_json`: as [`unisolver_solve_image_json_opts`]. A raw frame has **no header**, so
- *   without `fov_deg`/`camera` the fallback is the aspect ladder, not header hints. Live and
- *   tracking use should pass `fov_deg` and `attitude_hint_wxyz` anyway.
+ *   without `fov_deg`/`camera` the fallback is the aspect ladder, not header hints; a photo
+ *   decoded by the platform (HEIC) passes its EXIF as `focal_length_35mm` (tried first) and
+ *   `observation_unix_ms`. Live and tracking use should pass `fov_deg` and
+ *   `attitude_hint_wxyz` anyway.
  *
  * # Safety
  * `solver` is live; `pixels` points to at least `len` readable bytes; `kind` is a valid

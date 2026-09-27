@@ -72,9 +72,13 @@ if (res.outcome.status == SolveStatusDto.ok) {
 ```
 
 `solveImageFileAuto` carries the whole FOV strategy: a FOV computed from the header (FITS
-focal length and pixel size) goes first as a hint, the aspect-ratio ladder follows on
-failure, and rungs are clamped to the database's range, exactly as the C ABI's
-`solve_image_json`. To control the rungs yourself (per-model presets, a known lens) use
+focal length and pixel size; EXIF 35 mm-equivalent focal length, or focal length and focal
+plane resolution) goes first as a hint, the aspect-ratio ladder follows on failure, and
+rungs are clamped to the database's range, exactly as the C ABI's `solve_image_json`. The
+header's observation time (FITS `DATE-AVG`, or `DATE-OBS` plus half the exposure; EXIF
+`DateTimeOriginal` with its zone) feeds the aberration correction unless you pass one, and
+comes back in `outcome.observationUnixMs`, next to `outcome.observer` from EXIF GPS: hand
+both to the annotator (§1.4). To control the rungs yourself (per-model presets, a known lens) use
 `solveImageFileWithPresets(path, base, presets)`; `example/lib/fov_presets.dart` shows a
 ladder.
 
@@ -123,6 +127,30 @@ When tracking is lost (consecutive failures) fall back to a blind solve with the
 on dark frames retry with `phoneJpeg()` and the hint before giving up. See
 `example/lib/live_page.dart` for the full cadence.
 
+**Photos the engine does not decode (HEIC).** The engine reads FITS, XISF, PNG, JPEG and
+TIFF; iPhone photos default to HEIC, which it rejects with an error pointing here (the only
+open decoders are LGPL, with HEVC patents). Decode on the platform (ImageIO on Apple,
+`ImageDecoder` on Android), read the EXIF there too, and pass what the file would have
+given:
+
+```dart
+final res = await pool.solveFrameAuto(
+  frame: FrameDto(width: w, height: h, rowStrideBytes: null,
+                  kind: PixelKindDto.rgba8, bytes: rgba),
+  opts: SolveOptionsDto(
+    // ...the fields of SolveOptionsDto.defaults(fovEstimateDeg: 70), plus:
+    focalLength35Mm: 24,            // EXIF FocalLengthIn35mmFilm: tried first, ±15%
+    observationUnixMs: takenAtUtcMs, // DateTimeOriginal + OffsetTimeOriginal, as UTC
+  ),
+);
+```
+
+The EXIF keys are `kCGImagePropertyExifFocalLenIn35mmFilm`,
+`kCGImagePropertyExifDateTimeOriginal` and `kCGImagePropertyExifOffsetTimeOriginal` on Apple,
+`TAG_FOCAL_LENGTH_IN_35MM_FILM`, `TAG_DATETIME_ORIGINAL` and `TAG_OFFSET_TIME_ORIGINAL` in
+Android's `ExifInterface`. Without a zone, leave the time out rather than guess: a wrong hour
+moves the moon by half a degree.
+
 ### 1.4 Annotation
 
 ```dart
@@ -141,6 +169,10 @@ final ann = await annotator.annotate(
 // ann.stars / ann.namedStars / ann.objects (DSO) / ann.solar / ann.satellites
 // ann.layers: availability per layer plus **why** a layer is unavailable or degraded
 ```
+
+For a photo, take the time and place from the solve: `outcome.observationUnixMs` (from the
+options or the file's header) and `outcome.observer` (EXIF GPS). The example enables the
+solar-system layer whenever the solve reports a time.
 
 **The engine returns data; drawing is yours.** Every object comes with **pixel
 coordinates** (top-left origin), a name, an apparent size (`semiMajorPx` / `semiMinorPx`)
@@ -383,8 +415,10 @@ unisolver_close(s);
 ```
 
 The JSON holds `status`, per-rung `attempts` (with timing) and `solution` (ra/dec/roll/fov,
-matches, RMSE, the **full WCS** and the plate scale). This entry carries the same "header
-hints + ladder + range clamp" strategy as the Flutter path.
+matches, RMSE, the **full WCS** and the plate scale), plus `observation_unix_ms` and
+`observer` (the time the solve used and, for files with EXIF GPS, where the photo was taken;
+null otherwise). This entry carries the same "header hints + ladder + range clamp" strategy
+as the Flutter path, EXIF included.
 
 **Solving and annotating are separate calls** (annotation depends only on the WCS);
 continuing from `json` above:
@@ -429,7 +463,9 @@ Every `opts_json` field is optional: `fov_deg` / `fov_max_error_deg` / `camera` 
 `attitude_hint_wxyz` / `hint_uncertainty_deg` / `strict_hint` / `profile`
 (`auto` · `phone` · `clean`) / `sigma` / `max_centroids` / `retry_alternate_profile` /
 `thorough` /
-`match_threshold` / `timeout_ms` / `observation_unix_ms` / `observer_velocity_km_s`.
+`match_threshold` / `timeout_ms` / `observation_unix_ms` / `observer_velocity_km_s` /
+`focal_length_35mm` (ladders only: an EXIF 35 mm focal length read by the caller, tried
+first).
 `attitude_hint_wxyz` without `fov_deg` or `camera` is an **error**: tracking needs the
 scale, and silently falling back to a blind solve would hide that tracking is not working.
 
@@ -448,8 +484,10 @@ char *j = unisolver_solve_frame_json_opts(
 
 Two contracts: **the pixels are copied** (a camera callback's buffer is reclaimed at once
 and cannot be assumed to outlive the solve), and a raw frame **has no header**, so without
-`fov_deg`/`camera` the fallback is the aspect ladder rather than header hints. Live and
-tracking use should pass the FOV and the previous attitude anyway.
+`fov_deg`/`camera` the fallback is the aspect ladder rather than header hints. A photo
+decoded by the platform (HEIC) passes its EXIF as `focal_length_35mm` and
+`observation_unix_ms`. Live and tracking use should pass the FOV and the previous attitude
+anyway.
 
 ### On-device calibration (optional)
 
@@ -567,7 +605,8 @@ and `stellarium` when you ship the names pack. The example app lists them all un
    example's `macos/Runner/{DebugProfile,Release}.entitlements`.
 9. **Narrow frames without a hint sweep the ladder**: without a header FOV hint, a 3°
    frame routed through a multi-tier pool took 3 s (measured). Give a hint whenever you can
-   (EXIF/FITS headers or a calibrated camera): one attempt instead of a dozen.
+   (EXIF/FITS headers, `focalLength35Mm` for decoded photos, or a calibrated camera): one
+   attempt instead of a dozen. Photos forwarded through chat apps usually lose their EXIF.
 
 ## 6. Versions and compatibility
 

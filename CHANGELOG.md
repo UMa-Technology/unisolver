@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+1. **Photos bring their own FOV, time and place.** JPEG, PNG and TIFF files now have their
+   EXIF read: the 35 mm-equivalent focal length (or focal length with focal plane
+   resolution) becomes the first ladder rung, and the capture time (when EXIF gives its zone)
+   feeds the aberration correction. FITS/XISF files contribute `DATE-AVG`, or `DATE-OBS` plus
+   half the exposure. Outcomes report `observationUnixMs` and, for photos with GPS,
+   `observer` (Rust `SolveOutcome`, Flutter `SolveOutcomeDto`, C JSON), so the solar-system
+   layer needs no input from the app; the example now draws it.
+2. **Decoded photos can pass their EXIF.** `SolveOptionsDto.focalLength35Mm` (Rust
+   `SolveOptions::focal_length_35mm`, C `focal_length_35mm`) puts that focal length's FOV
+   first in any ladder, for formats the engine does not decode.
+3. **HEIC is rejected with directions.** A HEIC/HEIF file now fails with an error that says to
+   decode it on the platform and use a frame entry; the integration guide shows how.
+
 ## 2026-09-28 — v0.2.0
 
 1. **Data attributions from the engine.** `dataAttributions()` (Flutter),

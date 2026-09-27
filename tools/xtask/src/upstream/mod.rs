@@ -7,12 +7,14 @@ mod fetch;
 pub mod git;
 pub mod lock;
 mod queue;
+mod remote;
 mod sync;
 pub mod tags;
 pub mod tree;
 
 pub use check::{check_local, LocalReport};
 pub use queue::{edit, export, BRANCH};
+pub use remote::{check_remote, RemoteReport};
 pub use sync::{sync, sync_abort, sync_continue, SyncOutcome};
 
 use anyhow::{Context, Result};

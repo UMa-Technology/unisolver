@@ -67,6 +67,25 @@ pub fn has_commit(git: &Git, rev: &str) -> bool {
     git.succeeds(&["cat-file", "-e", &format!("{rev}^{{commit}}")])
 }
 
+pub fn has_tag(git: &Git, tag: &str) -> bool {
+    git.succeeds(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("refs/tags/{tag}"),
+    ])
+}
+
+/// The commit a tag points at (annotated tags peeled).
+pub fn resolve_tag(git: &Git, tag: &str) -> Result<String> {
+    let rev = format!("refs/tags/{tag}^{{commit}}");
+    let sha = git.run(&["rev-parse", "--verify", "--quiet", &rev]);
+    Ok(sha
+        .with_context(|| format!("upstream has no tag {tag}"))?
+        .trim()
+        .to_string())
+}
+
 /// The work clone, holding every tag the cache has.
 pub fn ensure_work(ctx: &Ctx) -> Result<Git> {
     ensure_cache(ctx)?;

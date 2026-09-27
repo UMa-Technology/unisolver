@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-09-28 — v0.2.0
+
 1. **Data attributions from the engine.** `dataAttributions()` (Flutter),
    `unisolver_attributions_json()` (C) and `unisolver_core::data_attributions()` (Rust) return
    the attribution each data source requires (Gaia DR3, Hipparcos, IAU WGSN, OpenNGC,

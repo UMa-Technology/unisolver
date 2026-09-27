@@ -310,6 +310,37 @@ char *unisolver_annotate_json(const UnisolverAnnotator *annotator,
                               char **error_out);
 
 /**
+ * Batch sky → pixel, for drawing your own overlays: `input` holds `n` pairs `ra, dec`
+ * (degrees), `out` receives `n` pairs `x, y` (top-left pixels). A pair the lens model cannot
+ * place (behind the camera, or beyond 1.2× the frame's corner distance, where the distortion
+ * polynomial folds points back in) comes back as NaN, NaN. `wcs_json` is the solve JSON's
+ * `wcs`, unchanged. Returns false with `error_out` set on bad arguments.
+ *
+ * # Safety
+ * `wcs_json` is a valid NUL-terminated string; `input` and `out` point to `2 * n` doubles
+ * (they may be the same buffer); `error_out` is NULL or a writable pointer slot.
+ */
+bool unisolver_wcs_sky_to_pixels(const char *wcs_json,
+                                 const double *input,
+                                 uintptr_t n,
+                                 double *out,
+                                 char **error_out);
+
+/**
+ * Batch pixel → sky: `n` pairs `x, y` in, `n` pairs `ra, dec` (degrees) out; NaN, NaN for
+ * pixels more than a quarter frame outside the image. Otherwise as
+ * [`unisolver_wcs_sky_to_pixels`].
+ *
+ * # Safety
+ * As [`unisolver_wcs_sky_to_pixels`].
+ */
+bool unisolver_wcs_pixels_to_sky(const char *wcs_json,
+                                 const double *input,
+                                 uintptr_t n,
+                                 double *out,
+                                 char **error_out);
+
+/**
  * Releases an annotator. Accepts NULL.
  *
  * # Safety

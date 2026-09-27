@@ -898,6 +898,16 @@ struct AnnotateOptsJson {
     include_constellations: bool,
     /// IAU constellation boundaries (`boundaries`); needs the constellation pack
     constellation_boundaries: bool,
+    /// Equatorial grid (`grid`, J2000 right ascension and declination)
+    equatorial_grid: bool,
+    /// Horizontal grid (`grid`, apparent altitude and azimuth); needs `observation_unix_ms`
+    /// and `observer`
+    horizontal_grid: bool,
+    /// Screen pixels between grid lines (default 150)
+    grid_spacing_px: Option<f64>,
+    /// What the app shows: `{x, y, width, height}` of the visible image region in image
+    /// pixels and `scale` (screen pixels per image pixel). Lines and labels follow it
+    viewport: Option<core::Viewport>,
 }
 
 impl Default for AnnotateOptsJson {
@@ -918,6 +928,10 @@ impl Default for AnnotateOptsJson {
             language: d.language,
             include_constellations: d.include_constellations,
             constellation_boundaries: d.constellation_boundaries,
+            equatorial_grid: d.equatorial_grid,
+            horizontal_grid: d.horizontal_grid,
+            grid_spacing_px: d.grid_spacing_px,
+            viewport: d.viewport,
         }
     }
 }
@@ -939,6 +953,10 @@ impl From<AnnotateOptsJson> for core::AnnotateOptions {
             language: j.language,
             include_constellations: j.include_constellations,
             constellation_boundaries: j.constellation_boundaries,
+            equatorial_grid: j.equatorial_grid,
+            horizontal_grid: j.horizontal_grid,
+            grid_spacing_px: j.grid_spacing_px,
+            viewport: j.viewport,
         }
     }
 }
@@ -1125,6 +1143,86 @@ pub unsafe extern "C" fn unisolver_annotate_json(
         Err(e) => {
             set_error(error_out, &e);
             ptr::null_mut()
+        }
+    }
+}
+
+/// Shared shape of the batch transforms: parse the WCS, map `n` points of `input` into `out`.
+unsafe fn wcs_batch(
+    wcs_json: *const c_char,
+    input: *const f64,
+    n: usize,
+    out: *mut f64,
+    map: impl Fn(&core::Wcs, &[[f64; 2]]) -> Vec<Option<[f64; 2]>>,
+) -> Result<(), String> {
+    let wcs: core::Wcs =
+        serde_json::from_str(cstr(wcs_json, "wcs_json")?).map_err(|e| format!("wcs_json: {e}"))?;
+    if n == 0 {
+        return Ok(());
+    }
+    if input.is_null() || out.is_null() {
+        return Err("input and out must not be NULL".into());
+    }
+    let pts: Vec<[f64; 2]> = std::slice::from_raw_parts(input, 2 * n)
+        .as_chunks::<2>()
+        .0
+        .to_vec();
+    let res = map(&wcs, &pts);
+    let out = std::slice::from_raw_parts_mut(out, 2 * n);
+    for (i, r) in res.into_iter().enumerate() {
+        let [a, b] = r.unwrap_or([f64::NAN, f64::NAN]);
+        (out[2 * i], out[2 * i + 1]) = (a, b);
+    }
+    Ok(())
+}
+
+/// Batch sky → pixel, for drawing your own overlays: `input` holds `n` pairs `ra, dec`
+/// (degrees), `out` receives `n` pairs `x, y` (top-left pixels). A pair the lens model cannot
+/// place (behind the camera, or beyond 1.2× the frame's corner distance, where the distortion
+/// polynomial folds points back in) comes back as NaN, NaN. `wcs_json` is the solve JSON's
+/// `wcs`, unchanged. Returns false with `error_out` set on bad arguments.
+///
+/// # Safety
+/// `wcs_json` is a valid NUL-terminated string; `input` and `out` point to `2 * n` doubles
+/// (they may be the same buffer); `error_out` is NULL or a writable pointer slot.
+#[no_mangle]
+pub unsafe extern "C" fn unisolver_wcs_sky_to_pixels(
+    wcs_json: *const c_char,
+    input: *const f64,
+    n: usize,
+    out: *mut f64,
+    error_out: *mut *mut c_char,
+) -> bool {
+    clear_error(error_out);
+    match wcs_batch(wcs_json, input, n, out, |w, p| w.sky_to_pixels(p)) {
+        Ok(()) => true,
+        Err(e) => {
+            set_error(error_out, &e);
+            false
+        }
+    }
+}
+
+/// Batch pixel → sky: `n` pairs `x, y` in, `n` pairs `ra, dec` (degrees) out; NaN, NaN for
+/// pixels more than a quarter frame outside the image. Otherwise as
+/// [`unisolver_wcs_sky_to_pixels`].
+///
+/// # Safety
+/// As [`unisolver_wcs_sky_to_pixels`].
+#[no_mangle]
+pub unsafe extern "C" fn unisolver_wcs_pixels_to_sky(
+    wcs_json: *const c_char,
+    input: *const f64,
+    n: usize,
+    out: *mut f64,
+    error_out: *mut *mut c_char,
+) -> bool {
+    clear_error(error_out);
+    match wcs_batch(wcs_json, input, n, out, |w, p| w.pixels_to_sky(p)) {
+        Ok(()) => true,
+        Err(e) => {
+            set_error(error_out, &e);
+            false
         }
     }
 }
@@ -1634,6 +1732,95 @@ mod tests {
             unisolver_close(solver);
         }
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Grids and transforms through the C surface: a zoomed viewport gets a finer grid,
+    /// labelled on its edges; the batch transforms round-trip and mark the far side NaN.
+    #[test]
+    fn grid_and_transforms_via_c_surface() {
+        let mut err: *mut c_char = std::ptr::null_mut();
+        let solver = open_test_solver(&mut err);
+        let ann = unsafe {
+            unisolver_annotator_open(solver, std::ptr::null(), std::ptr::null(), &mut err)
+        };
+        let wcs = serde_json::to_string(&core::Wcs {
+            width: 1920,
+            height: 1080,
+            cd: [[0.0; 2]; 2],
+            crval_deg: [83.8, 0.0],
+            theta_rad: 0.0,
+            camera: core::CameraParams::from_horizontal_fov(70.0, 1920, 1080).unwrap(),
+        })
+        .unwrap();
+        let wcs = CString::new(wcs).unwrap();
+        let annotate = |opts: &str| -> serde_json::Value {
+            let o = CString::new(opts).unwrap();
+            let mut e: *mut c_char = std::ptr::null_mut();
+            let out = unsafe { unisolver_annotate_json(ann, wcs.as_ptr(), o.as_ptr(), &mut e) };
+            assert!(!out.is_null());
+            let v = serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+            unsafe { unisolver_string_free(out) };
+            v
+        };
+        let whole = annotate(r#"{"equatorial_grid":true}"#);
+        assert_eq!(whole["layers"]["grid"], true);
+        let steps = |v: &serde_json::Value| -> f64 {
+            let mut decs: Vec<f64> = v["grid"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|g| g["kind"] == "Dec")
+                .map(|g| g["value_deg"].as_f64().unwrap())
+                .collect();
+            decs.sort_by(f64::total_cmp);
+            decs.windows(2)
+                .map(|w| w[1] - w[0])
+                .fold(f64::MAX, f64::min)
+        };
+        let zoomed = annotate(
+            r#"{"equatorial_grid":true,"viewport":{"x":800,"y":450,"width":320,"height":180,"scale":6}}"#,
+        );
+        assert!(
+            steps(&zoomed) < steps(&whole),
+            "{} vs {}",
+            steps(&zoomed),
+            steps(&whole)
+        );
+        let label = &zoomed["grid"][0]["label"];
+        assert!(
+            ["Left", "Right", "Top", "Bottom"].contains(&label["edge"].as_str().unwrap()),
+            "{label}"
+        );
+
+        let input = [83.8, 0.0, 263.8, 0.0];
+        let mut px = [0.0f64; 4];
+        assert!(unsafe {
+            unisolver_wcs_sky_to_pixels(wcs.as_ptr(), input.as_ptr(), 2, px.as_mut_ptr(), &mut err)
+        });
+        assert!(
+            (px[0] - 959.5).abs() < 1e-6 && (px[1] - 539.5).abs() < 1e-6,
+            "{px:?}"
+        );
+        assert!(px[2].is_nan() && px[3].is_nan());
+        let mut back = [0.0f64; 2];
+        assert!(unsafe {
+            unisolver_wcs_pixels_to_sky(wcs.as_ptr(), px.as_ptr(), 1, back.as_mut_ptr(), &mut err)
+        });
+        assert!((back[0] - 83.8).abs() < 1e-9 && back[1].abs() < 1e-9);
+        assert!(!unsafe {
+            unisolver_wcs_sky_to_pixels(
+                wcs.as_ptr(),
+                std::ptr::null(),
+                1,
+                px.as_mut_ptr(),
+                &mut err,
+            )
+        });
+        unsafe {
+            unisolver_string_free(err);
+            unisolver_annotator_close(ann);
+            unisolver_close(solver);
+        }
     }
 
     #[test]

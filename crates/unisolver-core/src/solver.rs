@@ -282,18 +282,16 @@ impl Solver {
         let t_total = Instant::now();
         let (w, h) = (frame.width, frame.height);
         let cfg = build_solve_config(opts, w, h)?;
-        let luma = frame.to_luma_f32()?;
 
         let (mut out, mut raw) =
-            self.extract_and_solve(&luma, w, h, &opts.extraction.resolve(), &cfg, t_total)?;
+            self.extract_and_solve(frame, &opts.extraction.resolve(), &cfg, t_total)?;
 
         // Profile retry: the fallback when the material guess was wrong. Triggers: see the field docs.
         let trigger = matches!(out.status, SolveStatus::TooFew)
             || (retry_on_nomatch && matches!(out.status, SolveStatus::NoMatch));
         if trigger && opts.retry_alternate_profile && opts.attitude_hint.is_none() {
             if let Some(alt) = opts.extraction.alternate() {
-                let (out2, raw2) =
-                    self.extract_and_solve(&luma, w, h, &alt.resolve(), &cfg, t_total)?;
+                let (out2, raw2) = self.extract_and_solve(frame, &alt.resolve(), &cfg, t_total)?;
                 if matches!(out2.status, SolveStatus::Ok) {
                     let mut out2 = out2;
                     out2.extraction_retried = true;
@@ -315,15 +313,13 @@ impl Solver {
     /// One extraction plus solve. extract_ms/solve_ms belong to this attempt; total_ms counts from t_total.
     fn extract_and_solve(
         &self,
-        luma: &[f32],
-        w: u32,
-        h: u32,
+        frame: &Frame,
         extraction: &ExtractionOptions,
         cfg: &SolveConfig,
         t_total: Instant,
     ) -> Result<SolveInner> {
-        let ext = extract_frame(luma, w, h, extraction, &self.pool)?;
-        self.solve_extracted(&ext, cfg, w, h, t_total)
+        let ext = extract_frame(frame, extraction, &self.pool)?;
+        self.solve_extracted(&ext, cfg, frame.width, frame.height, t_total)
     }
 
     /// Solves once from already-extracted centroids. **Extraction does not depend on the
@@ -412,16 +408,14 @@ pub(crate) struct ExtractCache {
 impl ExtractCache {
     pub(crate) fn get(
         &mut self,
-        luma: &[f32],
-        w: u32,
-        h: u32,
+        frame: &Frame,
         opts: &ExtractionOptions,
         rayon_pool: &rayon::ThreadPool,
     ) -> Result<Arc<Extracted>> {
         if let Some((_, e)) = self.entries.iter().find(|(k, _)| k == opts) {
             return Ok(e.clone());
         }
-        let e = Arc::new(extract_frame(luma, w, h, opts, rayon_pool)?);
+        let e = Arc::new(extract_frame(frame, opts, rayon_pool)?);
         self.entries.push((opts.clone(), e.clone()));
         Ok(e)
     }
@@ -432,47 +426,55 @@ impl ExtractCache {
     }
 }
 
-/// Extracts a frame; rayon parallelism stays inside the given pool (≤ 4 threads).
+/// Extracts a frame; rayon parallelism stays inside the given pool (≤ 4 threads). The
+/// luminance is converted here, per extraction, rather than held for a whole ladder; frames
+/// above [`crate::bands::BANDED_ABOVE_PX`] take the banded path and never exist as
+/// full-frame f32.
 pub(crate) fn extract_frame(
-    luma: &[f32],
-    w: u32,
-    h: u32,
+    frame: &Frame,
     extraction: &ExtractionOptions,
     rayon_pool: &rayon::ThreadPool,
 ) -> Result<Extracted> {
+    let (w, h) = (frame.width, frame.height);
     let t_ex = Instant::now();
-    let ext = rayon_pool.install(|| match extraction {
-        ExtractionOptions::Ccl {
-            sigma_threshold,
-            max_centroids,
-        } => extract_centroids_from_raw(
-            luma,
-            w,
-            h,
-            &CentroidExtractionConfig {
-                sigma_threshold: *sigma_threshold,
-                max_centroids: Some(*max_centroids),
-                ..Default::default()
-            },
-        ),
-        ExtractionOptions::Fast {
-            sigma_threshold,
-            max_centroids,
-        } => extract_centroids_fast(
-            luma,
-            w,
-            h,
-            &FastCentroidConfig {
-                sigma_threshold: *sigma_threshold,
-                max_centroids: Some(*max_centroids),
-                ..Default::default()
-            },
-        ),
+    let centroids = rayon_pool.install(|| -> Result<Vec<tetra3::Centroid>> {
+        Ok(match extraction {
+            ExtractionOptions::Ccl {
+                sigma_threshold,
+                max_centroids,
+            } => {
+                let cfg = CentroidExtractionConfig {
+                    sigma_threshold: *sigma_threshold,
+                    max_centroids: Some(*max_centroids),
+                    ..Default::default()
+                };
+                if (w as usize) * (h as usize) > crate::bands::BANDED_ABOVE_PX {
+                    crate::bands::extract(frame, &cfg)?
+                } else {
+                    extract_centroids_from_raw(&frame.to_luma_f32()?, w, h, &cfg)?.centroids
+                }
+            }
+            ExtractionOptions::Fast {
+                sigma_threshold,
+                max_centroids,
+            } => {
+                extract_centroids_fast(
+                    &frame.to_luma_f32()?,
+                    w,
+                    h,
+                    &FastCentroidConfig {
+                        sigma_threshold: *sigma_threshold,
+                        max_centroids: Some(*max_centroids),
+                        ..Default::default()
+                    },
+                )?
+                .centroids
+            }
+        })
     })?;
     let extract_ms = t_ex.elapsed().as_secs_f32() * 1000.0;
 
-    let topleft: Vec<CentroidOut> = ext
-        .centroids
+    let topleft: Vec<CentroidOut> = centroids
         .iter()
         .map(|c| {
             let (x, y) = coords::center_to_topleft(c.x as f64, c.y as f64, w, h);
@@ -486,7 +488,7 @@ pub(crate) fn extract_frame(
         .collect();
     let median_elongation = crate::outcome::median_elongation(&topleft);
     Ok(Extracted {
-        centroids: ext.centroids,
+        centroids,
         topleft,
         median_elongation,
         extract_ms,
@@ -530,7 +532,6 @@ impl Solver {
         // Staged search over the rungs (see `search`), extracting once
         let t_total = Instant::now();
         let (w, h) = (frame.width, frame.height);
-        let luma = frame.to_luma_f32()?;
         let mut cache = ExtractCache::default();
         let mut attempts = Vec::new();
         let mut last: Option<SolveOutcome> = None;
@@ -542,7 +543,7 @@ impl Solver {
             o.fov_max_error_deg = Some(p.max_error_deg);
             o.timeout_ms = pass.timeout_ms;
             let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
-            let ext = cache.get(&luma, w, h, &o.extraction.resolve(), &self.pool)?;
+            let ext = cache.get(frame, &o.extraction.resolve(), &self.pool)?;
             let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total)?;
             // Profile retry, once per rung and only on TooFew: inside a ladder NoMatch more
             // likely means a wrong FOV
@@ -552,7 +553,7 @@ impl Solver {
                 && o.attitude_hint.is_none()
             {
                 if let Some(alt) = o.extraction.alternate() {
-                    let ext2 = cache.get(&luma, w, h, &alt.resolve(), &self.pool)?;
+                    let ext2 = cache.get(frame, &alt.resolve(), &self.pool)?;
                     let (out2, _) = self.solve_extracted(&ext2, &cfg, w, h, t_total)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;

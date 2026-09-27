@@ -238,7 +238,6 @@ impl SolverPool {
                 .collect()
         };
 
-        let luma = frame.to_luma_f32()?;
         let mut cache = ExtractCache::default();
         let mut attempts: Vec<PoolAttempt> = Vec::with_capacity(passes.len());
         let mut last: Option<SolveOutcome> = None;
@@ -254,7 +253,7 @@ impl SolverPool {
             }
             o.timeout_ms = pass.timeout_ms;
             let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
-            let ext = cache.get(&luma, w, h, &o.extraction.resolve(), &self.rayon)?;
+            let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
             let (mut out, _) = tier.solver.solve_extracted(&ext, &cfg, w, h, t_total)?;
 
             // Profile retry, as in the single-database ladder: once per step, only on TooFew
@@ -265,7 +264,7 @@ impl SolverPool {
                 && o.attitude_hint.is_none()
             {
                 if let Some(alt) = o.extraction.alternate() {
-                    let ext2 = cache.get(&luma, w, h, &alt.resolve(), &self.rayon)?;
+                    let ext2 = cache.get(frame, &alt.resolve(), &self.rayon)?;
                     let (out2, _) = tier.solver.solve_extracted(&ext2, &cfg, w, h, t_total)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;

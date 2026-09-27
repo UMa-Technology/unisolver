@@ -3,6 +3,7 @@
 pub mod aberration;
 pub mod annotate;
 pub mod attribution;
+mod bands;
 pub mod calibrate;
 pub mod camera;
 pub mod coords;

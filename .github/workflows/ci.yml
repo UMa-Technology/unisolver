@@ -1,51 +1,108 @@
-# CI matrix (GitHub Actions). The day-to-day gate is scripts/ci/ci-local.sh; this runs when
-# main is mirrored to GitHub.
+# CI (GitHub Actions). The day-to-day gate is scripts/ci/ci-local.sh; this runs when main reaches
+# GitHub through scripts/sync-github.sh. While the repository is private only rust-linux runs
+# (macOS and Windows minutes bill at 10x and 2x); `gh workflow run ci.yml -f full=true` runs the
+# rest by hand. Once public, every job runs on every push and pull request.
 name: ci
 on:
   push: { branches: [main] }
   pull_request:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Also run the macOS, Windows and Flutter jobs
+        type: boolean
+        default: false
+
+env:
+  PKGS: -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask
+  FEATURES: imageio satellites
 
 jobs:
-  rust:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-14, ubuntu-24.04, windows-2022]
+  rust-linux:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "clippy, rustfmt" }
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          # upstream's integration tests download their images (about 600 MB) on first use
+          path: |
+            third_party/tetra3/data/skyview_10deg_test_images
+            third_party/tetra3/data/tess_same_ccd
+            third_party/tetra3/data/tess_test_images
+          key: tetra3-testdata-${{ hashFiles('third_party/tetra3.lock') }}
+      - name: public text
+        run: python3 scripts/ci/check_public_text.py
+      - name: rust licenses
+        run: python3 scripts/ci/rust_licenses.py --check
       - name: fmt
-        run: cargo fmt -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask --check
+        run: cargo fmt $PKGS --check
       - name: clippy
-        run: cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask --all-targets --features "imageio satellites" -- -D warnings
-        # unisolver_frb needs the Flutter toolchain (dart-sys); the flutter job covers it
+        # unisolver_frb needs the Flutter toolchain (dart-sys); flutter-macos covers it
+        run: cargo clippy $PKGS --all-targets --features "$FEATURES" -- -D warnings
       - name: test
-        run: cargo test --workspace --exclude unisolver_frb --release --features "imageio satellites"
-        # Private test material is not in the repository: tests that need it print skipped and pass
+        # private test material is not in the repository: tests that need it print skipped and pass
+        run: cargo test --workspace --exclude unisolver_frb --release --features "$FEATURES"
       - name: upstream patch queue
-        if: runner.os == 'Linux'
         # exit 2 = a newer upstream release exists: reported, not a failure
         run: cargo xtask upstream check || [ $? -eq 2 ]
 
+  rust:
+    if: ${{ !github.event.repository.private || inputs.full }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: { shell: bash }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            third_party/tetra3/data/skyview_10deg_test_images
+            third_party/tetra3/data/tess_same_ccd
+            third_party/tetra3/data/tess_test_images
+          key: tetra3-testdata-${{ hashFiles('third_party/tetra3.lock') }}
+      - name: clippy
+        run: cargo clippy $PKGS --all-targets --features "$FEATURES" -- -D warnings
+      - name: test
+        run: cargo test --workspace --exclude unisolver_frb --release --features "$FEATURES"
+
   windows-dll:
     # Full Windows build for both architectures (macOS can only cross-check)
+    if: ${{ !github.event.repository.private || inputs.full }}
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: rustup target add aarch64-pc-windows-msvc
+        with: { targets: "x86_64-pc-windows-msvc, aarch64-pc-windows-msvc" }
+      - uses: Swatinem/rust-cache@v2
       - run: cargo build -p unisolver-cabi --release --target x86_64-pc-windows-msvc
       - run: cargo build -p unisolver-cabi --release --target aarch64-pc-windows-msvc
 
   flutter-macos:
-    runs-on: macos-14
+    if: ${{ !github.event.repository.private || inputs.full }}
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: "3.47.0" }
+        with: { flutter-version: "3.47.5", channel: stable }
+      - name: plugin tests
+        run: cd packages/unisolver_flutter && flutter test
+      - name: plugin analyze
+        run: cd packages/unisolver_flutter && flutter analyze --no-pub --no-fatal-infos lib test
       - name: build example (cargokit compiles rust)
         run: cd packages/unisolver_flutter/example && flutter build macos --debug
-      - name: dart unit tests
+      - name: example tests
         run: cd packages/unisolver_flutter/example && flutter test test/
+      - name: example analyze
+        run: cd packages/unisolver_flutter/example && flutter analyze --no-pub lib test integration_test

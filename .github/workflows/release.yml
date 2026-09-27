@@ -1,0 +1,63 @@
+# Release packages. A v* tag (pushed to GitHub by scripts/sync-github.sh) builds the C library on
+# each desktop platform and publishes a GitHub release: one zip per platform, the names pack with
+# its GPL notice, and SHA256SUMS, with the tag's CHANGELOG section as the notes. No star databases
+# are attached. `gh workflow run release.yml` builds the same zips as workflow artifacts without
+# publishing: a dry run before tagging. See docs/releasing.md.
+name: release
+on:
+  push: { tags: ["v*"] }
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: macos-universal, os: macos-15 }
+          - { platform: linux-x86_64, os: ubuntu-22.04 }
+          - { platform: windows-x86_64, os: windows-2022 }
+          - { platform: windows-aarch64, os: windows-2022 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: package
+        shell: bash
+        run: |
+          version="$GITHUB_REF_NAME"
+          [[ "$GITHUB_REF" == refs/tags/* ]] || version="dev-${GITHUB_SHA::7}"
+          python scripts/ci/package_cabi.py "${{ matrix.platform }}" "$version" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cabi-${{ matrix.platform }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: the tag matches every manifest and the CHANGELOG
+        run: cargo xtask release check "$GITHUB_REF_NAME"
+      - uses: actions/download-artifact@v4
+        with: { pattern: cabi-*, path: dist, merge-multiple: true }
+      - name: names pack, checksums, notes
+        run: |
+          cp packages/unisolver_flutter/lib/optional/unisolver_names.bin dist/
+          cp scripts/ci/names-pack-NOTICE.txt dist/unisolver_names.NOTICE.txt
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          cargo xtask release notes "$GITHUB_REF_NAME" > notes.md
+          ls -l dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: dist/*

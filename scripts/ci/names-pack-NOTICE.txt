@@ -1,0 +1,9 @@
+unisolver_names.bin: multilingual object names for unisolver's annotations (13 languages).
+
+License: GPL-2.0-or-later. Object names and translations from Stellarium
+(https://stellarium.org): nebulae/default/names.dat, skycultures/common_star_names.fab and the
+po/stellarium-sky translations.
+
+Corresponding source: tools/namesgen and tools/namesgen/data/objects-names.json in the unisolver
+repository at this release's tag. The engine works without this file; see
+THIRD_PARTY_LICENSES.md and docs/integration.md for how an app opts in.

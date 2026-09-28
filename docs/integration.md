@@ -363,17 +363,21 @@ theirs.
 A phone's wide lens also bends the edges of a frame by several pixels, and annotations drawn
 through a pinhole solve inherit that error. By default (`SolveOptionsDto.fitLens`, C
 `fit_lens`, Rust `SolveOptions::fit_lens`) a wide solve (20° or more, 30 or more matched
-stars, no `camera` given) then fits the focal length and one radial distortion term to the
-frame's own stars, re-solves with that lens and keeps it only when it fits those stars at
-least 5% better: `solution.lensFitted` says so, and `wcs.camera` then carries the
-distortion, so every annotation and transform follows the lens.
+stars, no `camera` given) then fits the focal length and a radial distortion term (k1) to the
+frame's own stars, adding a second term (k2) when it predicts left-out stars at least 5%
+better and pins the corners down to within 3 px. It re-solves with that lens and keeps it only
+when it fits those stars at least 5% better, then fits once more on the stars the new solve
+matched, which reach further into the corners: `solution.lensFitted` says so, and
+`wcs.camera` then carries the distortion, so every annotation and transform follows the lens.
+With a fitted lens, `fov` is the lens's paraxial field of view, a few tenths of a degree away
+from a pinhole's.
 
-Together they add 5–20 ms to a wide solve. On 38 phone photos, the stars matched with and
+Together they add 10–20 ms to a wide solve. On 38 phone photos, the stars matched with and
 without them sat 2.7 px from their catalog positions on average without either, 2.1 px with
-the scale refined and 1.7 px with both, and no photo got worse; the 73° frames above now
-solve between 73.5° and 73.7°. The lens fit covers only distortion that is radial about the
-centre; for anything else (and for narrow fields) calibrate the camera once from several
-frames:
+the scale refined and 1.2 px with both (26 of the 32 fitted lenses took k2), and no photo got
+worse; the scale of the 73° frames above now comes out between 73.3° and 73.4°. The lens fit
+covers only distortion that is radial about the centre; for anything else (and for narrow
+fields) calibrate the camera once from several frames:
 
 ### 1.5.1 On-device calibration (optional; for narrow fields and distorting lenses)
 

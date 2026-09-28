@@ -699,7 +699,9 @@ fn dso_outlines_project_to_pixels() {
 /// does not, localized through the names pack, and silent unless asked for.
 #[test]
 fn constellation_layers_project_figures_boundaries_and_names() {
-    use unisolver_core::constellations::{BoundaryEdge, ConstellationFigure, ConstellationPack};
+    use unisolver_core::constellations::{
+        BoundaryEdge, ConstellationFigure, ConstellationName, ConstellationPack, ZoneBand,
+    };
     use unisolver_core::names_pack::NamesPack;
     let solver = Solver::from_file(&test_db_path()).unwrap();
     let dir = std::env::temp_dir().join(format!("ucon_test_{}", std::process::id()));
@@ -728,6 +730,17 @@ fn constellation_layers_project_figures_boundaries_and_names() {
             between: [0, 1],
             points: (0..=12).map(|k| [86.0, 22.0 - k as f32]).collect(),
         }],
+        // Taurus north of +10° (B1875) between 4h and 6h, Orion everywhere else
+        zones: vec![
+            ZoneBand {
+                dec_min: -5400,
+                ranges: vec![(0, 0)],
+            },
+            ZoneBand {
+                dec_min: 600,
+                ranges: vec![(0, 0), (4 * 3600, 1), (6 * 3600, 0)],
+            },
+        ],
     };
     let pack_path = dir.join("unisolver_constellations.bin");
     pack.write(pack_path.to_str().unwrap()).unwrap();
@@ -827,12 +840,34 @@ fn constellation_layers_project_figures_boundaries_and_names() {
         .iter()
         .any(|p| p[0] >= 0.0 && p[0] < 1024.0 && p[1] >= 0.0 && p[1] < 768.0));
 
+    // Point lookup: localized where the names pack has the name, else the IAU name
+    let named = |abbr: &str, name: &str| {
+        Some(ConstellationName {
+            abbr: abbr.into(),
+            name: name.into(),
+        })
+    };
+    assert_eq!(
+        ann.constellation_at(83.8, -1.0, "zh_cn"),
+        named("Ori", "猎户座")
+    );
+    assert_eq!(
+        ann.constellation_at(70.0, 20.0, "zh_cn"),
+        named("Tau", "Taurus")
+    );
+    assert_eq!(plain.constellation_at(83.8, -1.0, "zh_cn"), None);
+    assert_eq!(broken.constellation_at(83.8, -1.0, "zh_cn"), None);
+
     // Without the names pack: the IAU name
     let latin = solver
         .annotator(None, None)
         .unwrap()
         .with_constellations(Some(pack_path.to_str().unwrap()));
     assert_eq!(latin.annotate(&wcs, &both).constellations[0].name, "Orion");
+    assert_eq!(
+        latin.constellation_at(83.8, -1.0, "zh_cn"),
+        named("Ori", "Orion")
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -868,6 +903,34 @@ fn bundled_constellation_pack_draws_real_skies() {
         bordered.iter().all(|&b| b),
         "every constellation has a boundary"
     );
+    let mut zoned = [false; 88];
+    for z in &pack.zones {
+        for r in &z.ranges {
+            zoned[r.1 as usize] = true;
+        }
+    }
+    assert!(zoned.iter().all(|&z| z), "every constellation has a zone");
+    // Known positions (J2000), including both poles and the 0h meridian
+    let abbr_at = |ra: f64, dec: f64| {
+        pack.index_at(ra, dec)
+            .map(|i| pack.constellations[i].abbr.as_str())
+    };
+    for (ra, dec, want) in [
+        (88.793, 7.407, "Ori"),    // Betelgeuse
+        (101.287, -16.716, "CMa"), // Sirius
+        (37.955, 89.264, "UMi"),   // Polaris
+        (0.0, 90.0, "UMi"),
+        (0.0, -90.0, "Oct"),
+        (266.417, -29.008, "Sgr"), // Sgr A*
+        (10.685, 41.269, "And"),   // M31
+        (0.0, 0.0, "Psc"),
+        (279.235, 38.784, "Lyr"),  // Vega
+        (201.298, -11.161, "Vir"), // Spica
+        (233.0, 10.0, "Ser"),      // Serpens Caput
+        (275.0, -5.0, "Ser"),      // Serpens Cauda
+    ] {
+        assert_eq!(abbr_at(ra, dec), Some(want), "({ra}, {dec})");
+    }
     // Orion's figure passes through Betelgeuse and Rigel (J2000)
     let ori = pack
         .constellations
@@ -920,6 +983,10 @@ fn bundled_constellation_pack_draws_real_skies() {
     if names_pack_path().is_some() {
         let ori = a.constellations.iter().find(|c| c.abbr == "Ori").unwrap();
         assert_eq!(ori.name, "猎户座");
+        assert_eq!(
+            ann.constellation_at(83.8, 0.0, "zh_cn").map(|c| c.name),
+            Some("猎户座".to_string())
+        );
     }
     let label = a
         .constellations

@@ -285,6 +285,30 @@ impl Annotator {
             .unwrap_or_default()
     }
 
+    /// The constellation containing J2000 `(ra, dec)` in degrees, named in `language` (as
+    /// [`AnnotateOptions::language`]). For the frame centre pass the solve's centre; for a
+    /// point on the image, convert it with [`Wcs::pixels_to_sky`] first. None without a
+    /// constellation pack (`annotate` reports why in `layers.reasons`).
+    pub fn constellation_at(
+        &self,
+        ra_deg: f64,
+        dec_deg: f64,
+        language: &str,
+    ) -> Option<crate::constellations::ConstellationName> {
+        let pack = &self.constellations.as_ref()?.pack;
+        let c = &pack.constellations[pack.index_at(ra_deg, dec_deg)?];
+        let lang = self
+            .names
+            .as_ref()
+            .and_then(|n| n.resolve_language(language));
+        Some(crate::constellations::ConstellationName {
+            abbr: c.abbr.clone(),
+            name: self
+                .localized(&format!("CON {}", c.abbr), lang, Some(&c.name))
+                .unwrap_or_else(|| c.name.clone()),
+        })
+    }
+
     /// Localized name: names pack (requested language → English), then the caller's fallback.
     fn localized(&self, key: &str, lang: Option<usize>, fallback: Option<&str>) -> Option<String> {
         self.names

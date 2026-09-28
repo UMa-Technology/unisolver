@@ -82,7 +82,7 @@ static ATTRIBUTIONS: [DataAttribution; 8] = [
     DataAttribution {
         id: "constellation_art",
         name: "Constellation illustrations (western_new)",
-        applies_to: "constellation art, bundled set",
+        applies_to: "constellation art, painted set",
         license: "CC-BY-SA-4.0",
         text: "Constellation illustrations by UMa Technology (CC BY-SA 4.0), placed with the \
                anchor stars of Stellarium's western sky culture (CC BY-SA).",
@@ -91,7 +91,7 @@ static ATTRIBUTIONS: [DataAttribution; 8] = [
     DataAttribution {
         id: "constellation_art_western",
         name: "Constellation illustrations (western)",
-        applies_to: "constellation art, optional set",
+        applies_to: "constellation art, low-poly set",
         license: "LAL-1.3",
         text: concat!(
             "Constellation illustrations by 氕氘氚Star",

@@ -10,6 +10,13 @@
    machine searches the same patterns and gets the same result. On a Snapdragon 865 phone the
    47 test photos now solve as on the desktop (44), and a frame without stars fails about
    0.3 s later. The timeout still caps every pass; `thorough` stays off by default.
+2. **Constellation illustrations are no longer bundled.** The painted set shipped with every
+   app (3.2 MiB); it is now an opt-in pack like the low-poly one. **Apps that draw the art
+   layer must declare** `packages/unisolver_flutter/optional/unisolver_art_western_new.bin` in
+   their assets (`ConstellationArtSet.westernNew.load()` returns null otherwise), or read a copy
+   they already carry with the new `ConstellationArtFiles(directory)`: a Stellarium sky culture
+   directory (`index.json` and its images) or images named by IAU abbreviation. Both implement
+   `ConstellationArtSource`.
 
 ## 2026-09-29 — v0.4.1
 

@@ -35,20 +35,32 @@ When you distribute the file you distribute GPL-2.0-or-later data:
   `tools/namesgen/data/objects-names.json` and `tools/namesgen/data/constellation-names.json`
   in the unisolver repository.
 
-# Optional: western constellation illustrations
+# Optional: constellation illustrations
 
-`unisolver_art_western.bin` holds a second set of constellation illustrations for the art
-layer (`AnnotateOptionsDto.constellationArt`): low-poly drawings under the **Free Art
-License 1.3** (see `unisolver_art_western.NOTICE.txt`). The painted set
-(`ConstellationArtSet.westernNew`, CC BY-SA 4.0) is bundled; this one is not, to keep apps
-small. Declare it in **your app's** `pubspec.yaml`:
+Two sets of illustrations for the art layer (`AnnotateOptionsDto.constellationArt`), one
+pack file each. **Neither is bundled**, to keep apps small:
+
+| Pack | Set | License |
+|---|---|---|
+| `unisolver_art_western_new.bin` | `ConstellationArtSet.westernNew`, painted | CC BY-SA 4.0 (`unisolver_art_western_new.NOTICE.txt`) |
+| `unisolver_art_western.bin` | `ConstellationArtSet.western`, low-poly | Free Art License 1.3 (`unisolver_art_western.NOTICE.txt`) |
+
+Declare the one you want in **your app's** `pubspec.yaml`:
 
 ```yaml
 flutter:
   assets:
-    - packages/unisolver_flutter/optional/unisolver_art_western.bin
+    - packages/unisolver_flutter/optional/unisolver_art_western_new.bin
 ```
 
-and load images with `ConstellationArtSet.western.load(abbr)` (null when not declared). Show
-the attribution from `dataAttributions()` (`constellation_art_western`) and keep the NOTICE
-with the file when you distribute it.
+and load images with `ConstellationArtSet.westernNew.load(abbr)` (null when not declared).
+
+An app that already carries the drawings, for example in a resource archive it unpacks, can
+skip the pack and read its own copy with `ConstellationArtFiles(directory).load(abbr)`: a
+Stellarium sky culture directory (`index.json` plus its images) or images named by IAU
+abbreviation (`Ori.webp`). The anchors are those of Stellarium's western sky cultures, so
+the drawings must be theirs (any resolution).
+
+Show the attribution from `dataAttributions()` (`constellation_art` for the painted set,
+`constellation_art_western` for the low-poly one) and keep the NOTICE with the file when you
+distribute it.

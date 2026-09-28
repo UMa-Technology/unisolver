@@ -290,14 +290,18 @@ missing vertex: `drawVertices` with an `ImageShader` (see `artTriangles` in the 
 `overlay_painter.dart`). The illustrations are light on black, so blend them onto the photo
 with `BlendMode.screen` at 40–60% opacity and the black disappears. The engine places each
 one from three anchor stars, as Stellarium does, so the art follows the lens model and the
-zoom. `ConstellationArtSet.westernNew.load(abbr)` returns the bundled painted set's image
-bytes (CC BY-SA 4.0); `ConstellationArtSet.western` is a low-poly set (Free Art License 1.3)
-your app opts into by declaring `packages/unisolver_flutter/optional/unisolver_art_western.bin`
-in its assets. Both return null for a constellation without an illustration (Puppis, Vela and
-Serpens appear in their neighbours' art). Credit the set you ship (`dataAttributions()`). C and
-Rust: the option is `constellation_art`; the images are the plugin's `assets/art/western_new/`
-files (named by IAU abbreviation) and the `UART` pack in `lib/optional/`, whose layout is given
-in `constellation_art.dart`.
+zoom. The illustrations are **not bundled**: declare the set you want in your app's assets,
+`packages/unisolver_flutter/optional/unisolver_art_western_new.bin` (painted, CC BY-SA 4.0) or
+`packages/unisolver_flutter/optional/unisolver_art_western.bin` (low-poly, Free Art License 1.3),
+and `ConstellationArtSet.westernNew.load(abbr)` or `.western.load(abbr)` returns the image
+bytes. An app that already carries the drawings reads its own copy with
+`ConstellationArtFiles(directory)`: a Stellarium sky culture directory (`index.json` and its
+images) or images named by IAU abbreviation; the anchors are those of Stellarium's western
+sky cultures, so the drawings must be theirs. All return null for a constellation without an
+illustration (Puppis, Vela and Serpens appear in their neighbours' art). Credit the set you
+ship (`dataAttributions()`). C and Rust: the option is `constellation_art`; the images are the
+`UART` packs in the plugin's `lib/optional/`, whose layout is given in
+`constellation_art.dart`.
 
 **Build the annotator once and keep it.** Construction reads and parses the DSO catalog
 (771 KB), the names pack (215 KB) and, when given, the constellation pack (211 KB):
@@ -695,11 +699,11 @@ runtime, so only these count (**databases excluded**, see the next table):
 | Dart AOT | ~150 KB | `unisolver_flutter` + `flutter_rust_bridge` |
 | `unisolver_dso.bin` (bundled asset) | 753 KiB (~457 KiB compressed in the APK) | DSO annotation catalog with outlines; omit it if you do not annotate |
 | `unisolver_constellations.bin` (bundled asset) | 211 KiB (~173 KiB compressed) | constellation figures, IAU boundaries, the lookup table and the art anchors |
-| `assets/art/western_new/` (bundled asset) | 3.4 MiB (85 webp) | constellation illustrations, painted set |
+| `optional/unisolver_art_western_new.bin` (opt-in asset) | 3.2 MiB (85 webp) | constellation illustrations, painted set; `unisolver_art_western.bin` (low-poly) is 2.8 MiB |
 
 **About 3.3 MiB installed / 3.0 MiB download per architecture** (Android arm64, without
-databases), plus 3.4 MiB for the bundled constellation illustrations (webp, which the store
-cannot compress further). Shipping both arm64-v8a and x86_64 doubles the native part (x86_64 is only for
+databases), plus about 3 MiB for a set of constellation illustrations if you opt into one
+(webp, which the store cannot compress further). Shipping both arm64-v8a and x86_64 doubles the native part (x86_64 is only for
 emulators). Integrating through the **C ABI** is smaller: `libunisolver_cabi.dylib` (macOS
 arm64, stripped) is **1.67 MiB**, without the flutter_rust_bridge / serde_json /
 tracing-subscriber layer.

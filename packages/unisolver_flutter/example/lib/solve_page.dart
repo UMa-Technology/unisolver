@@ -202,7 +202,7 @@ class _SolvePageState extends State<SolvePage> {
   bool _diagnostics = false;
   bool _showArt = true;
 
-  /// Decoded illustrations by IAU abbreviation (the bundled western_new set)
+  /// Decoded illustrations by IAU abbreviation (the western_new set, declared in pubspec.yaml)
   Map<String, ui.Image> _art = const {};
 
   Future<void> _loadArt(AnnotationsDto a) async {

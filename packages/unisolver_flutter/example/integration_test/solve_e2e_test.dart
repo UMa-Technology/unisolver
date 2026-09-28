@@ -131,7 +131,7 @@ void main() {
     expect(placed.length, greaterThan(scoArt.cols * scoArt.rows ~/ 2));
     final webp = await ConstellationArtSet.westernNew.load('Sco');
     expect(webp!.lengthInBytes, greaterThan(10000));
-    // The optional set is not declared by the example: nothing, no error
+    // The example declares only the painted set: the low-poly one gives nothing, no error
     expect(await ConstellationArtSet.western.load('Sco'), isNull);
 
     // A grid for a zoomed view: finer lines, labels on the view's edges; and the batch

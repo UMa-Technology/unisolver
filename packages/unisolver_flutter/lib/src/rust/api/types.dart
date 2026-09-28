@@ -51,7 +51,8 @@ class AnnotateOptionsDto {
   final bool constellationBoundaries;
 
   /// Mythology illustrations on the figures (`ConstellationAnnotationDto.art`); needs
-  /// `includeConstellations`. Draw them with `ConstellationArtSet` images.
+  /// `includeConstellations`. Draw them with images from a `ConstellationArtSource`
+  /// (`ConstellationArtSet`, `ConstellationArtFiles`).
   final bool constellationArt;
 
   /// Equatorial grid (`AnnotationsDto.grid`, J2000 right ascension and declination)

@@ -590,7 +590,8 @@ pub struct AnnotateOptionsDto {
     #[frb(default = false)]
     pub constellation_boundaries: bool,
     /// Mythology illustrations on the figures (`ConstellationAnnotationDto.art`); needs
-    /// `includeConstellations`. Draw them with `ConstellationArtSet` images.
+    /// `includeConstellations`. Draw them with images from a `ConstellationArtSource`
+    /// (`ConstellationArtSet`, `ConstellationArtFiles`).
     #[frb(default = false)]
     pub constellation_art: bool,
     /// Equatorial grid (`AnnotationsDto.grid`, J2000 right ascension and declination)

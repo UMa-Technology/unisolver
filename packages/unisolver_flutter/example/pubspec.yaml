@@ -69,6 +69,8 @@ flutter:
     - assets/sample_scorpius.jpg
     # Opt in to the multilingual names pack (GPL-2.0-or-later, see its README)
     - packages/unisolver_flutter/optional/unisolver_names.bin
+    # Opt in to the painted constellation illustrations (CC BY-SA 4.0)
+    - packages/unisolver_flutter/optional/unisolver_art_western_new.bin
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

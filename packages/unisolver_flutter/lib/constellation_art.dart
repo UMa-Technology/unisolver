@@ -1,42 +1,41 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Illustration sets for the constellation art layer (`AnnotateOptionsDto.constellationArt`),
-/// keyed by IAU abbreviation as `ConstellationAnnotationDto.abbr`. Each set's NOTICE and
-/// `dataAttributions()` give its author and license.
-enum ConstellationArtSet {
-  /// Painted, CC BY-SA 4.0. Bundled with the plugin (one webp per constellation).
+/// Where the illustrations of the constellation art layer (`AnnotateOptionsDto.constellationArt`)
+/// come from: a set the plugin provides ([ConstellationArtSet]) or a copy the app keeps on
+/// disk ([ConstellationArtFiles]). Images are keyed by IAU abbreviation, as
+/// `ConstellationAnnotationDto.abbr`.
+abstract interface class ConstellationArtSource {
+  /// The illustration of [abbr] as encoded image bytes (decode with
+  /// `ui.instantiateImageCodec`), or null when there is none for it.
+  Future<Uint8List?> load(String abbr);
+}
+
+/// Illustration sets the plugin provides, one pack file each. **Neither is bundled**: declare
+/// a set's pack in your app's `pubspec.yaml` to ship it; [load] returns null otherwise. Each
+/// set's NOTICE and `dataAttributions()` give its author and license.
+enum ConstellationArtSet implements ConstellationArtSource {
+  /// Painted, CC BY-SA 4.0: declare
+  /// `packages/unisolver_flutter/optional/unisolver_art_western_new.bin`.
   westernNew(
-    'packages/unisolver_flutter/assets/art/western_new',
-    packed: false,
+    'packages/unisolver_flutter/optional/unisolver_art_western_new.bin',
   ),
 
-  /// Low-poly, Free Art License 1.3. Optional, as one file: declare
-  /// `packages/unisolver_flutter/optional/unisolver_art_western.bin` in your app's assets.
-  western(
-    'packages/unisolver_flutter/optional/unisolver_art_western.bin',
-    packed: true,
-  );
+  /// Low-poly, Free Art License 1.3: declare
+  /// `packages/unisolver_flutter/optional/unisolver_art_western.bin`.
+  western('packages/unisolver_flutter/optional/unisolver_art_western.bin');
 
-  const ConstellationArtSet(this.asset, {required this.packed});
+  const ConstellationArtSet(this.asset);
 
-  /// Asset directory, or the asset key of the pack
+  /// Asset key of the set's pack ([parseArtPack])
   final String asset;
 
-  /// Whether the set is one art pack file ([parseArtPack]) rather than a directory
-  final bool packed;
-
-  /// The illustration of [abbr] as encoded image bytes (webp; decode with
-  /// `ui.instantiateImageCodec`), or null when the set has none for it or the app does not
-  /// ship the set.
+  @override
   Future<Uint8List?> load(String abbr) async {
     try {
-      if (!packed) {
-        final data = await rootBundle.load('$asset/$abbr.webp');
-        return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      }
       final images = await (_packs[this] ??= rootBundle
           .load(asset)
           .then(parseArtPack));
@@ -44,6 +43,55 @@ enum ConstellationArtSet {
     } on FlutterError {
       return null;
     }
+  }
+}
+
+/// Illustrations the app keeps on disk, for example unpacked from its own resource archive:
+/// a Stellarium sky culture directory (an `index.json` whose constellations give their `iau`
+/// abbreviation and `image.file`), or a directory of images named by IAU abbreviation
+/// (`Ori.webp`, `Ori.png`, `Ori.jpg`). The layer places the drawings of Stellarium's western
+/// sky cultures, whose anchors are in 0–1 image coordinates, so any resolution fits; other
+/// drawings would not line up with their stars. Throws [FormatException] when `index.json`
+/// is not JSON.
+class ConstellationArtFiles implements ConstellationArtSource {
+  ConstellationArtFiles(this.directory);
+
+  /// The sky culture's directory, or the directory of images named by abbreviation
+  final String directory;
+
+  static const _extensions = ['webp', 'png', 'jpg'];
+
+  /// `index.json`'s image files by lower-case abbreviation (sky cultures spell some
+  /// abbreviations differently, as `Cvn` for `CVn`); null without an index
+  late final Future<Map<String, String>?> _index = _readIndex();
+
+  Future<Map<String, String>?> _readIndex() async {
+    final f = File('$directory/index.json');
+    if (!await f.exists()) return null;
+    final json = jsonDecode(await f.readAsString());
+    final list = json is Map ? json['constellations'] : null;
+    return {
+      for (final c in list is List ? list : const [])
+        if (c is Map &&
+            c['iau'] is String &&
+            c['image'] is Map &&
+            c['image']['file'] is String)
+          (c['iau'] as String).toLowerCase(): c['image']['file'] as String,
+    };
+  }
+
+  @override
+  Future<Uint8List?> load(String abbr) async {
+    // With an index, the index alone decides
+    final index = await _index;
+    final names = index == null
+        ? [for (final e in _extensions) '$abbr.$e']
+        : [?index[abbr.toLowerCase()]];
+    for (final name in names) {
+      final f = File('$directory/$name');
+      if (await f.exists()) return f.readAsBytes();
+    }
+    return null;
   }
 }
 

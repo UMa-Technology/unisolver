@@ -47,8 +47,8 @@ pub struct ImageMeta {
     /// Observation time, Unix ms UTC, mid-exposure when the exposure is known. Only when the
     /// header pins the zone: FITS/XISF `DATE-AVG`, or `DATE-OBS` (UTC by definition) plus half
     /// the exposure; EXIF DateTimeOriginal with OffsetTimeOriginal, or with a GPS time that
-    /// fixes the zone. File entries hand it to the solve (aberration) and report it in the
-    /// outcome, for the solar-system layer.
+    /// fixes the zone. File entries report it in the outcome, for the solar-system layer and
+    /// the horizontal grid.
     pub observation_unix_ms: Option<i64>,
     /// Where the photo was taken, from EXIF GPS. Never used by the solve; file entries report
     /// it in the outcome for the annotator (the moon's parallax, satellites)
@@ -99,10 +99,10 @@ impl ImageMeta {
         };
     }
 
-    /// The header's observation time fills in when the caller gave neither a time nor an
-    /// observer velocity (what the caller passes always wins). File entries call this.
+    /// The header's observation time fills in when the caller gave none (what the caller
+    /// passes always wins). File entries call this.
     pub fn apply_time(&self, opts: &mut crate::SolveOptions) {
-        if opts.observation_unix_ms.is_none() && opts.observer_velocity_km_s.is_none() {
+        if opts.observation_unix_ms.is_none() {
             opts.observation_unix_ms = self.observation_unix_ms;
         }
     }

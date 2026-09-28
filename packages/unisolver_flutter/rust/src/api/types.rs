@@ -273,6 +273,8 @@ pub struct SolveOptionsDto {
     pub thorough: bool,
     pub match_threshold: f64,
     pub timeout_ms: Option<u64>,
+    /// Observation time (Unix ms), reported back as `observationUnixMs` for the solar-system
+    /// layer; it does not change the solution
     pub observation_unix_ms: Option<i64>,
     /// Ladders only: EXIF FocalLengthIn35mmFilm read by the app, for formats the engine does
     /// not decode (HEIC: decode with the platform and use `solveFrameAuto`). Its FOV is tried

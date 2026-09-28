@@ -1099,6 +1099,9 @@ class SolveOptionsDto {
   final bool thorough;
   final double matchThreshold;
   final BigInt? timeoutMs;
+
+  /// Observation time (Unix ms), reported back as `observationUnixMs` for the solar-system
+  /// layer; it does not change the solution
   final PlatformInt64? observationUnixMs;
 
   /// Ladders only: EXIF FocalLengthIn35mmFilm read by the app, for formats the engine does

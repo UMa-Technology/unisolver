@@ -168,9 +168,11 @@ struct SolveOptsJson {
     thorough: bool,
     match_threshold: f64,
     timeout_ms: Option<u64>,
-    /// Aberration: observation time (Unix ms)
+    /// Observation time (Unix ms), reported back for the solar-system layer; does not change
+    /// the solution
     observation_unix_ms: Option<i64>,
-    /// Advanced override: observer ICRS velocity in km/s
+    /// Advanced: observer ICRS velocity in km/s, to correct stellar aberration. The solution
+    /// then gives the physical pointing, up to 20″ from the catalog frame the annotation uses
     observer_velocity_km_s: Option<[f64; 3]>,
     /// Ladders only: EXIF FocalLengthIn35mmFilm read by the caller, for formats the engine
     /// does not decode (HEIC: decode with the platform, then use a frame entry). Its FOV is

@@ -546,3 +546,47 @@ fn unmatched_field_fails_through_the_staged_schedule() {
         "thorough appends every rung once more"
     );
 }
+
+/// The observation time never moves the solution: the WCS stays in the J2000 catalog frame,
+/// so catalog positions project onto the stars. (Feeding the time into the aberration
+/// correction put every annotation layer up to 20″ off the stars: 10 px at 2″/px.) An
+/// explicit observer velocity still asks for the physical pointing.
+#[test]
+fn observation_time_leaves_the_solution_in_the_catalog_frame() {
+    let solver = Solver::from_file(&write_test_db()).unwrap();
+    let q = synth::look_at(120.0, 40.0, 15.0);
+    let img = synth::render(
+        synth::test_db().star_catalog.stars(),
+        &q,
+        20.0,
+        1024,
+        768,
+        &synth::RenderParams::default(),
+        5,
+    );
+    let frame = frame_from(img, 1024, 768);
+    let solve = |opts: SolveOptions| solver.solve(&frame, &opts).unwrap();
+    let arcsec = |a: &SolvedGeometry, b: &SolvedGeometry| {
+        let (a0, a1) = (a.ra_deg.to_radians(), a.dec_deg.to_radians());
+        let (b0, b1) = (b.ra_deg.to_radians(), b.dec_deg.to_radians());
+        let h =
+            ((b1 - a1) / 2.0).sin().powi(2) + a1.cos() * b1.cos() * ((b0 - a0) / 2.0).sin().powi(2);
+        (2.0 * h.sqrt().asin()).to_degrees() * 3600.0
+    };
+    let plain = solve(SolveOptions::new(20.0)).solution.expect("solution");
+
+    let mut timed = SolveOptions::new(20.0);
+    timed.observation_unix_ms = Some(1_788_614_467_378);
+    let out = solve(timed);
+    assert_eq!(out.observation_unix_ms, Some(1_788_614_467_378), "reported");
+    let t = out.solution.expect("solution");
+    assert!(arcsec(&plain, &t) < 0.01, "{}″", arcsec(&plain, &t));
+    assert!((plain.roll_deg - t.roll_deg).abs() < 1e-6);
+
+    // 30 km/s toward RA 90°: 48.5° from the boresight, so about 20.6″ × sin 48.5° = 15.4″
+    let mut moving = SolveOptions::new(20.0);
+    moving.observer_velocity_km_s = Some([0.0, 30.0, 0.0]);
+    let m = solve(moving).solution.expect("solution");
+    let shift = arcsec(&plain, &m);
+    assert!(shift > 12.0 && shift < 19.0, "{shift}″");
+}

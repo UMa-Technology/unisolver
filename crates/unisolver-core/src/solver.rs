@@ -113,9 +113,14 @@ pub struct SolveOptions {
     pub thorough: bool,
     pub match_threshold: f64,
     pub timeout_ms: Option<u64>,
-    /// Aberration: observation time (Unix ms). Camera frames: system clock; photos: EXIF.
+    /// Observation time (Unix ms), reported back on the outcome for the solar-system layer
+    /// and the horizontal grid. It does not change the solution. Camera frames: system clock;
+    /// photos: EXIF.
     pub observation_unix_ms: Option<i64>,
-    /// Advanced override: observer ICRS velocity in km/s; wins over the time above.
+    /// Advanced: observer ICRS velocity in km/s, to correct stellar aberration. The solution
+    /// then gives the camera's physical pointing, up to 20″ from the J2000 catalog frame, and
+    /// catalog positions projected through its WCS (annotation, grids, transforms) miss the
+    /// stars by as much. Leave it unset for annotation and mount sync.
     pub observer_velocity_km_s: Option<[f64; 3]>,
     /// Ladders only: a 35 mm-equivalent focal length from metadata the caller read itself
     /// (EXIF through the platform, for HEIC and other formats the engine does not decode).
@@ -214,7 +219,8 @@ pub(crate) fn build_solve_config_with(
             .map(|a| numeris::Quaternion::new(a[0], a[1], a[2], a[3])),
         hint_uncertainty_rad: opts.hint_uncertainty_deg.to_radians(),
         strict_hint: opts.strict_hint,
-        observer_velocity_km_s: crate::aberration::observer_velocity(opts),
+        // Only on request: the time alone would move the WCS off the catalog frame
+        observer_velocity_km_s: opts.observer_velocity_km_s,
         // Upstream 0.13 builds patterns from the brightest 24 centroids by default (tuned
         // for clean tracker frames). On phone frames the brightest often include hot
         // pixels, light-pollution blobs and trailed stars, pushing the true pattern out of

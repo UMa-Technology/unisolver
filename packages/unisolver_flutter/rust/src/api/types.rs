@@ -566,6 +566,10 @@ pub struct AnnotateOptionsDto {
     /// IAU constellation boundaries (`AnnotationsDto.boundaries`); needs the constellation pack
     #[frb(default = false)]
     pub constellation_boundaries: bool,
+    /// Mythology illustrations on the figures (`ConstellationAnnotationDto.art`); needs
+    /// `includeConstellations`. Draw them with `ConstellationArtSet` images.
+    #[frb(default = false)]
+    pub constellation_art: bool,
     /// Equatorial grid (`AnnotationsDto.grid`, J2000 right ascension and declination)
     #[frb(default = false)]
     pub equatorial_grid: bool,
@@ -622,6 +626,7 @@ impl AnnotateOptionsDto {
             language: "en".to_string(),
             include_constellations: false,
             constellation_boundaries: false,
+            constellation_art: false,
             equatorial_grid: false,
             horizontal_grid: false,
             grid_spacing_px: None,
@@ -647,6 +652,7 @@ impl From<AnnotateOptionsDto> for core::AnnotateOptions {
             language: d.language,
             include_constellations: d.include_constellations,
             constellation_boundaries: d.constellation_boundaries,
+            constellation_art: d.constellation_art,
             equatorial_grid: d.equatorial_grid,
             horizontal_grid: d.horizontal_grid,
             grid_spacing_px: d.grid_spacing_px,
@@ -759,6 +765,18 @@ pub struct ConstellationAnnotationDto {
     pub label_y: Option<f64>,
     /// Figure polylines in pixels, interleaved x, y. They may run past the frame edge.
     pub lines: Vec<Vec<f64>>,
+    /// Illustration mesh (`constellationArt`); null without art
+    pub art: Option<ConstellationArtDto>,
+}
+
+/// A constellation's illustration on the image: `cols × rows` vertices over the whole image,
+/// row-major, row r and column c at image position (c / (cols − 1), r / (rows − 1)) of the
+/// width and height (top-left origin). `points` holds interleaved pixel x, y; NaN, NaN where
+/// the lens model cannot place a vertex (skip triangles that use it).
+pub struct ConstellationArtDto {
+    pub cols: u32,
+    pub rows: u32,
+    pub points: Vec<f64>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -952,6 +970,15 @@ impl From<core::Annotations> for AnnotationsDto {
                         .into_iter()
                         .map(|l| l.into_iter().flatten().collect())
                         .collect(),
+                    art: c.art.map(|m| ConstellationArtDto {
+                        cols: m.cols as u32,
+                        rows: m.rows as u32,
+                        points: m
+                            .points
+                            .into_iter()
+                            .flat_map(|p| p.unwrap_or([f64::NAN, f64::NAN]))
+                            .collect(),
+                    }),
                 })
                 .collect(),
             boundaries: a

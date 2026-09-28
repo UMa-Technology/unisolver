@@ -377,8 +377,11 @@ mod tests {
         let g = out.solution.unwrap();
         assert!((g.ra_deg - 120.0).abs() < 0.1 && (g.dec_deg - 40.0).abs() < 0.1);
         // annotate round-trips through WcsDto
+        let wcs: core::Wcs = g.wcs.try_into().unwrap();
         let ann = s.annotator(None, None, None).unwrap();
-        let a = ann.annotate(g.wcs, AnnotateOptionsDto::defaults()).unwrap();
+        let a = ann
+            .annotate(wcs.clone().into(), AnnotateOptionsDto::defaults())
+            .unwrap();
         assert!(a.layers.catalog_stars && a.stars.len() > 5);
         // The frame centre's constellation, from the bundled pack; none without it
         assert!(ann
@@ -396,6 +399,18 @@ mod tests {
             .expect("pack loaded");
         assert_eq!((c.abbr.as_str(), c.name.as_str()), ("Lyn", "Lynx"));
         assert!(ann.constellation_at(f64::NAN, 0.0, "en".into()).is_err());
+        // Constellation art comes back as a mesh with NaN for unplaced vertices
+        let mut opts = AnnotateOptionsDto::defaults();
+        opts.include_constellations = true;
+        opts.constellation_art = true;
+        let a = ann.annotate(wcs.into(), opts).unwrap();
+        let art = a
+            .constellations
+            .iter()
+            .find_map(|c| c.art.as_ref())
+            .expect("a constellation with art in a 20° field at (120°, +40°)");
+        assert_eq!((art.cols, art.rows, art.points.len()), (16, 16, 512));
+        assert!(art.points.iter().any(|v| v.is_finite()));
     }
 
     /// The pool handle along the path Dart takes: open_dir → tiers → solve a frame → annotator from the tier that solved it.

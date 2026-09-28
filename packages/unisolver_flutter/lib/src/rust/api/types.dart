@@ -50,6 +50,10 @@ class AnnotateOptionsDto {
   /// IAU constellation boundaries (`AnnotationsDto.boundaries`); needs the constellation pack
   final bool constellationBoundaries;
 
+  /// Mythology illustrations on the figures (`ConstellationAnnotationDto.art`); needs
+  /// `includeConstellations`. Draw them with `ConstellationArtSet` images.
+  final bool constellationArt;
+
   /// Equatorial grid (`AnnotationsDto.grid`, J2000 right ascension and declination)
   final bool equatorialGrid;
 
@@ -80,6 +84,7 @@ class AnnotateOptionsDto {
     required this.language,
     this.includeConstellations = false,
     this.constellationBoundaries = false,
+    this.constellationArt = false,
     this.equatorialGrid = false,
     this.horizontalGrid = false,
     this.gridSpacingPx,
@@ -105,6 +110,7 @@ class AnnotateOptionsDto {
       language.hashCode ^
       includeConstellations.hashCode ^
       constellationBoundaries.hashCode ^
+      constellationArt.hashCode ^
       equatorialGrid.hashCode ^
       horizontalGrid.hashCode ^
       gridSpacingPx.hashCode ^
@@ -129,6 +135,7 @@ class AnnotateOptionsDto {
           language == other.language &&
           includeConstellations == other.includeConstellations &&
           constellationBoundaries == other.constellationBoundaries &&
+          constellationArt == other.constellationArt &&
           equatorialGrid == other.equatorialGrid &&
           horizontalGrid == other.horizontalGrid &&
           gridSpacingPx == other.gridSpacingPx &&
@@ -336,12 +343,16 @@ class ConstellationAnnotationDto {
   /// Figure polylines in pixels, interleaved x, y. They may run past the frame edge.
   final List<Float64List> lines;
 
+  /// Illustration mesh (`constellationArt`); null without art
+  final ConstellationArtDto? art;
+
   const ConstellationAnnotationDto({
     required this.abbr,
     required this.name,
     this.labelX,
     this.labelY,
     required this.lines,
+    this.art,
   });
 
   @override
@@ -350,7 +361,8 @@ class ConstellationAnnotationDto {
       name.hashCode ^
       labelX.hashCode ^
       labelY.hashCode ^
-      lines.hashCode;
+      lines.hashCode ^
+      art.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -361,7 +373,36 @@ class ConstellationAnnotationDto {
           name == other.name &&
           labelX == other.labelX &&
           labelY == other.labelY &&
-          lines == other.lines;
+          lines == other.lines &&
+          art == other.art;
+}
+
+/// A constellation's illustration on the image: `cols × rows` vertices over the whole image,
+/// row-major, row r and column c at image position (c / (cols − 1), r / (rows − 1)) of the
+/// width and height (top-left origin). `points` holds interleaved pixel x, y; NaN, NaN where
+/// the lens model cannot place a vertex (skip triangles that use it).
+class ConstellationArtDto {
+  final int cols;
+  final int rows;
+  final Float64List points;
+
+  const ConstellationArtDto({
+    required this.cols,
+    required this.rows,
+    required this.points,
+  });
+
+  @override
+  int get hashCode => cols.hashCode ^ rows.hashCode ^ points.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConstellationArtDto &&
+          runtimeType == other.runtimeType &&
+          cols == other.cols &&
+          rows == other.rows &&
+          points == other.points;
 }
 
 /// The constellation a position is in (`UniAnnotator.constellationAt`).

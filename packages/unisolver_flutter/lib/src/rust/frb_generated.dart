@@ -1644,8 +1644,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnnotateOptionsDto dco_decode_annotate_options_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return AnnotateOptionsDto(
       starMaxMag: dco_decode_opt_box_autoadd_f_32(arr[0]),
       maxStars: dco_decode_u_32(arr[1]),
@@ -1661,10 +1661,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       language: dco_decode_String(arr[11]),
       includeConstellations: dco_decode_bool(arr[12]),
       constellationBoundaries: dco_decode_bool(arr[13]),
-      equatorialGrid: dco_decode_bool(arr[14]),
-      horizontalGrid: dco_decode_bool(arr[15]),
-      gridSpacingPx: dco_decode_opt_box_autoadd_f_64(arr[16]),
-      viewport: dco_decode_opt_box_autoadd_viewport_dto(arr[17]),
+      constellationArt: dco_decode_bool(arr[14]),
+      equatorialGrid: dco_decode_bool(arr[15]),
+      horizontalGrid: dco_decode_bool(arr[16]),
+      gridSpacingPx: dco_decode_opt_box_autoadd_f_64(arr[17]),
+      viewport: dco_decode_opt_box_autoadd_viewport_dto(arr[18]),
     );
   }
 
@@ -1721,6 +1722,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CameraParamsDto dco_decode_box_autoadd_camera_params_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_camera_params_dto(raw);
+  }
+
+  @protected
+  ConstellationArtDto dco_decode_box_autoadd_constellation_art_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_constellation_art_dto(raw);
   }
 
   @protected
@@ -1867,14 +1876,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return ConstellationAnnotationDto(
       abbr: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
       labelX: dco_decode_opt_box_autoadd_f_64(arr[2]),
       labelY: dco_decode_opt_box_autoadd_f_64(arr[3]),
       lines: dco_decode_list_list_prim_f_64_strict(arr[4]),
+      art: dco_decode_opt_box_autoadd_constellation_art_dto(arr[5]),
+    );
+  }
+
+  @protected
+  ConstellationArtDto dco_decode_constellation_art_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ConstellationArtDto(
+      cols: dco_decode_u_32(arr[0]),
+      rows: dco_decode_u_32(arr[1]),
+      points: dco_decode_list_prim_f_64_strict(arr[2]),
     );
   }
 
@@ -2418,6 +2441,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ConstellationArtDto? dco_decode_opt_box_autoadd_constellation_art_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_constellation_art_dto(raw);
+  }
+
+  @protected
   ConstellationNameDto? dco_decode_opt_box_autoadd_constellation_name_dto(
     dynamic raw,
   ) {
@@ -2948,6 +2981,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_language = sse_decode_String(deserializer);
     var var_includeConstellations = sse_decode_bool(deserializer);
     var var_constellationBoundaries = sse_decode_bool(deserializer);
+    var var_constellationArt = sse_decode_bool(deserializer);
     var var_equatorialGrid = sse_decode_bool(deserializer);
     var var_horizontalGrid = sse_decode_bool(deserializer);
     var var_gridSpacingPx = sse_decode_opt_box_autoadd_f_64(deserializer);
@@ -2967,6 +3001,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       language: var_language,
       includeConstellations: var_includeConstellations,
       constellationBoundaries: var_constellationBoundaries,
+      constellationArt: var_constellationArt,
       equatorialGrid: var_equatorialGrid,
       horizontalGrid: var_horizontalGrid,
       gridSpacingPx: var_gridSpacingPx,
@@ -3041,6 +3076,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_camera_params_dto(deserializer));
+  }
+
+  @protected
+  ConstellationArtDto sse_decode_box_autoadd_constellation_art_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_constellation_art_dto(deserializer));
   }
 
   @protected
@@ -3212,12 +3255,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_labelX = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_labelY = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_lines = sse_decode_list_list_prim_f_64_strict(deserializer);
+    var var_art = sse_decode_opt_box_autoadd_constellation_art_dto(
+      deserializer,
+    );
     return ConstellationAnnotationDto(
       abbr: var_abbr,
       name: var_name,
       labelX: var_labelX,
       labelY: var_labelY,
       lines: var_lines,
+      art: var_art,
+    );
+  }
+
+  @protected
+  ConstellationArtDto sse_decode_constellation_art_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_cols = sse_decode_u_32(deserializer);
+    var var_rows = sse_decode_u_32(deserializer);
+    var var_points = sse_decode_list_prim_f_64_strict(deserializer);
+    return ConstellationArtDto(
+      cols: var_cols,
+      rows: var_rows,
+      points: var_points,
     );
   }
 
@@ -3965,6 +4027,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ConstellationArtDto? sse_decode_opt_box_autoadd_constellation_art_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_constellation_art_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ConstellationNameDto? sse_decode_opt_box_autoadd_constellation_name_dto(
     SseDeserializer deserializer,
   ) {
@@ -4627,6 +4702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.language, serializer);
     sse_encode_bool(self.includeConstellations, serializer);
     sse_encode_bool(self.constellationBoundaries, serializer);
+    sse_encode_bool(self.constellationArt, serializer);
     sse_encode_bool(self.equatorialGrid, serializer);
     sse_encode_bool(self.horizontalGrid, serializer);
     sse_encode_opt_box_autoadd_f_64(self.gridSpacingPx, serializer);
@@ -4694,6 +4770,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_camera_params_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_constellation_art_dto(
+    ConstellationArtDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_constellation_art_dto(self, serializer);
   }
 
   @protected
@@ -4860,6 +4945,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.labelX, serializer);
     sse_encode_opt_box_autoadd_f_64(self.labelY, serializer);
     sse_encode_list_list_prim_f_64_strict(self.lines, serializer);
+    sse_encode_opt_box_autoadd_constellation_art_dto(self.art, serializer);
+  }
+
+  @protected
+  void sse_encode_constellation_art_dto(
+    ConstellationArtDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.cols, serializer);
+    sse_encode_u_32(self.rows, serializer);
+    sse_encode_list_prim_f_64_strict(self.points, serializer);
   }
 
   @protected
@@ -5494,6 +5591,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_camera_params_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_constellation_art_dto(
+    ConstellationArtDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_constellation_art_dto(self, serializer);
     }
   }
 

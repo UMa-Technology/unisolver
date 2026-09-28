@@ -197,6 +197,15 @@ label to about 3 px when a 1920 px photo fits a phone. The example pairs an
 `TransformationController` (`solve_page.dart`, `overlay_painter.dart`); opaque line colors
 render more evenly than translucent ones.
 
+**Keep labels apart.** In a wide field of the Milky Way, star and deep-sky names pile up.
+Whether two labels collide depends on their size on screen (font, language, zoom), which
+only the app knows, so placing them is the app's job. The example (`label_layout.dart`) places
+them greedily in screen space, in priority order: grid readings, the sun, moon and planets,
+constellation names, named stars from the brightest, deep-sky objects from the brightest. Each
+label tries below, above, right and left of its marker, and prefers spots on screen that cover
+no other ring. A label with no free spot is left out until zooming in makes room. It runs on
+every repaint.
+
 **Showing FITS and XISF.** Flutter cannot decode them, and their linear data would look
 black anyway. `imagePreview(path:, maxSide:)` returns an auto-stretched greyscale preview as
 RGBA (the engine box-averages the frame down by a whole factor so neither side exceeds
@@ -257,8 +266,16 @@ frame edge (let the canvas clip them) and break where the sky leaves the camera'
 Both options are off by default. Without the pack the layers report themselves unavailable
 in `layers.reasons`.
 
+**Which constellation a point is in.** `annotator.constellationAt(raDeg:, decDeg:, language:)`
+returns the constellation containing a J2000 position as a `ConstellationNameDto` (IAU
+abbreviation and name, localized as above): pass the solve's `raDeg` / `decDeg` for the frame
+centre, or a tapped point converted with `wcsPixelsToSky`. It is a lookup, not a layer, and
+takes a few microseconds. The position is looked up in the boundaries' own frame (B1875), so
+the answer agrees with the boundaries drawn. It needs the constellation pack (null without
+it). C: `unisolver_annotator_constellation_at_json`; Rust: `Annotator::constellation_at`.
+
 **Build the annotator once and keep it.** Construction reads and parses the DSO catalog
-(771 KB), the names pack (215 KB) and, when given, the constellation pack (195 KB):
+(771 KB), the names pack (215 KB) and, when given, the constellation pack (207 KB):
 
 | Operation | Measured (Apple M2 Max, 73.2° phone frame, 734 annotated objects, 20 outlined) |
 |---|---|
@@ -443,6 +460,7 @@ databases are not attached (section 4).
 | `unisolver_annotator_open(solver, dso, names, &err)` | Build an annotator (both paths may be NULL); **build once and keep it** |
 | `unisolver_pool_annotator_open(pool, db_name, dso, names, &err)` | The same from one tier of a pool (`db_name` = the solve JSON's `db`) |
 | `unisolver_annotator_load_constellations(annotator, path, &err)` | Load the constellation pack (figures and IAU boundaries) → true when loaded |
+| `unisolver_annotator_constellation_at_json(annotator, ra, dec, language, &err)` | The constellation containing a J2000 position → `{"abbr","name"}`, or `null` without the pack |
 | `unisolver_annotate_json(annotator, wcs_json, opts_json, &err)` | Annotate a frame from the solve JSON's `wcs` → annotation JSON |
 | `unisolver_wcs_sky_to_pixels(wcs_json, in, n, out, &err)` | Batch `ra, dec` → `x, y` through the solve's lens model (NaN where it cannot place a point) |
 | `unisolver_wcs_pixels_to_sky(wcs_json, in, n, out, &err)` | Batch `x, y` → `ra, dec` |
@@ -605,7 +623,7 @@ runtime, so only these count (**databases excluded**, see the next table):
 | Windows x64 / arm64 DLL | not measured | needs a Windows host; expected to be similar |
 | Dart AOT | ~150 KB | `unisolver_flutter` + `flutter_rust_bridge` |
 | `unisolver_dso.bin` (bundled asset) | 753 KiB (~457 KiB compressed in the APK) | DSO annotation catalog with outlines; omit it if you do not annotate |
-| `unisolver_constellations.bin` (bundled asset) | 195 KiB (~169 KiB compressed) | constellation figures and IAU boundaries |
+| `unisolver_constellations.bin` (bundled asset) | 207 KiB (~171 KiB compressed) | constellation figures, IAU boundaries and the lookup table |
 
 **About 3.3 MiB installed / 3.0 MiB download per architecture** (Android arm64, without
 databases). Shipping both arm64-v8a and x86_64 doubles the native part (x86_64 is only for

@@ -27,6 +27,9 @@
    (C `unisolver_annotator_load_constellations`, Rust `Annotator::with_constellations`). The
    names pack now names the constellations in its 13 languages, and `dataAttributions()`
    lists the new source. `annotator()` gains the optional `constellationsPath` parameter.
+   `UniAnnotator.constellationAt()` (C `unisolver_annotator_constellation_at_json`, Rust
+   `Annotator::constellation_at`) names the constellation a position is in, such as the frame
+   centre or a tapped point; the example shows the centre's.
 6. **Coordinate grids, and annotation that follows the zoom.** Annotation can draw an
    equatorial grid (J2000) and a horizontal grid (apparent altitude and azimuth with the
    horizon, refraction included) as pixel polylines with chart-style labels anchored on the
@@ -37,7 +40,8 @@
    `unisolver_wcs_pixels_to_sky`, Rust `Wcs::sky_to_pixels` / `pixels_to_sky`) convert batches
    through the solve's lens model. The example now draws its overlay in screen space over a
    pinch-zoomable photo, keeps the detection rings behind a toggle and no longer rings a named
-   star twice.
+   star twice. Its labels are placed by priority so they never overlap; more appear as you
+   zoom in.
 7. **Previews for FITS and XISF.** `imagePreview(path:, maxSide:)` (Rust
    `imageio::preview` / `load_preview`) turns any supported image into an auto-stretched 8-bit
    preview no larger than `maxSide`, so apps can show astronomical frames that are otherwise

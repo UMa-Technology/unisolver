@@ -138,6 +138,8 @@ struct SolutionJson {
     wcs: core::Wcs,
     /// The lens was fitted to this frame's stars (`fit_lens`): `wcs.camera` carries it
     lens_fitted: bool,
+    /// The scale was re-measured from the brightest stars (`refine_scale`)
+    scale_refined: bool,
 }
 
 /// Solve options as JSON. **Every field is optional** (`{}` or NULL keeps the defaults).
@@ -184,6 +186,10 @@ struct SolveOptsJson {
     /// Fit the lens to the stars of a wide frame (≥ 20°, ≥ 30 matches) and keep it when it
     /// fits better (`solution.lens_fitted`); never with `camera`. Default true
     fit_lens: bool,
+    /// Re-measure the scale of a lost-in-space solve from its brightest stars and keep it when
+    /// they land closer to catalog stars (`solution.scale_refined`); never with `camera` or an
+    /// attitude hint. Default true
+    refine_scale: bool,
 }
 
 impl Default for SolveOptsJson {
@@ -208,6 +214,7 @@ impl Default for SolveOptsJson {
             observer_velocity_km_s: None,
             focal_length_35mm: None,
             fit_lens: true,
+            refine_scale: true,
         }
     }
 }
@@ -262,6 +269,7 @@ impl SolveOptsJson {
         o.observer_velocity_km_s = self.observer_velocity_km_s;
         o.focal_length_35mm = self.focal_length_35mm;
         o.fit_lens = self.fit_lens;
+        o.refine_scale = self.refine_scale;
         Ok((o, known))
     }
 }
@@ -301,6 +309,7 @@ fn build_solve_json(
             scale_arcsec_per_px: g.wcs.scale_arcsec_per_px(),
             wcs: g.wcs,
             lens_fitted: g.lens_fitted,
+            scale_refined: g.scale_refined,
         }),
     }
 }
@@ -2307,7 +2316,8 @@ mod tests {
     }
 
     /// The lens fit through the C surface: on by default for a wide, bent frame (the fitted
-    /// camera comes back in `wcs`), off with `"fit_lens": false`.
+    /// camera comes back in `wcs`), off with `"fit_lens": false`; the scale refinement is
+    /// reported and switched off the same way.
     #[test]
     fn lens_fit_via_c_surface() {
         let mut err: *mut c_char = std::ptr::null_mut();
@@ -2354,6 +2364,9 @@ mod tests {
         assert!(on["solution"]["wcs"]["camera"]["distortion"]["Radial"]["k1"].is_number());
         let off = solve(r#"{"fov_deg":35.0,"fit_lens":false}"#);
         assert_eq!(off["solution"]["lens_fitted"], false);
+        assert!(on["solution"]["scale_refined"].is_boolean());
+        let pattern_scale = solve(r#"{"fov_deg":35.0,"refine_scale":false}"#);
+        assert_eq!(pattern_scale["solution"]["scale_refined"], false);
         assert!(
             on["solution"]["rmse_arcsec"].as_f64().unwrap()
                 < off["solution"]["rmse_arcsec"].as_f64().unwrap()

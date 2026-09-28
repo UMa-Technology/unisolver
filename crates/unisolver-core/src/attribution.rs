@@ -8,7 +8,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct DataAttribution {
     /// Stable identifier (`gaia`, `hipparcos`, `iau_wgsn`, `openngc`, `stellarium`,
-    /// `iau_constellations`)
+    /// `iau_constellations`, `constellation_art`, `constellation_art_western`)
     pub id: &'static str,
     pub name: &'static str,
     /// What in the engine derives from it
@@ -25,7 +25,7 @@ pub fn data_attributions() -> &'static [DataAttribution] {
     &ATTRIBUTIONS
 }
 
-static ATTRIBUTIONS: [DataAttribution; 6] = [
+static ATTRIBUTIONS: [DataAttribution; 8] = [
     DataAttribution {
         id: "gaia",
         name: "ESA Gaia DR3",
@@ -79,6 +79,26 @@ static ATTRIBUTIONS: [DataAttribution; 6] = [
                Pierre Barbier, via Stellarium's modern (IAU) sky culture (CC BY-SA 4.0).",
         url: "https://www.iau.org/public/themes/constellations/",
     },
+    DataAttribution {
+        id: "constellation_art",
+        name: "Constellation illustrations (western_new)",
+        applies_to: "constellation art, bundled set",
+        license: "CC-BY-SA-4.0",
+        text: "Constellation illustrations by UMa Technology (CC BY-SA 4.0), placed with the \
+               anchor stars of Stellarium's western sky culture (CC BY-SA).",
+        url: "https://github.com/UMa-Technology/unisolver",
+    },
+    DataAttribution {
+        id: "constellation_art_western",
+        name: "Constellation illustrations (western)",
+        applies_to: "constellation art, optional set",
+        license: "LAL-1.3",
+        text: concat!(
+            "Constellation illustrations by 氕氘氚Star",
+            " from Stellarium's western sky culture (Free Art License 1.3)."
+        ),
+        url: "https://github.com/Stellarium/stellarium-skycultures",
+    },
 ];
 
 #[cfg(test)]
@@ -97,7 +117,9 @@ mod tests {
                 "iau_wgsn",
                 "openngc",
                 "stellarium",
-                "iau_constellations"
+                "iau_constellations",
+                "constellation_art",
+                "constellation_art_western"
             ]
         );
         for a in all {
@@ -111,5 +133,8 @@ mod tests {
         assert_eq!(gaia.license, "CC-BY-SA-3.0-IGO");
         let st = all.iter().find(|a| a.id == "stellarium").unwrap();
         assert_eq!(st.license, "GPL-2.0-or-later");
+        let art = |id: &str| all.iter().find(|a| a.id == id).unwrap().license;
+        assert_eq!(art("constellation_art"), "CC-BY-SA-4.0");
+        assert_eq!(art("constellation_art_western"), "LAL-1.3");
     }
 }

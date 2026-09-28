@@ -10,6 +10,7 @@ file scripts/ci/cjk-allowlist.txt
 literals tools/namesgen/src/main.rs
 literals crates/unisolver-core/src/ephemeris.rs
 literals crates/unisolver-core/src/dso.rs
+literals crates/unisolver-core/src/attribution.rs
 literals crates/unisolver-core/src/names_pack.rs
 literals crates/unisolver-core/tests/annotate_test.rs
 literals crates/unisolver-cabi/src/lib.rs

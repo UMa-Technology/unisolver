@@ -129,10 +129,10 @@ void main() {
         if (scoArt.points[i].isFinite) i,
     ];
     expect(placed.length, greaterThan(scoArt.cols * scoArt.rows ~/ 2));
-    final webp = await rootBundle.load(
-      ConstellationArtSet.westernNew.assetFor('Sco'),
-    );
-    expect(webp.lengthInBytes, greaterThan(10000));
+    final webp = await ConstellationArtSet.westernNew.load('Sco');
+    expect(webp!.lengthInBytes, greaterThan(10000));
+    // The optional set is not declared by the example: nothing, no error
+    expect(await ConstellationArtSet.western.load('Sco'), isNull);
 
     // A grid for a zoomed view: finer lines, labels on the view's edges; and the batch
     // transform agrees with the solution's boresight

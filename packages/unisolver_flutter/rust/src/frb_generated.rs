@@ -3044,6 +3044,7 @@ impl SseDecode for crate::api::types::SolveOptionsDto {
         let mut var_timeoutMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_observationUnixMs = <Option<i64>>::sse_decode(deserializer);
         let mut var_focalLength35Mm = <Option<f32>>::sse_decode(deserializer);
+        let mut var_fitLens = <bool>::sse_decode(deserializer);
         return crate::api::types::SolveOptionsDto {
             fov_estimate_deg: var_fovEstimateDeg,
             fov_max_error_deg: var_fovMaxErrorDeg,
@@ -3058,6 +3059,7 @@ impl SseDecode for crate::api::types::SolveOptionsDto {
             timeout_ms: var_timeoutMs,
             observation_unix_ms: var_observationUnixMs,
             focal_length_35mm: var_focalLength35Mm,
+            fit_lens: var_fitLens,
         };
     }
 }
@@ -3116,6 +3118,7 @@ impl SseDecode for crate::api::types::SolvedGeometryDto {
         let mut var_prob = <f64>::sse_decode(deserializer);
         let mut var_wcs = <crate::api::types::WcsDto>::sse_decode(deserializer);
         let mut var_matched = <Vec<crate::api::types::MatchDto>>::sse_decode(deserializer);
+        let mut var_lensFitted = <bool>::sse_decode(deserializer);
         return crate::api::types::SolvedGeometryDto {
             quat_icrs2cam_wxyz: var_quatIcrs2CamWxyz,
             ra_deg: var_raDeg,
@@ -3129,6 +3132,7 @@ impl SseDecode for crate::api::types::SolvedGeometryDto {
             prob: var_prob,
             wcs: var_wcs,
             matched: var_matched,
+            lens_fitted: var_lensFitted,
         };
     }
 }
@@ -4441,6 +4445,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::SolveOptionsDto {
             self.timeout_ms.into_into_dart().into_dart(),
             self.observation_unix_ms.into_into_dart().into_dart(),
             self.focal_length_35mm.into_into_dart().into_dart(),
+            self.fit_lens.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4522,6 +4527,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::SolvedGeometryDto {
             self.prob.into_into_dart().into_dart(),
             self.wcs.into_into_dart().into_dart(),
             self.matched.into_into_dart().into_dart(),
+            self.lens_fitted.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5748,6 +5754,7 @@ impl SseEncode for crate::api::types::SolveOptionsDto {
         <Option<u64>>::sse_encode(self.timeout_ms, serializer);
         <Option<i64>>::sse_encode(self.observation_unix_ms, serializer);
         <Option<f32>>::sse_encode(self.focal_length_35mm, serializer);
+        <bool>::sse_encode(self.fit_lens, serializer);
     }
 }
 
@@ -5798,6 +5805,7 @@ impl SseEncode for crate::api::types::SolvedGeometryDto {
         <f64>::sse_encode(self.prob, serializer);
         <crate::api::types::WcsDto>::sse_encode(self.wcs, serializer);
         <Vec<crate::api::types::MatchDto>>::sse_encode(self.matched, serializer);
+        <bool>::sse_encode(self.lens_fitted, serializer);
     }
 }
 

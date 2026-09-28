@@ -1151,6 +1151,11 @@ class SolveOptionsDto {
   /// tracking hint. Files read their own EXIF.
   final double? focalLength35Mm;
 
+  /// Wide frames only (≥ 20°, ≥ 30 matched stars): fit the focal length and one radial
+  /// distortion term to the frame's stars and keep them when they fit better
+  /// (`SolvedGeometryDto.lensFitted`), so annotations follow the lens. Never with `camera`.
+  final bool fitLens;
+
   const SolveOptionsDto({
     required this.fovEstimateDeg,
     this.fovMaxErrorDeg,
@@ -1165,6 +1170,7 @@ class SolveOptionsDto {
     this.timeoutMs,
     this.observationUnixMs,
     this.focalLength35Mm,
+    this.fitLens = true,
   });
 
   /// Defaults shared with core::SolveOptions::new (PhoneJpeg, built-in σ, 5 s timeout)
@@ -1187,7 +1193,8 @@ class SolveOptionsDto {
       matchThreshold.hashCode ^
       timeoutMs.hashCode ^
       observationUnixMs.hashCode ^
-      focalLength35Mm.hashCode;
+      focalLength35Mm.hashCode ^
+      fitLens.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1206,7 +1213,8 @@ class SolveOptionsDto {
           matchThreshold == other.matchThreshold &&
           timeoutMs == other.timeoutMs &&
           observationUnixMs == other.observationUnixMs &&
-          focalLength35Mm == other.focalLength35Mm;
+          focalLength35Mm == other.focalLength35Mm &&
+          fitLens == other.fitLens;
 }
 
 class SolveOutcomeDto {
@@ -1287,6 +1295,10 @@ class SolvedGeometryDto {
   final WcsDto wcs;
   final List<MatchDto> matched;
 
+  /// The lens was fitted to this frame's stars: `wcs.camera` carries the fitted focal length
+  /// and radial distortion
+  final bool lensFitted;
+
   const SolvedGeometryDto({
     required this.quatIcrs2CamWxyz,
     required this.raDeg,
@@ -1300,6 +1312,7 @@ class SolvedGeometryDto {
     required this.prob,
     required this.wcs,
     required this.matched,
+    required this.lensFitted,
   });
 
   @override
@@ -1315,7 +1328,8 @@ class SolvedGeometryDto {
       maxErrArcsec.hashCode ^
       prob.hashCode ^
       wcs.hashCode ^
-      matched.hashCode;
+      matched.hashCode ^
+      lensFitted.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1333,7 +1347,8 @@ class SolvedGeometryDto {
           maxErrArcsec == other.maxErrArcsec &&
           prob == other.prob &&
           wcs == other.wcs &&
-          matched == other.matched;
+          matched == other.matched &&
+          lensFitted == other.lensFitted;
 }
 
 class StarAnnotationDto {

@@ -177,6 +177,7 @@ class _SolvePageState extends State<SolvePage> {
                   '${sw.elapsedMilliseconds}ms'
                   '${out.extractionRetried ? ' (profile retried)' : ''}'
                   '${_usedCalibratedCamera ? ' (calibrated)' : ''}'
+                  '${g.lensFitted ? ' (lens fitted)' : ''}'
                   '${_solvedBy == null ? '' : '  ← $_solvedBy'}';
       });
       await _annotate();

@@ -2625,8 +2625,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SolveOptionsDto dco_decode_solve_options_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return SolveOptionsDto(
       fovEstimateDeg: dco_decode_f_32(arr[0]),
       fovMaxErrorDeg: dco_decode_opt_box_autoadd_f_32(arr[1]),
@@ -2641,6 +2641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timeoutMs: dco_decode_opt_box_autoadd_u_64(arr[10]),
       observationUnixMs: dco_decode_opt_box_autoadd_i_64(arr[11]),
       focalLength35Mm: dco_decode_opt_box_autoadd_f_32(arr[12]),
+      fitLens: dco_decode_bool(arr[13]),
     );
   }
 
@@ -2672,8 +2673,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SolvedGeometryDto dco_decode_solved_geometry_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return SolvedGeometryDto(
       quatIcrs2CamWxyz: dco_decode_f_32_array_4(arr[0]),
       raDeg: dco_decode_f_64(arr[1]),
@@ -2687,6 +2688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       prob: dco_decode_f_64(arr[9]),
       wcs: dco_decode_wcs_dto(arr[10]),
       matched: dco_decode_list_match_dto(arr[11]),
+      lensFitted: dco_decode_bool(arr[12]),
     );
   }
 
@@ -4294,6 +4296,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_timeoutMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_observationUnixMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_focalLength35Mm = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_fitLens = sse_decode_bool(deserializer);
     return SolveOptionsDto(
       fovEstimateDeg: var_fovEstimateDeg,
       fovMaxErrorDeg: var_fovMaxErrorDeg,
@@ -4308,6 +4311,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timeoutMs: var_timeoutMs,
       observationUnixMs: var_observationUnixMs,
       focalLength35Mm: var_focalLength35Mm,
+      fitLens: var_fitLens,
     );
   }
 
@@ -4360,6 +4364,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_prob = sse_decode_f_64(deserializer);
     var var_wcs = sse_decode_wcs_dto(deserializer);
     var var_matched = sse_decode_list_match_dto(deserializer);
+    var var_lensFitted = sse_decode_bool(deserializer);
     return SolvedGeometryDto(
       quatIcrs2CamWxyz: var_quatIcrs2CamWxyz,
       raDeg: var_raDeg,
@@ -4373,6 +4378,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       prob: var_prob,
       wcs: var_wcs,
       matched: var_matched,
+      lensFitted: var_lensFitted,
     );
   }
 
@@ -5841,6 +5847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_u_64(self.timeoutMs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.observationUnixMs, serializer);
     sse_encode_opt_box_autoadd_f_32(self.focalLength35Mm, serializer);
+    sse_encode_bool(self.fitLens, serializer);
   }
 
   @protected
@@ -5886,6 +5893,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.prob, serializer);
     sse_encode_wcs_dto(self.wcs, serializer);
     sse_encode_list_match_dto(self.matched, serializer);
+    sse_encode_bool(self.lensFitted, serializer);
   }
 
   @protected

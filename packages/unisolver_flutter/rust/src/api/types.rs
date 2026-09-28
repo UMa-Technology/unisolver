@@ -259,6 +259,7 @@ impl From<ExtractionProfileDto> for core::ExtractionProfile {
     }
 }
 
+#[frb]
 pub struct SolveOptionsDto {
     pub fov_estimate_deg: f32,
     pub fov_max_error_deg: Option<f32>,
@@ -281,6 +282,11 @@ pub struct SolveOptionsDto {
     /// first as a hint (±15%) and the ladder still follows; ignored with a camera or a
     /// tracking hint. Files read their own EXIF.
     pub focal_length_35mm: Option<f32>,
+    /// Wide frames only (≥ 20°, ≥ 30 matched stars): fit the focal length and one radial
+    /// distortion term to the frame's stars and keep them when they fit better
+    /// (`SolvedGeometryDto.lensFitted`), so annotations follow the lens. Never with `camera`.
+    #[frb(default = true)]
+    pub fit_lens: bool,
 }
 
 impl SolveOptionsDto {
@@ -301,6 +307,7 @@ impl SolveOptionsDto {
             timeout_ms: Some(5000),
             observation_unix_ms: None,
             focal_length_35mm: None,
+            fit_lens: true,
         }
     }
 }
@@ -321,6 +328,7 @@ impl TryFrom<SolveOptionsDto> for core::SolveOptions {
         o.timeout_ms = d.timeout_ms;
         o.observation_unix_ms = d.observation_unix_ms;
         o.focal_length_35mm = d.focal_length_35mm;
+        o.fit_lens = d.fit_lens;
         Ok(o)
     }
 }
@@ -420,6 +428,9 @@ pub struct SolvedGeometryDto {
     pub prob: f64,
     pub wcs: WcsDto,
     pub matched: Vec<MatchDto>,
+    /// The lens was fitted to this frame's stars: `wcs.camera` carries the fitted focal length
+    /// and radial distortion
+    pub lens_fitted: bool,
 }
 
 pub struct SolveOutcomeDto {
@@ -471,6 +482,7 @@ impl From<core::SolveOutcome> for SolveOutcomeDto {
                         y: m.y,
                     })
                     .collect(),
+                lens_fitted: g.lens_fitted,
             }),
             centroids: o
                 .centroids

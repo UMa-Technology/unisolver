@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
 
 class AnnotateOptionsDto {
   final double? starMaxMag;
@@ -362,6 +362,28 @@ class ConstellationAnnotationDto {
           labelX == other.labelX &&
           labelY == other.labelY &&
           lines == other.lines;
+}
+
+/// The constellation a position is in (`UniAnnotator.constellationAt`).
+class ConstellationNameDto {
+  /// IAU abbreviation (`Ori`)
+  final String abbr;
+
+  /// Name in the requested language (from the names pack), else the IAU name
+  final String name;
+
+  const ConstellationNameDto({required this.abbr, required this.name});
+
+  @override
+  int get hashCode => abbr.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConstellationNameDto &&
+          runtimeType == other.runtimeType &&
+          abbr == other.abbr &&
+          name == other.name;
 }
 
 class DbPropertiesDto {

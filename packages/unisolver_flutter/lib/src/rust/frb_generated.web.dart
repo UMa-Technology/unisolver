@@ -152,6 +152,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CameraParamsDto dco_decode_box_autoadd_camera_params_dto(dynamic raw);
 
   @protected
+  ConstellationNameDto dco_decode_box_autoadd_constellation_name_dto(
+    dynamic raw,
+  );
+
+  @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
@@ -203,6 +208,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConstellationAnnotationDto dco_decode_constellation_annotation_dto(
     dynamic raw,
   );
+
+  @protected
+  ConstellationNameDto dco_decode_constellation_name_dto(dynamic raw);
 
   @protected
   DataAttributionDto dco_decode_data_attribution_dto(dynamic raw);
@@ -376,6 +384,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CameraParamsDto? dco_decode_opt_box_autoadd_camera_params_dto(dynamic raw);
+
+  @protected
+  ConstellationNameDto? dco_decode_opt_box_autoadd_constellation_name_dto(
+    dynamic raw,
+  );
 
   @protected
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
@@ -590,6 +603,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ConstellationNameDto sse_decode_box_autoadd_constellation_name_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
@@ -647,6 +665,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConstellationAnnotationDto sse_decode_constellation_annotation_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ConstellationNameDto sse_decode_constellation_name_dto(
     SseDeserializer deserializer,
   );
 
@@ -854,6 +877,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CameraParamsDto? sse_decode_opt_box_autoadd_camera_params_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ConstellationNameDto? sse_decode_opt_box_autoadd_constellation_name_dto(
     SseDeserializer deserializer,
   );
 
@@ -1112,6 +1140,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_constellation_name_dto(
+    ConstellationNameDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -1189,6 +1223,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_constellation_annotation_dto(
     ConstellationAnnotationDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_constellation_name_dto(
+    ConstellationNameDto self,
     SseSerializer serializer,
   );
 
@@ -1450,6 +1490,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_camera_params_dto(
     CameraParamsDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_constellation_name_dto(
+    ConstellationNameDto? self,
     SseSerializer serializer,
   );
 

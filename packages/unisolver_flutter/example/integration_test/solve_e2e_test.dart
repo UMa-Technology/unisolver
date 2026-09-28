@@ -95,6 +95,14 @@ void main() {
     expect(sco.single.name, '天蝎座');
     expect(sco.single.lines, isNotEmpty);
     expect(a.boundaries.any((b) => b.between.contains('Sco')), isTrue);
+    // Framed on Scorpius, but the centre (16h40m, −19°) is just inside Ophiuchus
+    final centre = ann.constellationAt(
+      raDeg: g.raDeg,
+      decDeg: g.decDeg,
+      language: 'zh_cn',
+    );
+    expect(centre?.abbr, 'Oph');
+    expect(centre?.name, '蛇夫座');
 
     // A grid for a zoomed view: finer lines, labels on the view's edges; and the batch
     // transform agrees with the solution's boresight

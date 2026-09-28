@@ -43,6 +43,9 @@ class _SolvePageState extends State<SolvePage> {
   SolveOutcomeDto? _outcome;
   AnnotationsDto? _annotations;
 
+  /// The constellation the frame centre is in (null without the constellation pack)
+  ConstellationNameDto? _centre;
+
   /// Cross-tier attempts for display ("46°@unisolver_10_80→Ok")
   List<String> _attempts = const [];
   String? _solvedBy;
@@ -107,6 +110,7 @@ class _SolvePageState extends State<SolvePage> {
       _status = 'Solving…';
       _outcome = null;
       _annotations = null;
+      _centre = null;
       _attempts = const [];
     });
     await _loadDecoded(imgFile);
@@ -261,7 +265,18 @@ class _SolvePageState extends State<SolvePage> {
         viewport: _viewport(),
       ),
     );
-    if (seq == _annotateSeq && mounted) setState(() => _annotations = ann);
+    // A point lookup, not a layer: which constellation the centre is in, in the same language
+    final centre = annotator.constellationAt(
+      raDeg: g.raDeg,
+      decDeg: g.decDeg,
+      language: widget.language,
+    );
+    if (seq == _annotateSeq && mounted) {
+      setState(() {
+        _annotations = ann;
+        _centre = centre;
+      });
+    }
   }
 
   Future<void> _solveSample() async {
@@ -369,7 +384,12 @@ class _SolvePageState extends State<SolvePage> {
         if (_status != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Text(_status!, style: const TextStyle(fontSize: 13)),
+            child: Text(
+              _centre == null
+                  ? _status!
+                  : '$_status\nCentre in ${_centre!.name} (${_centre!.abbr})',
+              style: const TextStyle(fontSize: 13),
+            ),
           ),
         if (_attempts.isNotEmpty)
           Padding(

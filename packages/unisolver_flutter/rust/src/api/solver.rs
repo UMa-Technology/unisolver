@@ -276,6 +276,27 @@ impl UniAnnotator {
         let w: core::Wcs = wcs.try_into()?;
         Ok(self.inner.annotate(&w, &opts.into()).into())
     }
+
+    /// The constellation containing J2000 `(raDeg, decDeg)`, named in `language` (codes as
+    /// `AnnotateOptionsDto.language`). For the frame centre pass the solve's `raDeg` /
+    /// `decDeg`; for a point on the image, convert it with `wcsPixelsToSky` first. Null
+    /// without a constellation pack (`annotate` reports why in `layers.reasons`).
+    #[frb(sync)]
+    pub fn constellation_at(
+        &self,
+        ra_deg: f64,
+        dec_deg: f64,
+        language: String,
+    ) -> Result<Option<ConstellationNameDto>> {
+        anyhow::ensure!(
+            ra_deg.is_finite() && dec_deg.is_finite(),
+            "position ({ra_deg}, {dec_deg}) is not finite"
+        );
+        Ok(self
+            .inner
+            .constellation_at(ra_deg, dec_deg, &language)
+            .map(Into::into))
+    }
 }
 
 #[frb(opaque)]
@@ -359,6 +380,22 @@ mod tests {
         let ann = s.annotator(None, None, None).unwrap();
         let a = ann.annotate(g.wcs, AnnotateOptionsDto::defaults()).unwrap();
         assert!(a.layers.catalog_stars && a.stars.len() > 5);
+        // The frame centre's constellation, from the bundled pack; none without it
+        assert!(ann
+            .constellation_at(g.ra_deg, g.dec_deg, "en".into())
+            .unwrap()
+            .is_none());
+        let pack = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/unisolver_constellations.bin"
+        );
+        let ann = s.annotator(None, None, Some(pack.into())).unwrap();
+        let c = ann
+            .constellation_at(g.ra_deg, g.dec_deg, "en".into())
+            .unwrap()
+            .expect("pack loaded");
+        assert_eq!((c.abbr.as_str(), c.name.as_str()), ("Lyn", "Lynx"));
+        assert!(ann.constellation_at(f64::NAN, 0.0, "en".into()).is_err());
     }
 
     /// The pool handle along the path Dart takes: open_dir → tiers → solve a frame → annotator from the tier that solved it.

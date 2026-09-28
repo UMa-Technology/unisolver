@@ -30,6 +30,16 @@ abstract class UniAnnotator implements RustOpaqueInterface {
     required AnnotateOptionsDto opts,
   });
 
+  /// The constellation containing J2000 `(raDeg, decDeg)`, named in `language` (codes as
+  /// `AnnotateOptionsDto.language`). For the frame centre pass the solve's `raDeg` /
+  /// `decDeg`; for a point on the image, convert it with `wcsPixelsToSky` first. Null
+  /// without a constellation pack (`annotate` reports why in `layers.reasons`).
+  ConstellationNameDto? constellationAt({
+    required double raDeg,
+    required double decDeg,
+    required String language,
+  });
+
   /// Languages in the names pack (empty = no names pack, English only).
   List<String> languages();
 }

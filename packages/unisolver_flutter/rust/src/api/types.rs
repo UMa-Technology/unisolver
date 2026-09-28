@@ -811,6 +811,23 @@ pub struct GridLineDto {
     pub label: Option<GridLabelDto>,
 }
 
+/// The constellation a position is in (`UniAnnotator.constellationAt`).
+pub struct ConstellationNameDto {
+    /// IAU abbreviation (`Ori`)
+    pub abbr: String,
+    /// Name in the requested language (from the names pack), else the IAU name
+    pub name: String,
+}
+
+impl From<core::constellations::ConstellationName> for ConstellationNameDto {
+    fn from(c: core::constellations::ConstellationName) -> Self {
+        Self {
+            abbr: c.abbr,
+            name: c.name,
+        }
+    }
+}
+
 /// A stretch of IAU boundary in the frame.
 pub struct BoundaryAnnotationDto {
     /// IAU abbreviations of the constellations on either side

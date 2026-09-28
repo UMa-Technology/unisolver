@@ -40,6 +40,9 @@ struct Cli {
     /// After the staged ladder search fails, search every rung exhaustively (slow failures)
     #[arg(long)]
     thorough: bool,
+    /// Keep the pinhole solve: do not fit the lens to wide frames' stars
+    #[arg(long)]
+    no_fit_lens: bool,
     /// Calibration: feed every image to a CalibrationSession, fit radial distortion, write the camera JSON
     #[arg(long)]
     calibrate_out: Option<PathBuf>,
@@ -111,6 +114,8 @@ struct SolutionOut {
     p90_arcsec: f32,
     prob: f64,
     scale_arcsec_per_px: f64,
+    /// The lens was fitted to this frame's stars
+    lens_fitted: bool,
     named_stars: Vec<String>,
     dso: Vec<String>,
     /// Solar-system bodies (with --at-unix-ms; the moon is topocentric only with --observer)
@@ -361,6 +366,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         };
         base.timeout_ms = Some(4_000);
         base.thorough = cli.thorough;
+        base.fit_lens = !cli.no_fit_lens;
 
         // Observation time and place: the command line first, then the header (FITS/XISF time,
         // EXIF time with its zone and GPS position), as the library's file entries do
@@ -504,6 +510,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 p90_arcsec: g.p90_arcsec,
                 prob: g.prob,
                 scale_arcsec_per_px: g.wcs.scale_arcsec_per_px(),
+                lens_fitted: g.lens_fitted,
                 named_stars: ann
                     .named_stars
                     .iter()
@@ -672,8 +679,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             r.solution
                 .as_ref()
                 .map(|s| format!(
-                    ", ra={:.3} dec={:.3} fov={:.1} matches={} rmse={:.0}\"",
-                    s.ra_deg, s.dec_deg, s.fov_deg, s.num_matches, s.rmse_arcsec
+                    ", ra={:.3} dec={:.3} fov={:.1} matches={} rmse={:.0}\"{}",
+                    s.ra_deg,
+                    s.dec_deg,
+                    s.fov_deg,
+                    s.num_matches,
+                    s.rmse_arcsec,
+                    if s.lens_fitted { " lens" } else { "" }
                 ))
                 .unwrap_or_default()
         );

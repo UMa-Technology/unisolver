@@ -349,7 +349,20 @@ annotator.languages();   // the languages in the pack (data-driven; do not hard-
 - Without the names pack annotation still works: English names everywhere, plus Chinese
   names for deep-sky objects from the catalog (star names stay English).
 
-### 1.5 On-device calibration (optional; for narrow fields and distorting lenses)
+### 1.5 Lens distortion: fitted per frame, or calibrated
+
+A phone's wide lens bends the edges of a frame by several pixels, and annotations drawn
+through a pinhole solve inherit that error. By default (`SolveOptionsDto.fitLens`, C
+`fit_lens`, Rust `SolveOptions::fit_lens`) a wide solve (20° or more, 30 or more matched
+stars, no `camera` given) fits the focal length and one radial distortion term to the frame's
+own stars, re-solves with that lens and keeps it only when it fits those stars better:
+`solution.lensFitted` says so, and `wcs.camera` then carries the distortion, so every
+annotation and transform follows the lens. It costs about a millisecond. On 45 phone photos
+it was kept for 27, lowered the mean residual from 2.8 to 2.5 px and made none worse. It fits
+only distortion that is radial about the centre; for anything else (and for narrow fields)
+calibrate the camera once from several frames:
+
+### 1.5.1 On-device calibration (optional; for narrow fields and distorting lenses)
 
 ```dart
 final cal = await solver.newCalibration();

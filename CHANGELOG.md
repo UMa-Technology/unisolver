@@ -11,6 +11,13 @@
    `ConstellationArtSet.load()` returns their images and `dataAttributions()` their credits.
    The constellation pack moves to format v3 (it carries the anchors). The example draws the
    art behind an "Art" toggle.
+2. **Wide frames fit their lens.** A wide solve (20° or more, 30 or more matched stars, no
+   camera given) now fits the focal length and a radial distortion term to the frame's own
+   stars and keeps them when they fit better (`solution.lensFitted`; the distortion comes back
+   in `wcs.camera`), so annotations follow the lens. On 45 phone photos it was kept for 27 and
+   lowered the mean residual from 2.8 to 2.5 px without making any worse, at about a
+   millisecond per solve. Turn it off with `fitLens: false` (C `fit_lens`, Rust
+   `SolveOptions::fit_lens`); calibration sessions keep solving pinhole.
 
 ## 2026-09-28 — v0.3.0
 

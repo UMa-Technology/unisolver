@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-09-28 — v0.3.0
+
 1. **Photos bring their own FOV, time and place.** JPEG, PNG and TIFF files now have their
    EXIF read: the 35 mm-equivalent focal length (or focal length with focal plane
    resolution) becomes the first ladder rung, and the capture time is read when EXIF gives its

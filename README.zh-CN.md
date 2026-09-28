@@ -39,7 +39,7 @@ cd packages/unisolver_flutter/example && flutter run
 unisolver/
 ├── crates/
 │   ├── unisolver-core/         # 引擎主体：全部逻辑在此
-│   ├── unisolver-cabi/         # C ABI（INDI / ASCOM / 桌面原生 / Python）
+│   ├── unisolver-cabi/         # C ABI（INDI / ASCOM / 桌面与移动端原生 / Python）
 │   └── unisolver-synth/        # 测试用合成星场
 ├── packages/unisolver_flutter/ # Flutter 插件（flutter_rust_bridge 绑定）与示例 App
 ├── third_party/

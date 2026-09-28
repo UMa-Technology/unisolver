@@ -1,8 +1,9 @@
-# Release packages. A v* tag (pushed to GitHub by scripts/sync-github.sh) builds the C library on
-# each desktop platform and publishes a GitHub release: one zip per platform, the names pack with
-# its GPL notice, and SHA256SUMS, with the tag's CHANGELOG section as the notes. No star databases
-# are attached. `gh workflow run release.yml` builds the same zips as workflow artifacts without
-# publishing: a dry run before tagging. See docs/releasing.md.
+# Release packages. A v* tag (pushed to GitHub by scripts/sync-github.sh) builds the C library for
+# each desktop platform, iOS (an XCFramework) and Android (one .so per ABI) and publishes a GitHub
+# release: one zip per platform, the names pack with its GPL notice, and SHA256SUMS, with the tag's
+# CHANGELOG section as the notes. No star databases are attached. `gh workflow run release.yml`
+# builds the same zips as workflow artifacts without publishing: a dry run before tagging. See
+# docs/releasing.md.
 name: release
 on:
   push: { tags: ["v*"] }
@@ -21,6 +22,8 @@ jobs:
           - { platform: linux-x86_64, os: ubuntu-22.04 }
           - { platform: windows-x86_64, os: windows-2022 }
           - { platform: windows-aarch64, os: windows-2022 }
+          - { platform: ios, os: macos-15 }
+          - { platform: android, os: ubuntu-22.04 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

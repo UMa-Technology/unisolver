@@ -42,7 +42,7 @@ license obligations and common pitfalls. Toolchains and release builds:
 unisolver/
 ├── crates/
 │   ├── unisolver-core/         # the engine: all logic lives here
-│   ├── unisolver-cabi/         # C ABI (INDI / ASCOM / native desktop / Python)
+│   ├── unisolver-cabi/         # C ABI (INDI / ASCOM / native desktop and mobile / Python)
 │   └── unisolver-synth/        # synthetic star fields for tests
 ├── packages/unisolver_flutter/ # Flutter plugin (flutter_rust_bridge bindings) and example app
 ├── third_party/

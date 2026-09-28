@@ -9,7 +9,7 @@ network and runs entirely offline. This guide is for developers adding it to the
 | Your host | Surface | Location |
 |---|---|---|
 | Flutter app (iOS / Android / macOS / Windows) | `unisolver_flutter` plugin (flutter_rust_bridge bindings, recommended) | `packages/unisolver_flutter/` |
-| Native desktop, INDI, ASCOM, Python ctypes, … | C ABI library + `unisolver.h` | `crates/unisolver-cabi/` |
+| Native desktop, native iOS / Android, INDI, ASCOM, Python ctypes, … | C ABI library + `unisolver.h` | `crates/unisolver-cabi/` |
 | Rust | the `unisolver-core` crate | `crates/unisolver-core/` |
 
 Verified platforms: iOS devices and arm64 simulators; Android arm64-v8a and x86_64 (no
@@ -472,7 +472,7 @@ file, unsupported format, database version mismatch, …).
 
 ---
 
-## 2. C ABI (INDI / ASCOM / native desktop / Python)
+## 2. C ABI (INDI / ASCOM / native desktop and mobile / Python)
 
 ### Build
 
@@ -491,6 +491,20 @@ and `windows-aarch64`: `include/unisolver.h`, the dynamic and static libraries u
 the license files. Check downloads against the release's `SHA256SUMS`. The macOS dylib's install
 name is `@rpath/libunisolver_cabi.dylib`: ship it beside your binary or on its rpath. Star
 databases are not attached (section 4).
+
+For native mobile apps (Flutter apps use the plugin instead):
+
+- **iOS** (`unisolver-cabi-vX.Y.Z-ios.zip`): add `unisolver.xcframework` to the app target
+  (Frameworks, Libraries, and Embedded Content). It is a static library for devices (arm64) and
+  simulators (arm64, x86_64), iOS 12 or later, so there is nothing to embed or sign. Its headers
+  carry a module map: Swift can `import unisolver` and call the C functions directly (strings
+  come back as `UnsafePointer<CChar>`: copy with `String(cString:)`, then free as documented
+  below); Objective-C includes `unisolver.h`.
+- **Android** (`unisolver-cabi-vX.Y.Z-android.zip`): `lib/<abi>/libunisolver_cabi.so` for
+  `arm64-v8a` and `x86_64`, API 21 or later, 16 KB page aligned as Google Play requires. Copy
+  them into `src/main/jniLibs/<abi>/`, or import them in CMake
+  (`add_library(unisolver_cabi SHARED IMPORTED)` with `IMPORTED_LOCATION`), and call them from
+  your JNI or NDK code with `include/unisolver.h`.
 
 ### Symbols
 

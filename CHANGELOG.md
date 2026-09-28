@@ -9,6 +9,11 @@
    (EXIF, FITS `FOCALLEN` + `XPIXSZ`, `focalLength35mm`) or the caller's own FOV, that probe
    now gets 400 ms; all 44 phone photos that solve plainly solve with EXIF too. A frame without
    stars that carries a hint fails in about 2.3 s instead of 2.0 s.
+2. **Prebuilt C libraries for iOS and Android.** Releases now carry
+   `unisolver-cabi-vX.Y.Z-ios.zip` (`unisolver.xcframework`: the static library for devices and
+   simulators, iOS 12 or later, with a module map so Swift can `import unisolver`) and
+   `unisolver-cabi-vX.Y.Z-android.zip` (`libunisolver_cabi.so` for arm64-v8a and x86_64, API 21 or
+   later, 16 KB page aligned), for native apps that do not use the Flutter plugin.
 
 ## 2026-09-28 — v0.4.0
 

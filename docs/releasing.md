@@ -50,12 +50,16 @@ that is where the reasons and measurements behind a one-line commit message go.
 | Asset | Contents |
 |---|---|
 | `unisolver-cabi-vX.Y.Z-<platform>.zip` | `include/unisolver.h`, the dynamic and static libraries under `lib/`, `LICENSE-MIT`, `LICENSE-APACHE`, `THIRD_PARTY_LICENSES.md`; platforms `macos-universal`, `linux-x86_64`, `windows-x86_64`, `windows-aarch64` |
+| `unisolver-cabi-vX.Y.Z-ios.zip` | `unisolver.xcframework` (the static library for devices, arm64, and simulators, arm64 + x86_64; iOS 12 or later; headers with a module map), `include/unisolver.h` and the license files |
+| `unisolver-cabi-vX.Y.Z-android.zip` | `lib/arm64-v8a/` and `lib/x86_64/libunisolver_cabi.so` (API 21 or later, 16 KB page aligned), `include/unisolver.h` and the license files |
 | `unisolver_names.bin`, `unisolver_names.NOTICE.txt` | the optional names pack (GPL-2.0-or-later) and its notice |
 | `SHA256SUMS` | checksums of every asset above |
 
-No star databases are attached; the wide-field tier ships inside the Flutter plugin. Mobile apps
-use the Flutter plugin, so there is no prebuilt mobile C library. `gh workflow run release.yml`
-is a dry run: it builds the same zips as workflow artifacts and publishes nothing.
+No star databases are attached; the wide-field tier ships inside the Flutter plugin. Flutter apps
+use the plugin, which builds the library itself; the iOS and Android packages are for native apps.
+`scripts/ci/package_cabi.py` builds each package and links a small program against it.
+`gh workflow run release.yml` is a dry run: it builds the same zips as workflow artifacts and
+publishes nothing.
 
 ## CI
 

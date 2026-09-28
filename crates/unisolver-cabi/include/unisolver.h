@@ -289,6 +289,23 @@ bool unisolver_annotator_load_constellations(UnisolverAnnotator *annotator,
                                              char **error_out);
 
 /**
+ * The constellation containing J2000 `(ra_deg, dec_deg)`, as OWNED JSON
+ * `{"abbr":"Ori","name":"Orion"}` with the name in `language` (NULL = English; codes as the
+ * annotate option), or `null` when no constellation pack is loaded. For the frame centre pass
+ * the solve's centre; for a point on the image, convert it with
+ * [`unisolver_wcs_pixels_to_sky`] first. NULL with `error_out` set on bad arguments.
+ *
+ * # Safety
+ * `annotator` is live; `language` is NULL or a valid NUL-terminated string; `error_out` as
+ * above.
+ */
+char *unisolver_annotator_constellation_at_json(const UnisolverAnnotator *annotator,
+                                                double ra_deg,
+                                                double dec_deg,
+                                                const char *language,
+                                                char **error_out);
+
+/**
  * Annotates a frame from the `wcs` object of the solve JSON, unchanged; returns OWNED annotation JSON.
  *
  * `opts_json` may be NULL or `{}` (all defaults); fields are listed on `AnnotateOptsJson`.

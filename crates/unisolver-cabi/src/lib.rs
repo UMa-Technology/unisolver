@@ -1103,6 +1103,46 @@ pub unsafe extern "C" fn unisolver_annotator_load_constellations(
     }
 }
 
+/// The constellation containing J2000 `(ra_deg, dec_deg)`, as OWNED JSON
+/// `{"abbr":"Ori","name":"Orion"}` with the name in `language` (NULL = English; codes as the
+/// annotate option), or `null` when no constellation pack is loaded. For the frame centre pass
+/// the solve's centre; for a point on the image, convert it with
+/// [`unisolver_wcs_pixels_to_sky`] first. NULL with `error_out` set on bad arguments.
+///
+/// # Safety
+/// `annotator` is live; `language` is NULL or a valid NUL-terminated string; `error_out` as
+/// above.
+#[no_mangle]
+pub unsafe extern "C" fn unisolver_annotator_constellation_at_json(
+    annotator: *const UnisolverAnnotator,
+    ra_deg: f64,
+    dec_deg: f64,
+    language: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    clear_error(error_out);
+    let run = || -> Result<String, String> {
+        let a = annotator.as_ref().ok_or("annotator is NULL")?;
+        if !ra_deg.is_finite() || !dec_deg.is_finite() {
+            return Err(format!("position ({ra_deg}, {dec_deg}) is not finite"));
+        }
+        let language = if language.is_null() {
+            "en"
+        } else {
+            cstr(language, "language")?
+        };
+        serde_json::to_string(&a.inner.constellation_at(ra_deg, dec_deg, language))
+            .map_err(|e| e.to_string())
+    };
+    match run() {
+        Ok(s) => to_owned_cstring(s),
+        Err(e) => {
+            set_error(error_out, &e);
+            ptr::null_mut()
+        }
+    }
+}
+
 /// Annotates a frame from the `wcs` object of the solve JSON, unchanged; returns OWNED annotation JSON.
 ///
 /// `opts_json` may be NULL or `{}` (all defaults); fields are listed on `AnnotateOptsJson`.
@@ -1650,7 +1690,7 @@ mod tests {
     #[test]
     fn constellations_via_c_surface() {
         use unisolver_core::constellations::{
-            BoundaryEdge, ConstellationFigure, ConstellationPack,
+            BoundaryEdge, ConstellationFigure, ConstellationPack, ZoneBand,
         };
         let dir = std::env::temp_dir().join(format!("cabi_ucon_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1674,6 +1714,17 @@ mod tests {
                 between: [0, 1],
                 points: (0..=12).map(|k| [86.0, 12.0 - k as f32]).collect(),
             }],
+            // Taurus north of +10° (B1875) between 4h and 6h, Orion everywhere else
+            zones: vec![
+                ZoneBand {
+                    dec_min: -5400,
+                    ranges: vec![(0, 0)],
+                },
+                ZoneBand {
+                    dec_min: 600,
+                    ranges: vec![(0, 0), (4 * 3600, 1), (6 * 3600, 0)],
+                },
+            ],
         }
         .write(pack_path.to_str().unwrap())
         .unwrap();
@@ -1683,6 +1734,19 @@ mod tests {
         let ann = unsafe {
             unisolver_annotator_open(solver, std::ptr::null(), std::ptr::null(), &mut err)
         };
+        let at = |ann, ra: f64, dec: f64, err: &mut *mut c_char| {
+            let out = unsafe {
+                unisolver_annotator_constellation_at_json(ann, ra, dec, std::ptr::null(), err)
+            };
+            if out.is_null() {
+                return None;
+            }
+            let v: serde_json::Value =
+                serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+            unsafe { unisolver_string_free(out) };
+            Some(v)
+        };
+        assert_eq!(at(ann, 83.8, -1.0, &mut err), Some(serde_json::Value::Null));
         let bad = CString::new("/nonexistent/ucon.bin").unwrap();
         assert!(!unsafe { unisolver_annotator_load_constellations(ann, bad.as_ptr(), &mut err) });
         assert!(!err.is_null());
@@ -1690,6 +1754,15 @@ mod tests {
         err = std::ptr::null_mut();
         let good = CString::new(pack_path.to_str().unwrap()).unwrap();
         assert!(unsafe { unisolver_annotator_load_constellations(ann, good.as_ptr(), &mut err) });
+        assert_eq!(
+            at(ann, 70.0, 20.0, &mut err),
+            Some(serde_json::json!({"abbr": "Tau", "name": "Taurus"}))
+        );
+        assert_eq!(at(ann, 83.8, -1.0, &mut err).unwrap()["abbr"], "Ori");
+        assert_eq!(at(ann, f64::NAN, 0.0, &mut err), None);
+        assert!(!err.is_null());
+        unsafe { unisolver_string_free(err) };
+        err = std::ptr::null_mut();
 
         let wcs = serde_json::to_string(&core::Wcs {
             width: 1024,

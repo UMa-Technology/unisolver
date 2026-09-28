@@ -25,7 +25,7 @@ pub fn data_attributions() -> &'static [DataAttribution] {
     &ATTRIBUTIONS
 }
 
-static ATTRIBUTIONS: [DataAttribution; 8] = [
+static ATTRIBUTIONS: [DataAttribution; 9] = [
     DataAttribution {
         id: "gaia",
         name: "ESA Gaia DR3",
@@ -60,6 +60,19 @@ static ATTRIBUTIONS: [DataAttribution; 8] = [
         license: "CC-BY-SA-4.0",
         text: "Deep-sky object data from OpenNGC by Mattia Verga (CC BY-SA 4.0).",
         url: "https://github.com/mattiaverga/OpenNGC",
+    },
+    DataAttribution {
+        id: "own_outlines",
+        name: "Deep-sky outlines by UMa Technology",
+        applies_to: "deep-sky catalog outlines",
+        license: "CC-BY-SA-4.0",
+        text: "Outlines of the Spaghetti Nebula (Sh 2-240) and the bowl of the Pipe Nebula (B 78) \
+               traced by UMa Technology (CC BY-SA 4.0) from sky-survey images served by CDS \
+               hips2fits. The Digitized Sky Surveys were produced at the Space Telescope Science \
+               Institute under U.S. Government grant NAG W-2166. Based on the Virginia Tech \
+               Spectral-Line Survey (VTSS), which is supported by the National Science \
+               Foundation. This research made use of hips2fits, a service provided by CDS.",
+        url: "https://github.com/UMa-Technology/unisolver",
     },
     DataAttribution {
         id: "stellarium",
@@ -118,6 +131,7 @@ mod tests {
                 "hipparcos",
                 "iau_wgsn",
                 "openngc",
+                "own_outlines",
                 "stellarium",
                 "iau_constellations",
                 "constellation_art",
@@ -133,6 +147,16 @@ mod tests {
             .text
             .contains("European Space Agency (ESA) mission Gaia"));
         assert_eq!(gaia.license, "CC-BY-SA-3.0-IGO");
+        // Our outlines carry the acknowledgements their surveys ask for
+        let own = all.iter().find(|a| a.id == "own_outlines").unwrap();
+        assert_eq!(own.license, "CC-BY-SA-4.0");
+        for ack in [
+            "NAG W-2166",
+            "Virginia Tech Spectral-Line Survey",
+            "provided by CDS",
+        ] {
+            assert!(own.text.contains(ack), "{ack}");
+        }
         let st = all.iter().find(|a| a.id == "stellarium").unwrap();
         assert_eq!(st.license, "GPL-2.0-or-later");
         let art = |id: &str| all.iter().find(|a| a.id == id).unwrap().license;

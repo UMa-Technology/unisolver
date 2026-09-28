@@ -13,11 +13,21 @@
    art behind an "Art" toggle.
 2. **Wide frames fit their lens.** A wide solve (20° or more, 30 or more matched stars, no
    camera given) now fits the focal length and a radial distortion term to the frame's own
-   stars and keeps them when they fit better (`solution.lensFitted`; the distortion comes back
-   in `wcs.camera`), so annotations follow the lens. On 45 phone photos it was kept for 27 and
-   lowered the mean residual from 2.8 to 2.5 px without making any worse, at about a
-   millisecond per solve. Turn it off with `fitLens: false` (C `fit_lens`, Rust
-   `SolveOptions::fit_lens`); calibration sessions keep solving pinhole.
+   stars and keeps them when they fit at least 5% better (`solution.lensFitted`; the
+   distortion comes back in `wcs.camera`), so annotations follow the lens. On 38 phone photos,
+   after the scale refinement below, it was kept for 32 and lowered the mean residual from 2.1
+   to 1.7 px without making any worse, at about a millisecond per solve. Turn it off with
+   `fitLens: false` (C `fit_lens`, Rust `SolveOptions::fit_lens`); calibration sessions keep
+   solving pinhole.
+3. **Wide solves re-measure their scale.** A solve without a known camera kept the pixel
+   scale its 4-star pattern measured, 1–3% off on wide frames: 73° frames of one phone solved
+   anywhere between 72.7° and 75.6°, with the stars at the edges 5–7 px off. Such a solve now
+   finds the scale at which its brightest stars land on catalog stars, re-solves there and
+   keeps the result when they land at least 10% closer (`solution.scaleRefined`). The same
+   frames now solve between 73.5° and 73.7°, and on 38 phone photos the mean residual fell
+   from 2.7 to 2.1 px (1.7 px with the lens fit) without making any worse, for 5–20 ms per
+   wide solve. Turn it off with `refineScale: false` (C `refine_scale`, Rust
+   `SolveOptions::refine_scale`); solves given a camera or an attitude hint keep theirs.
 
 ## 2026-09-28 — v0.3.0
 

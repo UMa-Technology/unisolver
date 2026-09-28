@@ -349,18 +349,31 @@ annotator.languages();   // the languages in the pack (data-driven; do not hard-
 - Without the names pack annotation still works: English names everywhere, plus Chinese
   names for deep-sky objects from the catalog (star names stay English).
 
-### 1.5 Lens distortion: fitted per frame, or calibrated
+### 1.5 Scale and lens: refined per frame, or calibrated
 
-A phone's wide lens bends the edges of a frame by several pixels, and annotations drawn
+A solve without a known camera keeps the pixel scale its 4-star pattern measured. On wide
+frames that scale can be 1–3% off, which leaves the stars at the edges 5–7 px from their
+catalog positions: 73° frames of one phone solved anywhere between 72.7° and 75.6°. By
+default (`SolveOptionsDto.refineScale`, C `refine_scale`, Rust `SolveOptions::refine_scale`)
+such a solve re-measures its scale: it finds the scale at which the brightest detected stars
+land on catalog stars, re-solves at that scale and keeps the result only when they land at
+least 10% closer (`solution.scaleRefined`). Solves given a `camera` or an attitude hint keep
+theirs.
+
+A phone's wide lens also bends the edges of a frame by several pixels, and annotations drawn
 through a pinhole solve inherit that error. By default (`SolveOptionsDto.fitLens`, C
 `fit_lens`, Rust `SolveOptions::fit_lens`) a wide solve (20° or more, 30 or more matched
-stars, no `camera` given) fits the focal length and one radial distortion term to the frame's
-own stars, re-solves with that lens and keeps it only when it fits those stars better:
-`solution.lensFitted` says so, and `wcs.camera` then carries the distortion, so every
-annotation and transform follows the lens. It costs about a millisecond. On 45 phone photos
-it was kept for 27, lowered the mean residual from 2.8 to 2.5 px and made none worse. It fits
-only distortion that is radial about the centre; for anything else (and for narrow fields)
-calibrate the camera once from several frames:
+stars, no `camera` given) then fits the focal length and one radial distortion term to the
+frame's own stars, re-solves with that lens and keeps it only when it fits those stars at
+least 5% better: `solution.lensFitted` says so, and `wcs.camera` then carries the
+distortion, so every annotation and transform follows the lens.
+
+Together they add 5–20 ms to a wide solve. On 38 phone photos, the stars matched with and
+without them sat 2.7 px from their catalog positions on average without either, 2.1 px with
+the scale refined and 1.7 px with both, and no photo got worse; the 73° frames above now
+solve between 73.5° and 73.7°. The lens fit covers only distortion that is radial about the
+centre; for anything else (and for narrow fields) calibrate the camera once from several
+frames:
 
 ### 1.5.1 On-device calibration (optional; for narrow fields and distorting lenses)
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+1. **Both constellation illustration sets are credited to their artist.** The painted set
+   was credited to UMa Technology by mistake; `dataAttributions()` and the two NOTICE files
+   in `lib/optional/` now name the artist for both sets, and the painted set's entry is
+   called just "Constellation illustrations".
+
 ## 2026-09-29 — v0.4.2
 
 1. **Solves no longer depend on how fast the CPU is.** The staged search's all-centroid

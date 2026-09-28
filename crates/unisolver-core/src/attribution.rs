@@ -81,11 +81,13 @@ static ATTRIBUTIONS: [DataAttribution; 8] = [
     },
     DataAttribution {
         id: "constellation_art",
-        name: "Constellation illustrations (western_new)",
+        name: "Constellation illustrations",
         applies_to: "constellation art, painted set",
         license: "CC-BY-SA-4.0",
-        text: "Constellation illustrations by UMa Technology (CC BY-SA 4.0), placed with the \
-               anchor stars of Stellarium's western sky culture (CC BY-SA).",
+        text: concat!(
+            "Constellation illustrations by @氕氘氚Star (CC BY-SA 4.0), placed with the",
+            " anchor stars of Stellarium's western sky culture (CC BY-SA)."
+        ),
         url: "https://github.com/UMa-Technology/unisolver",
     },
     DataAttribution {
@@ -94,7 +96,7 @@ static ATTRIBUTIONS: [DataAttribution; 8] = [
         applies_to: "constellation art, low-poly set",
         license: "LAL-1.3",
         text: concat!(
-            "Constellation illustrations by 氕氘氚Star",
+            "Constellation illustrations by @氕氘氚Star",
             " from Stellarium's western sky culture (Free Art License 1.3)."
         ),
         url: "https://github.com/Stellarium/stellarium-skycultures",
@@ -136,5 +138,10 @@ mod tests {
         let art = |id: &str| all.iter().find(|a| a.id == id).unwrap().license;
         assert_eq!(art("constellation_art"), "CC-BY-SA-4.0");
         assert_eq!(art("constellation_art_western"), "LAL-1.3");
+        // Both sets are the same artist's work, credited by their handle.
+        for id in ["constellation_art", "constellation_art_western"] {
+            let a = all.iter().find(|a| a.id == id).unwrap();
+            assert!(a.text.contains("by @氕氘氚Star"), "{}", a.text);
+        }
     }
 }

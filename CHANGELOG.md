@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+1. **Constellation art.** Annotation can lay mythology illustrations over the constellation
+   figures (`constellationArt`; C `constellation_art`; Rust `AnnotateOptions::constellation_art`):
+   each illustration comes back as a mesh of pixel positions to texture-map, placed from three
+   anchor stars as Stellarium does, so it follows the lens model and the zoom. Two sets ship
+   with the plugin, named by IAU abbreviation: `western_new` (painted, CC BY-SA 4.0, bundled)
+   and `western` (low-poly, Free Art License 1.3, one optional file an app declares);
+   `ConstellationArtSet.load()` returns their images and `dataAttributions()` their credits.
+   The constellation pack moves to format v3 (it carries the anchors). The example draws the
+   art behind an "Art" toggle.
+
 ## 2026-09-28 — v0.3.0
 
 1. **Photos bring their own FOV, time and place.** JPEG, PNG and TIFF files now have their

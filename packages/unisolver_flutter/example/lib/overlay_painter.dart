@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:unisolver_flutter/unisolver_flutter.dart';
 
+import 'label_layout.dart';
+
 /// DSO shape decision (a testable pure function): with unknown orientation
 /// (angleDeg == null) draw a circle of the semi-major axis, never guess an angle.
 ({bool isCircle, double radius, double semiMinor, double angleRad})
@@ -143,6 +145,9 @@ class SolveOverlayPainter extends CustomPainter {
   static final _solar = _stroke(const Color(0xFFFFA040), 1.5);
   static final _satellite = _stroke(const Color(0xFF78FFFF), 1.2);
 
+  /// Rings up to this radius (screen pixels) mark a point; labels avoid covering them
+  static const _markerMaxRadius = 16.0;
+
   @override
   void paint(Canvas canvas, Size size) {
     final m = transform.value;
@@ -233,8 +238,12 @@ class SolveOverlayPainter extends CustomPainter {
         canvas.drawCircle(at(mt.x, mt.y), 9, _matched);
       }
     }
-    // Text last, above every line
+    // Text last, above every line, placed so no two labels overlap. Priority: the grid's
+    // readings (fixed to the view's edges), the sun, moon and planets, constellation names,
+    // named stars from the brightest, deep-sky objects from the brightest. A label with no
+    // free spot beside its marker waits until zooming in makes room.
     if (a != null) {
+      final labels = <(TextPainter, List<Offset>)>[];
       for (final g in a.grid) {
         final l = g.label;
         if (l == null) continue;
@@ -242,21 +251,32 @@ class SolveOverlayPainter extends CustomPainter {
             ? const Color(0xFF50E6C8)
             : const Color(0xFFFFAA50);
         final tp = _text(gridLabelText(g), color, 11);
-        tp.paint(canvas, at(l.x, l.y) + gridLabelOffset(l.edge, tp.size));
+        labels.add((tp, [at(l.x, l.y) + gridLabelOffset(l.edge, tp.size)]));
+      }
+      for (final b in a.solar) {
+        final tp = _text(b.name, const Color(0xFFFFA040), 12);
+        final r = ((b.angularRadiusPx ?? 0) * scale).clamp(7.0, 4000.0);
+        labels.add((tp, besideMarker(at(b.x, b.y), r + 2, tp.size)));
       }
       for (final c in a.constellations) {
         if (c.labelX == null || c.labelY == null) continue;
         final tp = _text(c.name, const Color(0xC080B4FF), 13);
-        tp.paint(
-          canvas,
-          at(c.labelX!, c.labelY!) - tp.size.center(Offset.zero),
-        );
+        final p = at(c.labelX!, c.labelY!) - tp.size.center(Offset.zero);
+        labels.add((
+          tp,
+          [p, p.translate(0, -tp.height), p.translate(0, tp.height)],
+        ));
+      }
+      final stars = [...a.namedStars]..sort((x, y) => x.mag.compareTo(y.mag));
+      for (final n in stars) {
+        final tp = _text(n.name, const Color(0xFF50C8FF), 12);
+        labels.add((tp, besideMarker(at(n.x, n.y), 9, tp.size)));
       }
       final wcs = outcome?.solution?.wcs;
       final image = wcs == null
           ? Size.infinite
           : Size(wcs.width.toDouble(), wcs.height.toDouble());
-      for (final o in a.objects) {
+      for (final o in [...a.objects]..sort(dsoLabelOrder)) {
         final tp = _text(
           o.commonName ?? o.designation,
           const Color(0xFFC878FF),
@@ -266,15 +286,26 @@ class SolveOverlayPainter extends CustomPainter {
         final anchor = o.outlines.isEmpty
             ? Offset(o.x, o.y)
             : outlineLabelAnchor(o.x, o.y, o.outlines, image);
-        tp.paint(canvas, at(anchor.dx, anchor.dy) + Offset(-tp.width / 2, 10));
+        labels.add((tp, besideMarker(at(anchor.dx, anchor.dy), 10, tp.size)));
       }
-      for (final n in a.namedStars) {
-        final tp = _text(n.name, const Color(0xFF50C8FF), 12);
-        tp.paint(canvas, at(n.x, n.y) + Offset(-tp.width / 2, 9));
-      }
-      for (final b in a.solar) {
-        final tp = _text(b.name, const Color(0xFFFFA040), 12);
-        tp.paint(canvas, at(b.x, b.y) + Offset(-tp.width / 2, 9));
+      // Rings of point-like objects: labels step around them when they can (a large
+      // object's ring is an area, not a marker)
+      final markers = [
+        for (final n in a.namedStars)
+          Rect.fromCircle(center: at(n.x, n.y), radius: 7),
+        for (final b in a.solar)
+          if ((b.angularRadiusPx ?? 0) * scale <= _markerMaxRadius)
+            Rect.fromCircle(center: at(b.x, b.y), radius: 7),
+        for (final o in a.objects)
+          if (o.outlines.isEmpty && o.semiMajorPx * scale <= _markerMaxRadius)
+            Rect.fromCircle(center: at(o.x, o.y), radius: 8),
+      ];
+      final spots = placeLabels(size, markers: markers, [
+        for (final (tp, candidates) in labels) LabelSlot(tp.size, candidates),
+      ]);
+      for (var i = 0; i < labels.length; i++) {
+        final spot = spots[i];
+        if (spot != null) labels[i].$1.paint(canvas, spot);
       }
     }
   }

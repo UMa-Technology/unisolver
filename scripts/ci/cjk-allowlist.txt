@@ -6,7 +6,7 @@
 file tools/namesgen/data/objects-names.json
 file tools/namesgen/data/constellation-names.json
 file README.zh-CN.md
-file packages/unisolver_flutter/lib/optional/art/western/NOTICE.txt
+file packages/unisolver_flutter/lib/optional/unisolver_art_western.NOTICE.txt
 file scripts/ci/cjk-allowlist.txt
 literals tools/namesgen/src/main.rs
 literals crates/unisolver-core/src/ephemeris.rs

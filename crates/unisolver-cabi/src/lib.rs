@@ -1704,12 +1704,14 @@ mod tests {
                     name: "Orion".into(),
                     lines: vec![vec![[88.79, 7.41], [81.28, 6.35], [78.63, -8.20]]],
                     label: [83.0, 1.0],
+                    art: None,
                 },
                 ConstellationFigure {
                     abbr: "Tau".into(),
                     name: "Taurus".into(),
                     lines: vec![vec![[68.98, 16.51], [84.41, 21.14]]],
                     label: [70.0, 18.0],
+                    art: None,
                 },
             ],
             boundaries: vec![BoundaryEdge {

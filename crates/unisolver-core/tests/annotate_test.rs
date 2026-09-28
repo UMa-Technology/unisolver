@@ -718,12 +718,14 @@ fn constellation_layers_project_figures_boundaries_and_names() {
                     vec![[83.0, 0.0], [150.0, 0.0]],
                 ],
                 label: [83.0, 1.0],
+                art: None,
             },
             ConstellationFigure {
                 abbr: "Tau".into(),
                 name: "Taurus".into(),
                 lines: vec![vec![[300.0, 40.0], [310.0, 45.0]]],
                 label: [305.0, 42.0],
+                art: None,
             },
         ],
         boundaries: vec![BoundaryEdge {
@@ -910,6 +912,56 @@ fn bundled_constellation_pack_draws_real_skies() {
         }
     }
     assert!(zoned.iter().all(|&z| z), "every constellation has a zone");
+    // 85 illustrations (Puppis, Vela and Serpens share their neighbours' art), each pinned so
+    // its anchors land on their stars
+    let with_art: Vec<_> = pack
+        .constellations
+        .iter()
+        .filter(|c| c.art.is_some())
+        .collect();
+    assert_eq!(with_art.len(), 85);
+    for c in with_art {
+        let anchors = c.art.unwrap();
+        for a in anchors {
+            let d = unisolver_core::constellations::art_direction(
+                &anchors,
+                a.uv[0] as f64,
+                a.uv[1] as f64,
+            )
+            .unwrap_or_else(|| panic!("{} anchors collinear", c.abbr));
+            let (ra, dec) = (
+                d[1].atan2(d[0]).to_degrees().rem_euclid(360.0),
+                d[2].asin().to_degrees(),
+            );
+            let dra = ((ra - a.radec[0] as f64 + 540.0).rem_euclid(360.0) - 180.0)
+                * dec.to_radians().cos();
+            assert!(
+                dra.hypot(dec - a.radec[1] as f64) < 1e-6,
+                "{} {a:?}",
+                c.abbr
+            );
+        }
+    }
+    for abbr in ["Pup", "Vel", "Ser"] {
+        assert!(pack
+            .constellations
+            .iter()
+            .find(|c| c.abbr == abbr)
+            .unwrap()
+            .art
+            .is_none());
+    }
+    for abbr in ["CVn", "TrA"] {
+        assert!(
+            pack.constellations
+                .iter()
+                .find(|c| c.abbr == abbr)
+                .unwrap()
+                .art
+                .is_some(),
+            "{abbr}: the sky culture spells it in another case"
+        );
+    }
     // Known positions (J2000), including both poles and the 0h meridian
     let abbr_at = |ra: f64, dec: f64| {
         pack.index_at(ra, dec)

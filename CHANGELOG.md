@@ -22,9 +22,10 @@
    calibration sessions keep solving pinhole.
 3. **Wide solves re-measure their scale.** A solve without a known camera kept the pixel
    scale its 4-star pattern measured, 1–3% off on wide frames: 73° frames of one phone solved
-   anywhere between 72.7° and 75.6°, with the stars at the edges 5–7 px off. Such a solve now
-   finds the scale at which its brightest stars land on catalog stars, re-solves there and
-   keeps the result when they land at least 10% closer (`solution.scaleRefined`). The same
+   anywhere between 72.7° and 75.6°, with the stars at the edges 5–7 px off. Such a solve of a
+   wide field (20° or more) now finds the scale at which its brightest stars land on catalog
+   stars, re-solves there and keeps the result when they land at least 10% closer
+   (`solution.scaleRefined`); narrower fields keep theirs. The same
    frames' scale now comes out between 73.3° and 73.4°, and on 38 phone photos the mean
    residual fell from 2.7 to 2.1 px (1.2 px with the lens fit) without making any worse;
    together with the lens fit it adds 10–20 ms to a wide solve. Turn it off with

@@ -186,9 +186,9 @@ struct SolveOptsJson {
     /// Fit the lens to the stars of a wide frame (≥ 20°, ≥ 30 matches) and keep it when it
     /// fits better (`solution.lens_fitted`); never with `camera`. Default true
     fit_lens: bool,
-    /// Re-measure the scale of a lost-in-space solve from its brightest stars and keep it when
-    /// they land closer to catalog stars (`solution.scale_refined`); never with `camera` or an
-    /// attitude hint. Default true
+    /// Re-measure the scale of a lost-in-space solve of a wide field (≥ 20°) from its brightest
+    /// stars and keep it when they land closer to catalog stars (`solution.scale_refined`);
+    /// never with `camera` or an attitude hint. Default true
     refine_scale: bool,
 }
 

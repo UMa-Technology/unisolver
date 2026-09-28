@@ -355,10 +355,10 @@ A solve without a known camera keeps the pixel scale its 4-star pattern measured
 frames that scale can be 1–3% off, which leaves the stars at the edges 5–7 px from their
 catalog positions: 73° frames of one phone solved anywhere between 72.7° and 75.6°. By
 default (`SolveOptionsDto.refineScale`, C `refine_scale`, Rust `SolveOptions::refine_scale`)
-such a solve re-measures its scale: it finds the scale at which the brightest detected stars
-land on catalog stars, re-solves at that scale and keeps the result only when they land at
-least 10% closer (`solution.scaleRefined`). Solves given a `camera` or an attitude hint keep
-theirs.
+such a solve of a wide field (20° or more) re-measures its scale: it finds the scale at which
+the brightest detected stars land on catalog stars, re-solves at that scale and keeps the
+result only when they land at least 10% closer (`solution.scaleRefined`). Narrower fields
+measure their scale well and keep it, as do solves given a `camera` or an attitude hint.
 
 A phone's wide lens also bends the edges of a frame by several pixels, and annotations drawn
 through a pinhole solve inherit that error. By default (`SolveOptionsDto.fitLens`, C

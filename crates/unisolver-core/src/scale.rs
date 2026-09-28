@@ -1,9 +1,9 @@
-//! Scale refinement after a lost-in-space solve. The upstream refinement keeps the pixel scale
-//! its 4-star pattern match measured (on purpose: a wrong focal-length guess must not bias it).
-//! On wide frames that scale is 1–3% off, which puts the stars at the edges 5–7 px from their
-//! catalog positions while the solve still verifies: a synthetic 73.3° Scorpius frame solved at
-//! 74.36°, 6.8 px off on average, and phone frames of one camera solved anywhere between 72.7°
-//! and 75.6°.
+//! Scale refinement after a lost-in-space solve of a wide field. The upstream refinement keeps
+//! the pixel scale its 4-star pattern match measured (on purpose: a wrong focal-length guess
+//! must not bias it). On wide frames that scale is 1–3% off, which puts the stars at the edges
+//! 5–7 px from their catalog positions while the solve still verifies: a synthetic 73.3°
+//! Scorpius frame solved at 74.36°, 6.8 px off on average, and phone frames of one camera
+//! solved anywhere between 72.7° and 75.6°.
 //!
 //! Find the scale that brings the brightest detections onto catalog stars (a chamfer distance,
 //! which needs no matches: at a wrong scale the matches themselves are wrong at the edges; each
@@ -12,7 +12,7 @@
 //! the given focal length), then polish the focal length by least squares on the new matches.
 //! Keep the result only when the brightest detections land at least 10% closer to catalog stars.
 use crate::camera::{CameraParams, DistortionParams};
-use crate::lens::{field_stars, track, FieldStar};
+use crate::lens::{field_stars, track, FieldStar, MIN_FOV_DEG};
 use crate::outcome::{SolvedGeometry, Wcs};
 use crate::solver::Extracted;
 use std::collections::HashMap;
@@ -141,6 +141,9 @@ fn pinhole(cam: &CameraParams, focal_length_px: f64) -> CameraParams {
 
 /// The lost-in-space solve `(sol, g)` at the scale its brightest detections fit best: Some
 /// when that brings them at least 10% closer to catalog stars, None keeps the solve as it is.
+/// Wide fields only, as for the lens fit: narrow ones measure their scale well, and on 16
+/// telescope and live-camera frames (2–8°) the refinement moved nothing by more than a
+/// pixel, in either direction.
 pub(crate) fn refine(
     db: &SolverDatabase,
     ext: &Extracted,
@@ -150,7 +153,7 @@ pub(crate) fn refine(
     sol: &Solution,
     g: &SolvedGeometry,
 ) -> Option<(Solution, SolvedGeometry)> {
-    if !matches!(g.wcs.camera.distortion, DistortionParams::None) {
+    if g.fov_deg < MIN_FOV_DEG || !matches!(g.wcs.camera.distortion, DistortionParams::None) {
         return None;
     }
     let dets = detections(ext);
@@ -218,16 +221,22 @@ mod tests {
     use crate::{Frame, PixelData};
     use unisolver_synth as synth;
 
-    /// A solve 3% off in scale (tracked at a wrong focal length, as the upstream refinement
-    /// leaves some wide frames) comes back to the rendered scale; a right one stays right.
-    #[test]
-    fn a_wrong_scale_comes_back() {
+    /// A synthetic 1024×768 frame of `fov` degrees, extracted and solved lost-in-space, and the
+    /// same solve re-tracked 3% off in scale (as the upstream refinement leaves some wide frames)
+    fn solved(
+        fov: f32,
+    ) -> (
+        Extracted,
+        SolveConfig,
+        Solution,
+        SolvedGeometry,
+        (Solution, SolvedGeometry),
+    ) {
         let db = synth::test_db();
-        let (w, h, fov) = (1024, 768, 35.0);
-        let q = synth::look_at(210.0, -20.0, 25.0);
+        let (w, h) = (1024, 768);
         let img = synth::render(
             db.star_catalog.stars(),
-            &q,
+            &synth::look_at(210.0, -20.0, 25.0),
             fov,
             w,
             h,
@@ -246,22 +255,39 @@ mod tests {
         let cfg = build_solve_config(&opts, w, h).unwrap();
         let sol = db.solve_from_centroids(&ext.centroids, &cfg).unwrap();
         let g = geometry_from_solution(&sol, w, h, &ext.topleft);
+        let wrong = pinhole(&g.wcs.camera, g.wcs.camera.focal_length_px * 1.03);
+        let off = track(db, &ext, &cfg, w, h, &sol, &wrong).expect("tracks");
+        assert!(
+            (off.1.fov_deg / fov - 1.0).abs() > 0.02,
+            "start {}",
+            off.1.fov_deg
+        );
+        (ext, cfg, sol, g, off)
+    }
+
+    /// A wide solve 3% off in scale comes back to the rendered scale; a right one stays right.
+    #[test]
+    fn a_wrong_scale_comes_back() {
+        let db = synth::test_db();
+        let fov = 35.0;
+        let (ext, cfg, sol, g, (sol3, g3)) = solved(fov);
         let close = |g: &SolvedGeometry| (g.fov_deg / fov - 1.0).abs() < 0.002;
 
-        let wrong = pinhole(&g.wcs.camera, g.wcs.camera.focal_length_px * 1.03);
-        let (sol3, g3) = track(db, &ext, &cfg, w, h, &sol, &wrong).expect("tracks");
-        assert!(
-            (g3.fov_deg / fov - 1.0).abs() > 0.02,
-            "start {}",
-            g3.fov_deg
-        );
-        let (_, g2) = refine(db, &ext, &cfg, w, h, &sol3, &g3).expect("refined");
+        let (_, g2) = refine(db, &ext, &cfg, 1024, 768, &sol3, &g3).expect("refined");
         assert!(g2.scale_refined);
         assert!(close(&g2), "refined to {} from {}", g2.fov_deg, g3.fov_deg);
 
-        match refine(db, &ext, &cfg, w, h, &sol, &g) {
+        match refine(db, &ext, &cfg, 1024, 768, &sol, &g) {
             Some((_, g4)) => assert!(close(&g4), "{} from {}", g4.fov_deg, g.fov_deg),
             None => assert!(close(&g), "kept {}", g.fov_deg),
         }
+    }
+
+    /// Narrow fields keep the scale they solved at, even a wrong one: they measure it well, and
+    /// the refinement is for wide fields only.
+    #[test]
+    fn narrow_fields_keep_their_scale() {
+        let (ext, cfg, _, _, (sol3, g3)) = solved(16.0);
+        assert!(refine(synth::test_db(), &ext, &cfg, 1024, 768, &sol3, &g3).is_none());
     }
 }

@@ -287,10 +287,10 @@ pub struct SolveOptionsDto {
     /// (`SolvedGeometryDto.lensFitted`), so annotations follow the lens. Never with `camera`.
     #[frb(default = true)]
     pub fit_lens: bool,
-    /// Lost-in-space solves only: re-measure the scale (focal length) from the brightest stars
-    /// and keep it when they land closer to catalog stars (`SolvedGeometryDto.scaleRefined`).
-    /// Wide frames otherwise keep the scale their 4-star pattern measured, 1–3% off. Never
-    /// with `camera` or a tracking hint.
+    /// Lost-in-space solves of wide fields (20° or more) only: re-measure the scale (focal
+    /// length) from the brightest stars and keep it when they land closer to catalog stars
+    /// (`SolvedGeometryDto.scaleRefined`). Wide frames otherwise keep the scale their 4-star
+    /// pattern measured, 1–3% off. Never with `camera` or a tracking hint.
     #[frb(default = true)]
     pub refine_scale: bool,
 }

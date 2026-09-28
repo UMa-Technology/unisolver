@@ -23,7 +23,8 @@ use tetra3::{Solution, SolveConfig, SolverDatabase};
 
 /// Fewer matched stars do not pin down a distortion term
 pub(crate) const MIN_MATCHES: u32 = 30;
-/// Narrower fields bend by less than a pixel
+/// Narrower fields bend by less than a pixel (and measure their scale well: the scale
+/// refinement stops here too)
 pub(crate) const MIN_FOV_DEG: f32 = 20.0;
 /// The fit is kept when the mean residual drops by at least this fraction
 const MIN_GAIN: f64 = 0.05;

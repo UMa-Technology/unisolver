@@ -134,10 +134,10 @@ pub struct SolveOptions {
     /// Default on.
     #[serde(default = "default_true")]
     pub fit_lens: bool,
-    /// Lost-in-space solves only: re-measure the scale (focal length) from the brightest stars
-    /// and keep it when they land closer to catalog stars. The upstream refinement keeps the
-    /// scale its 4-star pattern measured, 1–3% off on wide frames. Never with `camera` or a
-    /// tracking hint. Default on.
+    /// Lost-in-space solves of wide fields (20° or more) only: re-measure the scale (focal
+    /// length) from the brightest stars and keep it when they land closer to catalog stars. The
+    /// upstream refinement keeps the scale its 4-star pattern measured, 1–3% off on wide
+    /// frames. Never with `camera` or a tracking hint. Default on.
     #[serde(default = "default_true")]
     pub refine_scale: bool,
 }

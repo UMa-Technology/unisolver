@@ -20,20 +20,24 @@ git remote add github git@github.com:UMa-Technology/unisolver.git   # once per c
 
 ```bash
 cargo xtask release prepare 0.2.1      # on a clean develop
+(cd packages/unisolver_flutter/example/macos && pod install)   # Podfile.lock names the version
+(cd packages/unisolver_flutter/example/ios && pod install)
+git commit -am "chore(example): refresh the Podfile.lock files for 0.2.1"
 git checkout main && git merge --ff-only develop
 scripts/release.sh v0.2.1              # checks, local gate, tag, atomic push of main + tag
 scripts/sync-github.sh                 # GitHub main and tags; the tag starts the release workflow
-git checkout develop
+git checkout develop && git push origin develop
 ```
 
 - `cargo xtask release prepare X.Y.Z` writes the version into `Cargo.toml` (`[workspace.package]`),
   the plugin's `pubspec.yaml`, both podspecs and the example app's `pubspec.lock`; turns
   `## Unreleased` into `## YYYY-MM-DD — vX.Y.Z` under a new, empty `## Unreleased`; refreshes
   `Cargo.lock`; and commits `chore(release): vX.Y.Z`. It refuses an empty Unreleased section, a
-  version that already has a heading, a dirty tree and any branch but `develop`. When the version
-  changes, the example app's `Podfile.lock` files still name the old one: rebuild the example for
-  macOS and iOS (`flutter build macos`, `flutter build ios --config-only --no-codesign`) and
-  commit them before merging into `main`.
+  version that already has a heading, a dirty tree and any branch but `develop`. The example app's
+  two `Podfile.lock` files also name the version, and `flutter build` leaves them as they are: run
+  `pod install` in `example/macos` and `example/ios` (on a fresh clone, `flutter pub get` in the
+  example first; CocoaPods wants a UTF-8 locale such as `LANG=en_US.UTF-8`) and commit them before
+  merging into `main`.
 - `scripts/release.sh vX.Y.Z [--no-push]` refuses to run off `main`, on a dirty tree, for an
   existing tag, or while `origin/main` has commits `main` lacks. It then runs
   `cargo xtask release check vX.Y.Z` (every manifest carries the version, the newest CHANGELOG

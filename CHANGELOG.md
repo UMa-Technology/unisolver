@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-09-28 — v0.4.0
+
 1. **Constellation art.** Annotation can lay mythology illustrations over the constellation
    figures (`constellationArt`; C `constellation_art`; Rust `AnnotateOptions::constellation_art`):
    each illustration comes back as a mesh of pixel positions to texture-map, placed from three

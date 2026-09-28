@@ -287,6 +287,12 @@ pub struct SolveOptionsDto {
     /// (`SolvedGeometryDto.lensFitted`), so annotations follow the lens. Never with `camera`.
     #[frb(default = true)]
     pub fit_lens: bool,
+    /// Lost-in-space solves only: re-measure the scale (focal length) from the brightest stars
+    /// and keep it when they land closer to catalog stars (`SolvedGeometryDto.scaleRefined`).
+    /// Wide frames otherwise keep the scale their 4-star pattern measured, 1–3% off. Never
+    /// with `camera` or a tracking hint.
+    #[frb(default = true)]
+    pub refine_scale: bool,
 }
 
 impl SolveOptionsDto {
@@ -308,6 +314,7 @@ impl SolveOptionsDto {
             observation_unix_ms: None,
             focal_length_35mm: None,
             fit_lens: true,
+            refine_scale: true,
         }
     }
 }
@@ -329,6 +336,7 @@ impl TryFrom<SolveOptionsDto> for core::SolveOptions {
         o.observation_unix_ms = d.observation_unix_ms;
         o.focal_length_35mm = d.focal_length_35mm;
         o.fit_lens = d.fit_lens;
+        o.refine_scale = d.refine_scale;
         Ok(o)
     }
 }
@@ -431,6 +439,8 @@ pub struct SolvedGeometryDto {
     /// The lens was fitted to this frame's stars: `wcs.camera` carries the fitted focal length
     /// and radial distortion
     pub lens_fitted: bool,
+    /// The scale (focal length) was re-measured from the brightest stars
+    pub scale_refined: bool,
 }
 
 pub struct SolveOutcomeDto {
@@ -483,6 +493,7 @@ impl From<core::SolveOutcome> for SolveOutcomeDto {
                     })
                     .collect(),
                 lens_fitted: g.lens_fitted,
+                scale_refined: g.scale_refined,
             }),
             centroids: o
                 .centroids

@@ -1,0 +1,4 @@
+Constellation illustrations (western_new)
+By UMa Technology. Licensed under CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/
+Placed on the sky with the anchor stars of Stellarium's western sky culture (CC BY-SA).
+Files are named by IAU constellation abbreviation.

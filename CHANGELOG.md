@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-09-29 — v0.4.1
+
 1. **FOV hints no longer lose borderline frames.** The staged search gives the likeliest
    rung one all-centroid probe of 100 ms. A borderline phone frame needed 65–120 ms there
    depending on the FOV estimate, so the EXIF focal length, 0.02° off the ladder's rung, tipped

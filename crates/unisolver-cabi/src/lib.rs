@@ -900,6 +900,9 @@ struct AnnotateOptsJson {
     include_constellations: bool,
     /// IAU constellation boundaries (`boundaries`); needs the constellation pack
     constellation_boundaries: bool,
+    /// Mythology illustrations on the figures (`constellations[].art`: a `cols × rows` mesh of
+    /// pixels or null); needs `include_constellations`
+    constellation_art: bool,
     /// Equatorial grid (`grid`, J2000 right ascension and declination)
     equatorial_grid: bool,
     /// Horizontal grid (`grid`, apparent altitude and azimuth); needs `observation_unix_ms`
@@ -930,6 +933,7 @@ impl Default for AnnotateOptsJson {
             language: d.language,
             include_constellations: d.include_constellations,
             constellation_boundaries: d.constellation_boundaries,
+            constellation_art: d.constellation_art,
             equatorial_grid: d.equatorial_grid,
             horizontal_grid: d.horizontal_grid,
             grid_spacing_px: d.grid_spacing_px,
@@ -955,6 +959,7 @@ impl From<AnnotateOptsJson> for core::AnnotateOptions {
             language: j.language,
             include_constellations: j.include_constellations,
             constellation_boundaries: j.constellation_boundaries,
+            constellation_art: j.constellation_art,
             equatorial_grid: j.equatorial_grid,
             horizontal_grid: j.horizontal_grid,
             grid_spacing_px: j.grid_spacing_px,
@@ -1692,7 +1697,7 @@ mod tests {
     #[test]
     fn constellations_via_c_surface() {
         use unisolver_core::constellations::{
-            BoundaryEdge, ConstellationFigure, ConstellationPack, ZoneBand,
+            ArtAnchor, BoundaryEdge, ConstellationFigure, ConstellationPack, ZoneBand,
         };
         let dir = std::env::temp_dir().join(format!("cabi_ucon_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1704,7 +1709,20 @@ mod tests {
                     name: "Orion".into(),
                     lines: vec![vec![[88.79, 7.41], [81.28, 6.35], [78.63, -8.20]]],
                     label: [83.0, 1.0],
-                    art: None,
+                    art: Some([
+                        ArtAnchor {
+                            uv: [0.0, 0.0],
+                            radec: [88.79, 7.41],
+                        },
+                        ArtAnchor {
+                            uv: [1.0, 0.0],
+                            radec: [81.28, 6.35],
+                        },
+                        ArtAnchor {
+                            uv: [0.0, 1.0],
+                            radec: [78.63, -8.20],
+                        },
+                    ]),
                 },
                 ConstellationFigure {
                     abbr: "Tau".into(),
@@ -1779,7 +1797,7 @@ mod tests {
         .unwrap();
         let wcs = CString::new(wcs).unwrap();
         let opts =
-            CString::new(r#"{"include_constellations":true,"constellation_boundaries":true}"#)
+            CString::new(r#"{"include_constellations":true,"constellation_boundaries":true,"constellation_art":true}"#)
                 .unwrap();
         let out = unsafe { unisolver_annotate_json(ann, wcs.as_ptr(), opts.as_ptr(), &mut err) };
         assert!(!out.is_null());
@@ -1794,6 +1812,15 @@ mod tests {
             .map(|c| c["name"].as_str().unwrap())
             .collect();
         assert!(names.contains(&"Orion"), "{names:?}");
+        let ori = v["constellations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["abbr"] == "Ori")
+            .unwrap();
+        assert_eq!(ori["art"]["cols"], 16, "{ori}");
+        assert_eq!(ori["art"]["points"].as_array().unwrap().len(), 256);
+        assert!(ori["art"]["points"][0].is_array());
         assert_eq!(
             v["boundaries"][0]["between"],
             serde_json::json!(["Ori", "Tau"])

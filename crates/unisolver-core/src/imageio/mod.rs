@@ -10,10 +10,12 @@ use crate::{CoreError, Frame, Result};
 
 mod exif;
 mod fits;
+mod preview;
 mod raster;
 mod time;
 mod xisf;
 pub use fits::read_fits_bytes;
+pub use preview::{load_preview, preview, Preview};
 pub use xisf::read_xisf_bytes;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

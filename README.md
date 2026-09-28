@@ -74,7 +74,7 @@ The **single source** of behaviour; the Flutter and C layers only marshal.
 | `ephemeris.rs`, `satellites.rs` | Planet and moon ephemeris (Standish + Meeus), satellite passes (TLE + SGP4) |
 | `calibrate.rs`, `camera.rs` | On-device multi-frame calibration (radial / polynomial distortion) and the camera model |
 | `names.rs` + `named_stars.csv` | The IAU's 411 named stars (HIP, position, magnitude, English name; localized names live in the names pack) |
-| `dso.rs`, `coords.rs`, `quat.rs`, `frame.rs`, `aberration.rs` | DSO catalog, coordinate conversions, quaternions, frames (with row stride), aberration |
+| `dso.rs`, `coords.rs`, `quat.rs`, `frame.rs`, `aberration.rs` | DSO catalog, coordinate conversions, quaternions, frames (with row stride), observation time |
 
 Tests live in `crates/unisolver-core/tests/`: `solve_test` (ladders, profiles, clamping),
 `pool_test` (routing), `storage_test` (UNISOLV2 mmap equivalence and corruption),

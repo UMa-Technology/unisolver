@@ -71,7 +71,7 @@ unisolver/
 | `ephemeris.rs`、`satellites.rs` | 行星与月亮历表（Standish + Meeus）、卫星过境（TLE + SGP4） |
 | `calibrate.rs`、`camera.rs` | 端上多帧标定（径向 / 多项式畸变）与相机模型 |
 | `names.rs` + `named_stars.csv` | IAU 411 颗命名星（HIP、位置、星等、英文名；本地化名在名称包里） |
-| `dso.rs`、`coords.rs`、`quat.rs`、`frame.rs`、`aberration.rs` | DSO 表、坐标换算、四元数、帧（含行距）、光行差 |
+| `dso.rs`、`coords.rs`、`quat.rs`、`frame.rs`、`aberration.rs` | DSO 表、坐标换算、四元数、帧（含行距）、观测时刻 |
 
 测试在 `crates/unisolver-core/tests/`：`solve_test`（梯子、档位、裁剪）、`pool_test`
 （路由）、`storage_test`（UNISOLV2 mmap 等价与容错）、`annotate_test`、`calibrate_test`，

@@ -4,8 +4,8 @@
 
 1. **Photos bring their own FOV, time and place.** JPEG, PNG and TIFF files now have their
    EXIF read: the 35 mm-equivalent focal length (or focal length with focal plane
-   resolution) becomes the first ladder rung, and the capture time (when EXIF gives its zone)
-   feeds the aberration correction. FITS/XISF files contribute `DATE-AVG`, or `DATE-OBS` plus
+   resolution) becomes the first ladder rung, and the capture time is read when EXIF gives its
+   zone. FITS/XISF files contribute `DATE-AVG`, or `DATE-OBS` plus
    half the exposure. Outcomes report `observationUnixMs` and, for photos with GPS,
    `observer` (Rust `SolveOutcome`, Flutter `SolveOutcomeDto`, C JSON), so the solar-system
    layer needs no input from the app; the example now draws it.
@@ -46,6 +46,14 @@
    `imageio::preview` / `load_preview`) turns any supported image into an auto-stretched 8-bit
    preview no larger than `maxSide`, so apps can show astronomical frames that are otherwise
    black. `solvecli --annotate-dir` uses it for FITS/XISF backgrounds.
+8. **Annotations stay on the stars when the time is known (behaviour change).** An
+   observation time (`observationUnixMs`, and since item 1 the file's header) no longer feeds
+   the stellar aberration correction. The solution and its WCS stay in the J2000 catalog
+   frame, as other plate solvers report them. With the correction, every annotation layer,
+   the grids and the batch transforms landed up to 20″ off the stars (invisible on phone
+   photos, 10 px at 2″/px), and the reported centre was as far off the catalog frame, which
+   mount sync expects. The time is still reported for the solar-system layer. An explicit
+   `observer_velocity_km_s` (Rust `SolveOptions`, C) still asks for the physical pointing.
 
 ## 2026-09-28 — v0.2.0
 

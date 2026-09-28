@@ -76,9 +76,10 @@ focal length and pixel size; EXIF 35 mm-equivalent focal length, or focal length
 plane resolution) goes first as a hint, the aspect-ratio ladder follows on failure, and
 rungs are clamped to the database's range, exactly as the C ABI's `solve_image_json`. The
 header's observation time (FITS `DATE-AVG`, or `DATE-OBS` plus half the exposure; EXIF
-`DateTimeOriginal` with its zone) feeds the aberration correction unless you pass one, and
-comes back in `outcome.observationUnixMs`, next to `outcome.observer` from EXIF GPS: hand
-both to the annotator (§1.4). To control the rungs yourself (per-model presets, a known lens) use
+`DateTimeOriginal` with its zone), unless you pass one, comes back in
+`outcome.observationUnixMs`, next to `outcome.observer` from EXIF GPS: hand both to the
+annotator (§1.4). The time does not change the solution: the WCS and the reported centre are in
+the J2000 catalog frame, so catalog positions projected through it land on the stars. To control the rungs yourself (per-model presets, a known lens) use
 `solveImageFileWithPresets(path, base, presets)`; `example/lib/fov_presets.dart` shows a
 ladder.
 
@@ -554,7 +555,9 @@ Every `opts_json` field is optional: `fov_deg` / `fov_max_error_deg` / `camera` 
 `thorough` /
 `match_threshold` / `timeout_ms` / `observation_unix_ms` / `observer_velocity_km_s` /
 `focal_length_35mm` (ladders only: an EXIF 35 mm focal length read by the caller, tried
-first).
+first). `observation_unix_ms` is only reported back. `observer_velocity_km_s` corrects stellar
+aberration, which makes the solution the camera's physical pointing, up to 20″ from the catalog
+frame the annotation uses: leave it unset when annotating or syncing a mount.
 `attitude_hint_wxyz` without `fov_deg` or `camera` is an **error**: tracking needs the
 scale, and silently falling back to a blind solve would hide that tracking is not working.
 

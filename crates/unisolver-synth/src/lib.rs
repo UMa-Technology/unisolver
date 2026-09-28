@@ -131,6 +131,9 @@ pub struct RenderParams {
     pub mag_limit: f32,
     /// Total flux (ADU) of a magnitude-8 star; flux = flux_mag8 · 10^(0.4·(8−mag))
     pub flux_mag8: f32,
+    /// Radial lens distortion in pixels about the image centre, as the engine's `Radial` model:
+    /// a star at ideal radius r lands at r · (1 + k1 · r²). 0 = pinhole.
+    pub k1: f32,
 }
 impl Default for RenderParams {
     fn default() -> Self {
@@ -140,6 +143,7 @@ impl Default for RenderParams {
             noise_sigma: 2.0,
             mag_limit: 7.0,
             flux_mag8: 200.0,
+            k1: 0.0,
         }
     }
 }
@@ -172,7 +176,8 @@ pub fn render(
     let r = (4.0 * params.psf_sigma_px).ceil() as i64;
     for c in &cents {
         let flux = params.flux_mag8 * c.mass.unwrap_or(1.0);
-        let (px, py) = (c.x + cx0, c.y + cy0);
+        let d = 1.0 + params.k1 * (c.x * c.x + c.y * c.y);
+        let (px, py) = (c.x * d + cx0, c.y * d + cy0);
         let (ix, iy) = (px.round() as i64, py.round() as i64);
         for yy in (iy - r).max(0)..=(iy + r).min(h as i64 - 1) {
             for xx in (ix - r).max(0)..=(ix + r).min(w as i64 - 1) {

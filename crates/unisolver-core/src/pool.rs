@@ -208,6 +208,7 @@ impl SolverPool {
             .map(|t| (t.info.min_fov_deg, t.info.max_fov_deg))
             .collect();
 
+        let ladder = with_focal_hint(base, w, h, hints);
         let steps: Vec<(usize, Option<FovPreset>)> = match known_fov(base, w) {
             Some(fov) => {
                 let mut cands = covering(&spans, fov);
@@ -218,7 +219,7 @@ impl SolverPool {
                 }
                 cands.into_iter().map(|i| (i, None)).collect()
             }
-            None => plan(&spans, &with_focal_hint(base, w, h, hints))
+            None => plan(&spans, &ladder)
                 .into_iter()
                 .map(|(i, p)| (i, Some(p)))
                 .collect(),
@@ -227,7 +228,14 @@ impl SolverPool {
         // Unknown FOV: the staged search over the plan (see `search`). Known FOV: each
         // covering tier once, with every centroid and the full timeout.
         let passes: Vec<Pass> = if steps.iter().all(|(_, p)| p.is_some()) {
-            search::schedule(steps.len(), base.timeout_ms, base.thorough)
+            // The informed first rung counts only when the plan kept it first
+            let informed = crate::solver::first_rung_informed(&ladder, w, h)
+                && steps
+                    .first()
+                    .and_then(|(_, p)| *p)
+                    .zip(ladder.first())
+                    .is_some_and(|(a, b)| crate::solver::same_rung(&a, b));
+            search::schedule(steps.len(), base.timeout_ms, base.thorough, informed)
         } else {
             (0..steps.len())
                 .map(|rung| Pass {

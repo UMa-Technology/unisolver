@@ -91,8 +91,11 @@ ladder.
 - **Ladders search in stages**: the likeliest rung first with the brightest 28 centroids,
   the next rungs with the brightest 24, a short all-centroid probe of the first rung, then
   the remaining rungs. A frame without stars fails in under two seconds instead of 10–16,
-  and slow edge cases got faster too. Set `thorough: true` to append the exhaustive search
-  (every rung, every centroid, full timeout) when waiting beats missing.
+  and slow edge cases got faster too. When the first rung is a hint (EXIF focal length, FITS
+  `FOCALLEN` + `XPIXSZ`, `focalLength35mm`) or your own FOV rather than the built-in ladder's
+  guess, its probe gets 400 ms instead of 100, so borderline frames with few stars solve with
+  the hint too. Set `thorough: true` to append the exhaustive search (every rung, every
+  centroid, full timeout) when waiting beats missing.
 - `ExtractionProfileDto`: the default `.phoneJpeg()` (σ10) suits compressed phone images;
   astro cameras and clean sensors want `.cleanSensor()` (σ5); for files of any origin use
   `.auto()` (σ10 first, the other profile on failure).
@@ -736,9 +739,10 @@ and `stellarium` when you ship the names pack. The example app lists them all un
 4. **Attitude**: convert pixels ↔ sky through `solution.wcs`. `quatIcrs2CamWxyz` is the
    SVD-stage attitude and can differ from the final WCS by a few arcminutes; use it only as
    a tracking hint.
-5. **Frames without stars** fail in under two seconds (measured 1.7 s on real frames). Use
-   `attempts` to tell the user no stars were found; do not retry in a loop. With
-   `thorough: true` failures take as long as the exhaustive search (10–16 s).
+5. **Frames without stars** fail in under two seconds (measured 1.7–1.9 s on real frames;
+   about 2.3 s with a FOV hint, which adds a rung and a longer probe). Use `attempts` to tell
+   the user no stars were found; do not retry in a loop. With `thorough: true` failures take
+   as long as the exhaustive search (10–16 s).
 6. **Large frames**: frames above 16 Mpx are extracted in horizontal bands, so a 26 Mpx
    astro frame peaks around 290 MB including a 320 MB narrow tier (630 MB before banding);
    phone frames up to 4K take a single pass. On mobile, still prefer downsampling 48 Mpx

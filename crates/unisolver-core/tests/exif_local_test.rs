@@ -4,10 +4,10 @@
 //! pointing, within what two rungs give on a distorting wide lens (1% of the field; measured
 //! up to 0.49%, and the golden regression allows 0.3° at 73°).
 //!
-//! Edge frames are only reported: a frame that solved plainly only when a rung was revisited
-//! (the 100 ms all-centroid probe) sits on that budget, and the few-hundredths-of-a-degree
-//! shift of a rounded focal length can tip it either way (one takes 65–120 ms depending on
-//! the estimate). Without the corpus the test prints a skipped line and passes.
+//! Edge frames solved plainly only when a rung was revisited (the 100 ms all-centroid probe;
+//! one takes 65–120 ms depending on the estimate). With EXIF that rung is informed and gets
+//! the longer probe, so the copy must solve too, if not on its first attempt. Without the
+//! corpus the test prints a skipped line and passes.
 mod common;
 
 use common::{bundled_w_db, repo_root};
@@ -72,6 +72,12 @@ fn exif_focal_length_solves_real_photos_on_the_first_rung() {
             .iter()
             .any(|a| a.fov_deg == last.fov_deg);
         if revisited {
+            assert!(
+                hinted.outcome.solution.is_some(),
+                "{name}: solved plainly on attempt {}, not with EXIF: {:?}",
+                plain.attempts.len(),
+                hinted.attempts
+            );
             edges.push(format!(
                 "{name}: plain solved on attempt {}, with EXIF {:?} after {}",
                 plain.attempts.len(),

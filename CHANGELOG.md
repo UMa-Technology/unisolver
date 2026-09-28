@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+1. **FOV hints no longer lose borderline frames.** The staged search gives the likeliest
+   rung one all-centroid probe of 100 ms. A borderline phone frame needed 65–120 ms there
+   depending on the FOV estimate, so the EXIF focal length, 0.02° off the ladder's rung, tipped
+   it out: the same photo solved without EXIF and failed with it. When the first rung is a hint
+   (EXIF, FITS `FOCALLEN` + `XPIXSZ`, `focalLength35mm`) or the caller's own FOV, that probe
+   now gets 400 ms; all 44 phone photos that solve plainly solve with EXIF too. A frame without
+   stars that carries a hint fails in about 2.3 s instead of 2.0 s.
+
 ## 2026-09-28 — v0.4.0
 
 1. **Constellation art.** Annotation can lay mythology illustrations over the constellation

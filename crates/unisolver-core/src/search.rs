@@ -8,14 +8,18 @@
 //!
 //! 1. the first (likeliest) rung with the brightest 28 centroids;
 //! 2. the next two rungs with the brightest 24;
-//! 3. the first rung again with every centroid, for 100 ms;
+//! 3. the first rung again with every centroid, for 100 ms (400 ms when that rung is an
+//!    informed guess: a header or focal-length hint, or the caller's own FOV);
 //! 4. the remaining rungs with the brightest 24;
 //! 5. with `thorough`, every rung with every centroid and the full timeout (the old search).
 //!
 //! The numbers come from replaying per-rung timings of 47 real phone frames and stacked
 //! frames: every frame that solved before still solves, frames without stars fail in under
 //! two seconds instead of 10–16, and `thorough` keeps the exhaustive search for callers who
-//! would rather wait than miss.
+//! would rather wait than miss. A borderline frame needs 65–120 ms in the probe depending on
+//! the FOV estimate, so a hint 0.02° off the ladder's rung tipped it out of 100 ms: an
+//! informed rung is usually right, and a frame without stars that carries one fails 0.3 s
+//! later instead.
 
 /// Pattern stars for the first rung.
 pub(crate) const FIRST_RUNG_PATTERN_STARS: u32 = 28;
@@ -28,6 +32,8 @@ pub(crate) const SWEEP_RUNGS: usize = 3;
 pub(crate) const DEEP_PROBE_RUNGS: usize = 1;
 /// Budget of each deep probe.
 pub(crate) const DEEP_PROBE_MS: u64 = 100;
+/// Budget of the deep probe when the first rung is an informed guess
+pub(crate) const HINTED_PROBE_MS: u64 = 400;
 
 /// One attempt of the schedule: which rung, how many pattern stars, how long.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,8 +43,14 @@ pub(crate) struct Pass {
     pub timeout_ms: Option<u64>,
 }
 
-/// The staged schedule over `rungs` ladder rungs (see the module docs).
-pub(crate) fn schedule(rungs: usize, timeout_ms: Option<u64>, thorough: bool) -> Vec<Pass> {
+/// The staged schedule over `rungs` ladder rungs (see the module docs); `informed` when the
+/// first rung is an informed guess rather than the built-in ladder's.
+pub(crate) fn schedule(
+    rungs: usize,
+    timeout_ms: Option<u64>,
+    thorough: bool,
+    informed: bool,
+) -> Vec<Pass> {
     let pass = |rung, pattern_stars, timeout_ms| Pass {
         rung,
         pattern_stars,
@@ -48,7 +60,12 @@ pub(crate) fn schedule(rungs: usize, timeout_ms: Option<u64>, thorough: bool) ->
         return Vec::new();
     }
     let sweep = SWEEP_RUNGS.min(rungs);
-    let probe = Some(timeout_ms.map_or(DEEP_PROBE_MS, |t| t.min(DEEP_PROBE_MS)));
+    let budget = if informed {
+        HINTED_PROBE_MS
+    } else {
+        DEEP_PROBE_MS
+    };
+    let probe = Some(timeout_ms.map_or(budget, |t| t.min(budget)));
     let mut v = vec![pass(0, FIRST_RUNG_PATTERN_STARS, timeout_ms)];
     v.extend((1..sweep).map(|r| pass(r, SWEEP_PATTERN_STARS, timeout_ms)));
     v.extend((0..DEEP_PROBE_RUNGS.min(rungs)).map(|r| pass(r, u32::MAX, probe)));
@@ -96,7 +113,7 @@ mod tests {
     fn five_rungs() {
         let t = Some(4000);
         assert_eq!(
-            schedule(5, t, false),
+            schedule(5, t, false, false),
             [
                 p(0, 28, t),
                 p(1, 24, t),
@@ -111,9 +128,9 @@ mod tests {
     #[test]
     fn thorough_appends_the_exhaustive_search() {
         let t = Some(4000);
-        let s = schedule(5, t, true);
+        let s = schedule(5, t, true, false);
         assert_eq!(s.len(), 6 + 5);
-        assert_eq!(&s[..6], schedule(5, t, false).as_slice());
+        assert_eq!(&s[..6], schedule(5, t, false, false).as_slice());
         for (i, pass) in s[6..].iter().enumerate() {
             assert_eq!(*pass, p(i, u32::MAX, t));
         }
@@ -121,7 +138,7 @@ mod tests {
 
     #[test]
     fn run_stops_at_the_first_solve_and_flags_first_visits() {
-        let passes = schedule(5, Some(4000), false);
+        let passes = schedule(5, Some(4000), false, false);
         let mut seen = Vec::new();
         let solved = run(&passes, |p, first| {
             seen.push((p.rung, first));
@@ -139,12 +156,30 @@ mod tests {
     #[test]
     fn short_ladders_and_budgets() {
         assert_eq!(
-            schedule(1, Some(4000), false),
+            schedule(1, Some(4000), false, false),
             [p(0, 28, Some(4000)), p(0, u32::MAX, Some(100))]
         );
         // A caller budget below the probe budget caps the probe; no budget means 100 ms
-        assert_eq!(schedule(1, Some(50), false)[1].timeout_ms, Some(50));
-        assert_eq!(schedule(1, None, false)[1].timeout_ms, Some(100));
-        assert!(schedule(0, Some(4000), true).is_empty());
+        assert_eq!(schedule(1, Some(50), false, false)[1].timeout_ms, Some(50));
+        assert_eq!(schedule(1, None, false, false)[1].timeout_ms, Some(100));
+        assert!(schedule(0, Some(4000), true, false).is_empty());
+    }
+
+    #[test]
+    fn an_informed_first_rung_is_probed_longer() {
+        let t = Some(4000);
+        let s = schedule(5, t, false, true);
+        assert_eq!(s[3], p(0, u32::MAX, Some(400)));
+        // Everything else is the uninformed schedule
+        let plain = schedule(5, t, false, false);
+        assert_eq!(s.len(), plain.len());
+        assert!(s
+            .iter()
+            .zip(&plain)
+            .enumerate()
+            .all(|(i, (a, b))| i == 3 || a == b));
+        // The caller's budget still caps it
+        assert_eq!(schedule(1, Some(250), false, true)[1].timeout_ms, Some(250));
+        assert_eq!(schedule(1, None, false, true)[1].timeout_ms, Some(400));
     }
 }

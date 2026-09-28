@@ -588,6 +588,7 @@ impl Solver {
             .copied()
             .filter(|p| (lo..=hi).contains(&p.fov_deg))
             .collect();
+        let informed = first_rung_informed(&presets, frame.width, frame.height);
         if presets.is_empty() {
             presets = db_range_ladder(props.min_fov_deg, props.max_fov_deg);
         }
@@ -597,7 +598,8 @@ impl Solver {
         let mut cache = ExtractCache::default();
         let mut attempts = Vec::new();
         let mut last: Option<SolveOutcome> = None;
-        let passes = crate::search::schedule(presets.len(), base.timeout_ms, base.thorough);
+        let passes =
+            crate::search::schedule(presets.len(), base.timeout_ms, base.thorough, informed);
         crate::search::run(&passes, |pass, first| {
             let p = presets[pass.rung];
             let mut o = base.clone();
@@ -726,6 +728,20 @@ pub fn focal_35mm_hint(mm: f32, width: u32, height: u32) -> Option<FovPreset> {
         .then(|| hint_preset(fov as f32))
 }
 
+/// Whether `presets` starts with an informed guess: a first rung that is no rung of the
+/// built-in ladder for this frame shape came from a header, a focal-length hint or the
+/// caller, and the staged search probes it longer (`search::HINTED_PROBE_MS`).
+pub(crate) fn first_rung_informed(presets: &[FovPreset], width: u32, height: u32) -> bool {
+    let ladder = aspect_ladder(width, height);
+    presets
+        .first()
+        .is_some_and(|p| !ladder.iter().any(|q| same_rung(p, q)))
+}
+
+pub(crate) fn same_rung(a: &FovPreset, b: &FovPreset) -> bool {
+    a.fov_deg == b.fov_deg && a.max_error_deg == b.max_error_deg
+}
+
 /// Hint rungs first, then `ladder` without the rungs within 1° of a hint. Hints are only
 /// hints: when they fail, the rest of the ladder still runs.
 pub fn ladder_after_hints(hints: &[FovPreset], ladder: &[FovPreset]) -> Vec<FovPreset> {
@@ -764,4 +780,29 @@ pub fn presets_with_hints(
     height: u32,
 ) -> Vec<FovPreset> {
     ladder_after_hints(&meta.solve_hints(), &aspect_ladder(width, height))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The built-in ladder is an uninformed guess; a hint in front of it, or a caller's own
+    /// FOV, is informed. A hint 0.02° off a ladder rung replaces that rung and still counts.
+    #[test]
+    fn informed_first_rungs() {
+        let (w, h) = (720, 1280);
+        let ladder = aspect_ladder(w, h);
+        assert!(!first_rung_informed(&ladder, w, h));
+        assert!(!first_rung_informed(&ladder[1..], w, h));
+        assert!(!first_rung_informed(&[], w, h));
+        let hinted = ladder_after_hints(&[hint_preset(45.98)], &ladder);
+        assert!(first_rung_informed(&hinted, w, h));
+        let own = [FovPreset {
+            fov_deg: 70.0,
+            max_error_deg: 9.0,
+        }];
+        assert!(first_rung_informed(&own, w, h));
+        // A portrait frame's ladder starts at 46°: 70° ±9° is a rung only of the landscape one
+        assert!(!first_rung_informed(&own, h, w));
+    }
 }

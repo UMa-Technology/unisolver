@@ -4,7 +4,7 @@ members = ["third_party/tetra3", "crates/unisolver-synth", "crates/unisolver-cor
 exclude = ["internal"]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/UMa-Technology/unisolver"

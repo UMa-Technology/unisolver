@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-09-29 — v0.4.2
+
 1. **Solves no longer depend on how fast the CPU is.** The staged search's all-centroid
    probe of the likeliest rung ran for 100 ms (400 ms for a hinted rung). A phone three to
    five times slower than a desktop searched a third as far in that time, so a borderline

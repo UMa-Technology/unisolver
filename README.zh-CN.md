@@ -107,7 +107,7 @@ unisolver/
 | `lib/src/db_manager.dart` | 星库获取：清单 → 断点续传 → sha256 → 解压 → 注册 |
 | `lib/src/rust/` | **flutter_rust_bridge 生成，勿手改**（改 `rust/src/api/**` 后重新生成） |
 | `rust/src/api/` | 绑定层：`solver.rs`（单库与多库句柄）、`types.rs`（DTO）、`install.rs`（解压 + sha256）、`satellites.rs`、`logging.rs` |
-| `assets/` | 随包 10–80° 星库（zstd 16 MB）与 DSO 表（含轮廓，771 KB） |
+| `assets/` | 随包 10–80° 星库（zstd 16 MB）与 DSO 表（含轮廓，796 KB） |
 | `lib/optional/` | 多语言名称包（215 KB，GPL-2.0-or-later），由 App 自行选择是否带上 |
 | `example/` | 示例 App：解算、实时跟踪、标定、星库管理四页，可切换标注语言 |
 

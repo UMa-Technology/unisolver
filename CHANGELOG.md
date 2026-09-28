@@ -6,6 +6,11 @@
    was credited to UMa Technology by mistake; `dataAttributions()` and the two NOTICE files
    in `lib/optional/` now name the artist for both sets, and the painted set's entry is
    called just "Constellation illustrations".
+2. **Outlines for two nebulae OpenNGC lacks.** The Spaghetti Nebula (Sh 2-240, Simeis 147)
+   and the bowl of the Pipe Nebula (B 78) now have records of their own with three-level
+   outlines, traced from sky-survey images: B 78 from the red Digitized Sky Survey, Sh 2-240
+   from the continuum-corrected Virginia Tech Spectral-Line Survey (CC BY-SA 4.0, credited as
+   `own_outlines` in `dataAttributions()`). The DSO catalog grows from 771 KB to 796 KB.
 
 ## 2026-09-29 — v0.4.2
 

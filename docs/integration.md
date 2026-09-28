@@ -48,7 +48,7 @@ final namesPath = await UnisolverAssets.installNames();  // optional names pack,
 ```
 
 - Bundled assets: the 10–80° database (≈16 MB zstd, 61 MB decompressed, loaded with mmap)
-  and the DSO catalog (771 KB). The multilingual names pack (215 KB) is opt-in, see 1.4.
+  and the DSO catalog (796 KB). The multilingual names pack (215 KB) is opt-in, see 1.4.
 - `ensureInstalled` sniffs installed files by magic bytes; missing, empty or old v1 files
   are reinstalled, so it is safe to call on every launch.
 - `solver.properties()` (synchronous) reports the database's FOV range, star and pattern
@@ -304,7 +304,7 @@ ship (`dataAttributions()`). C and Rust: the option is `constellation_art`; the 
 `constellation_art.dart`.
 
 **Build the annotator once and keep it.** Construction reads and parses the DSO catalog
-(771 KB), the names pack (215 KB) and, when given, the constellation pack (211 KB):
+(796 KB), the names pack (215 KB) and, when given, the constellation pack (211 KB):
 
 | Operation | Measured (Apple M2 Max, 73.2° phone frame, 734 annotated objects, 20 outlined) |
 |---|---|
@@ -697,7 +697,7 @@ runtime, so only these count (**databases excluded**, see the next table):
 | macOS arm64 `libunisolver_frb.dylib` | **2.30 MiB** | |
 | Windows x64 / arm64 DLL | not measured | needs a Windows host; expected to be similar |
 | Dart AOT | ~150 KB | `unisolver_flutter` + `flutter_rust_bridge` |
-| `unisolver_dso.bin` (bundled asset) | 753 KiB (~457 KiB compressed in the APK) | DSO annotation catalog with outlines; omit it if you do not annotate |
+| `unisolver_dso.bin` (bundled asset) | 777 KiB (~481 KiB compressed in the APK) | DSO annotation catalog with outlines; omit it if you do not annotate |
 | `unisolver_constellations.bin` (bundled asset) | 211 KiB (~173 KiB compressed) | constellation figures, IAU boundaries, the lookup table and the art anchors |
 | `optional/unisolver_art_western_new.bin` (opt-in asset) | 3.2 MiB (85 webp) | constellation illustrations, painted set; `unisolver_art_western.bin` (low-poly) is 2.8 MiB |
 
@@ -713,7 +713,7 @@ tracing-subscriber layer.
 | File | Purpose | Size (zstd / raw) | Distribution |
 |---|---|---|---|
 | `unisolver_10_80.db` | wide field 10–80° (phones) | 16 MB / 61 MB | bundled with the plugin |
-| `unisolver_dso.bin` | DSO catalog (NGC / IC / Messier) with outlines | 771 KB | bundled with the plugin |
+| `unisolver_dso.bin` | DSO catalog (NGC / IC / Messier) with outlines | 796 KB | bundled with the plugin |
 | `unisolver_constellations.bin` | 88 IAU constellation figures and boundaries | 200 KB | bundled with the plugin |
 | `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 229 KB | opt-in: declared by the app, or downloaded |
 

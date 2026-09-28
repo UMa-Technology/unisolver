@@ -648,7 +648,8 @@ runtime, so only these count (**databases excluded**, see the next table):
 | `assets/art/western_new/` (bundled asset) | 3.4 MiB (85 webp) | constellation illustrations, painted set |
 
 **About 3.3 MiB installed / 3.0 MiB download per architecture** (Android arm64, without
-databases). Shipping both arm64-v8a and x86_64 doubles the native part (x86_64 is only for
+databases), plus 3.4 MiB for the bundled constellation illustrations (webp, which the store
+cannot compress further). Shipping both arm64-v8a and x86_64 doubles the native part (x86_64 is only for
 emulators). Integrating through the **C ABI** is smaller: `libunisolver_cabi.dylib` (macOS
 arm64, stripped) is **1.67 MiB**, without the flutter_rust_bridge / serde_json /
 tracing-subscriber layer.

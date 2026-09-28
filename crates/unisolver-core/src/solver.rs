@@ -134,6 +134,28 @@ pub struct SolveOptions {
     /// Default on.
     #[serde(default = "default_true")]
     pub fit_lens: bool,
+    /// Lost-in-space solves only: re-measure the scale (focal length) from the brightest stars
+    /// and keep it when they land closer to catalog stars. The upstream refinement keeps the
+    /// scale its 4-star pattern measured, 1–3% off on wide frames. Never with `camera` or a
+    /// tracking hint. Default on.
+    #[serde(default = "default_true")]
+    pub refine_scale: bool,
+}
+
+/// The refinements a solve runs after it succeeds
+#[derive(Clone, Copy)]
+pub(crate) struct Refine {
+    pub scale: bool,
+    pub lens: bool,
+}
+
+impl Refine {
+    pub(crate) fn from_opts(opts: &SolveOptions) -> Self {
+        Self {
+            scale: opts.refine_scale && opts.camera.is_none() && opts.attitude_hint.is_none(),
+            lens: opts.fit_lens && opts.camera.is_none(),
+        }
+    }
 }
 
 fn default_true() -> bool {
@@ -154,6 +176,7 @@ impl SolveOptions {
             retry_alternate_profile: true,
             thorough: false,
             fit_lens: true,
+            refine_scale: true,
             match_threshold: 1e-5,
             timeout_ms: Some(5000),
             observation_unix_ms: None,
@@ -300,9 +323,9 @@ impl Solver {
         let (w, h) = (frame.width, frame.height);
         let cfg = build_solve_config(opts, w, h)?;
 
-        let fit_lens = opts.fit_lens && opts.camera.is_none();
+        let refine = Refine::from_opts(opts);
         let (mut out, mut raw) =
-            self.extract_and_solve(frame, &opts.extraction.resolve(), &cfg, t_total, fit_lens)?;
+            self.extract_and_solve(frame, &opts.extraction.resolve(), &cfg, t_total, refine)?;
 
         // Profile retry: the fallback when the material guess was wrong. Triggers: see the field docs.
         let trigger = matches!(out.status, SolveStatus::TooFew)
@@ -310,7 +333,7 @@ impl Solver {
         if trigger && opts.retry_alternate_profile && opts.attitude_hint.is_none() {
             if let Some(alt) = opts.extraction.alternate() {
                 let (out2, raw2) =
-                    self.extract_and_solve(frame, &alt.resolve(), &cfg, t_total, fit_lens)?;
+                    self.extract_and_solve(frame, &alt.resolve(), &cfg, t_total, refine)?;
                 if matches!(out2.status, SolveStatus::Ok) {
                     let mut out2 = out2;
                     out2.extraction_retried = true;
@@ -336,16 +359,16 @@ impl Solver {
         extraction: &ExtractionOptions,
         cfg: &SolveConfig,
         t_total: Instant,
-        fit_lens: bool,
+        refine: Refine,
     ) -> Result<SolveInner> {
         let ext = extract_frame(frame, extraction, &self.pool)?;
-        self.solve_extracted(&ext, cfg, frame.width, frame.height, t_total, fit_lens)
+        self.solve_extracted(&ext, cfg, frame.width, frame.height, t_total, refine)
     }
 
     /// Solves once from already-extracted centroids. **Extraction does not depend on the
     /// database**, so `SolverPool` extracts once and reuses it across tiers (a cross-tier
-    /// ladder can have a dozen rungs; extracting a 26 Mpx frame takes seconds). With
-    /// `fit_lens` a wide solve is refined with a lens fitted to its own stars (`lens`).
+    /// ladder can have a dozen rungs; extracting a 26 Mpx frame takes seconds). A solve is then
+    /// refined as `refine` asks: its scale (`scale`), then a lens fitted to its stars (`lens`).
     pub(crate) fn solve_extracted(
         &self,
         ext: &Extracted,
@@ -353,7 +376,7 @@ impl Solver {
         w: u32,
         h: u32,
         t_total: Instant,
-        fit_lens: bool,
+        refine: Refine,
     ) -> Result<SolveInner> {
         let t_solve = Instant::now();
         let result = self
@@ -361,12 +384,21 @@ impl Solver {
             .solve_from_centroids(&ext.centroids, cfg)
             .map(|sol| {
                 let g = geometry_from_solution(&sol, w, h, &ext.topleft);
-                if fit_lens {
-                    if let Some(refined) = crate::lens::refine(&self.db, ext, cfg, w, h, &sol, &g) {
-                        return refined;
+                let mut best = (sol, g);
+                if refine.scale {
+                    if let Some(r) =
+                        crate::scale::refine(&self.db, ext, cfg, w, h, &best.0, &best.1)
+                    {
+                        best = r;
                     }
                 }
-                (sol, g)
+                if refine.lens {
+                    if let Some(r) = crate::lens::refine(&self.db, ext, cfg, w, h, &best.0, &best.1)
+                    {
+                        best = r;
+                    }
+                }
+                best
             });
         let solve_ms = t_solve.elapsed().as_secs_f32() * 1000.0;
         let timing = Timing {
@@ -574,8 +606,8 @@ impl Solver {
             o.timeout_ms = pass.timeout_ms;
             let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.pool)?;
-            let fit_lens = o.fit_lens && o.camera.is_none();
-            let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total, fit_lens)?;
+            let refine = Refine::from_opts(&o);
+            let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
             // Profile retry, once per rung and only on TooFew: inside a ladder NoMatch more
             // likely means a wrong FOV
             if first
@@ -585,7 +617,7 @@ impl Solver {
             {
                 if let Some(alt) = o.extraction.alternate() {
                     let ext2 = cache.get(frame, &alt.resolve(), &self.pool)?;
-                    let (out2, _) = self.solve_extracted(&ext2, &cfg, w, h, t_total, fit_lens)?;
+                    let (out2, _) = self.solve_extracted(&ext2, &cfg, w, h, t_total, refine)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;
                     }

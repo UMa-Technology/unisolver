@@ -254,10 +254,10 @@ impl SolverPool {
             o.timeout_ms = pass.timeout_ms;
             let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
-            let fit_lens = o.fit_lens && o.camera.is_none();
+            let refine = crate::solver::Refine::from_opts(&o);
             let (mut out, _) = tier
                 .solver
-                .solve_extracted(&ext, &cfg, w, h, t_total, fit_lens)?;
+                .solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
 
             // Profile retry, as in the single-database ladder: once per step, only on TooFew
             // (NoMatch more likely means a wrong FOV); tracking and Custom never retry.
@@ -270,7 +270,7 @@ impl SolverPool {
                     let ext2 = cache.get(frame, &alt.resolve(), &self.rayon)?;
                     let (out2, _) = tier
                         .solver
-                        .solve_extracted(&ext2, &cfg, w, h, t_total, fit_lens)?;
+                        .solve_extracted(&ext2, &cfg, w, h, t_total, refine)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;
                     }

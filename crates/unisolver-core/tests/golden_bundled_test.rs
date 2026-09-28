@@ -57,14 +57,14 @@ fn solve_at(fov: f32, ra: f64, dec: f64, w: u32, h: u32) -> SolvedGeometry {
 
 #[test]
 fn bundled_database_solves_real_sky_fields() {
-    // (fov, ra, dec, width, height, pointing tolerance in arcmin)
+    // (fov, ra, dec, width, height, pointing tolerance in arcmin). The upstream refinement
+    // keeps the scale its 4-star pattern measured, 1–3% off on very wide fields; the scale
+    // refinement brings every case to its rendered FOV and pointing.
     let cases = [
-        // Very wide fields: the final refinement fixes rotation, not scale, so the error
-        // grows with the field (≈ 0.1–0.2° at 60–75°)
-        (73.3_f32, 250.07, -19.19, 1920, 1080, 15.0), // Scorpius, landscape phone frame
-        (60.0, 10.0, 80.0, 1920, 1080, 15.0),         // near the north celestial pole
-        (46.0, 83.8, -5.4, 1080, 1920, 3.0),          // Orion, portrait phone frame
-        (20.0, 200.0, -75.0, 1600, 1200, 3.0),        // far south, 4:3
+        (73.3_f32, 250.07, -19.19, 1920, 1080, 2.0), // Scorpius, landscape phone frame
+        (60.0, 10.0, 80.0, 1920, 1080, 2.0),         // near the north celestial pole
+        (46.0, 83.8, -5.4, 1080, 1920, 2.0),         // Orion, portrait phone frame
+        (20.0, 200.0, -75.0, 1600, 1200, 2.0),       // far south, 4:3
     ];
     for (fov, ra, dec, w, h, tol_arcmin) in cases {
         let g = solve_at(fov, ra, dec, w, h);
@@ -77,8 +77,8 @@ fn bundled_database_solves_real_sky_fields() {
             g.dec_deg
         );
         assert!(
-            (g.fov_deg - fov).abs() < 1.5,
-            "fov {fov}: solved {:.2}",
+            (g.fov_deg - fov).abs() < 0.05,
+            "fov {fov}: solved {:.3}",
             g.fov_deg
         );
     }

@@ -117,6 +117,10 @@ pub struct SolvedGeometry {
     /// carries the fitted focal length and radial distortion
     #[serde(default)]
     pub lens_fitted: bool,
+    /// The scale (focal length) was re-measured from the brightest stars
+    /// (`SolveOptions::refine_scale`)
+    #[serde(default)]
+    pub scale_refined: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,5 +239,6 @@ pub(crate) fn geometry_from_solution(
         wcs,
         matched,
         lens_fitted: false,
+        scale_refined: false,
     }
 }

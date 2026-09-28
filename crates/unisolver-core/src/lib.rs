@@ -23,6 +23,7 @@ pub mod pool;
 mod quat;
 #[cfg(feature = "satellites")]
 pub mod satellites;
+mod scale;
 mod search;
 pub mod sky;
 pub mod solver;

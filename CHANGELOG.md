@@ -38,6 +38,10 @@
    through the solve's lens model. The example now draws its overlay in screen space over a
    pinch-zoomable photo, keeps the detection rings behind a toggle and no longer rings a named
    star twice.
+7. **Previews for FITS and XISF.** `imagePreview(path:, maxSide:)` (Rust
+   `imageio::preview` / `load_preview`) turns any supported image into an auto-stretched 8-bit
+   preview no larger than `maxSide`, so apps can show astronomical frames that are otherwise
+   black. `solvecli --annotate-dir` uses it for FITS/XISF backgrounds.
 
 ## 2026-09-28 — v0.2.0
 

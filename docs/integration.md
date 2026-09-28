@@ -197,6 +197,14 @@ label to about 3 px when a 1920 px photo fits a phone. The example pairs an
 `TransformationController` (`solve_page.dart`, `overlay_painter.dart`); opaque line colors
 render more evenly than translucent ones.
 
+**Showing FITS and XISF.** Flutter cannot decode them, and their linear data would look
+black anyway. `imagePreview(path:, maxSide:)` returns an auto-stretched greyscale preview as
+RGBA (the engine box-averages the frame down by a whole factor so neither side exceeds
+`maxSide`, then lifts the sky to a quarter of full scale from its median and MAD, as
+PixInsight's AutoSTF does): decode it with `ui.decodeImageFromPixels(..., PixelFormat.rgba8888,
+...)` and draw it over the source's size (`sourceWidth` × `sourceHeight`) so it lines up with
+the annotations. About 40 ms for a 26 Mpx frame. Rust: `imageio::preview` / `load_preview`.
+
 **Tell the engine what you show.** Pass `viewport` (the visible image rectangle in image
 pixels, and `scale`, screen pixels per image pixel) and annotate again when the user
 finishes zooming or panning: it costs about a millisecond. Lines then follow the zoom:

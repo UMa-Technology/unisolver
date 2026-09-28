@@ -1,6 +1,6 @@
 PODS:
   - FlutterMacOS (1.0.0)
-  - unisolver_flutter (0.4.0):
+  - unisolver_flutter (0.4.1):
     - FlutterMacOS
 
 DEPENDENCIES:
@@ -15,7 +15,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
-  unisolver_flutter: dad1dc955a099e79b9e9effc7c0dad30a9549f21
+  unisolver_flutter: ff683e704fad05cb50606e93282012710afa19c4
 
 PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
 

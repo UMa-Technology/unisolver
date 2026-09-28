@@ -553,18 +553,14 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
         if let (Some(dir), Some(g)) = (cli.annotate_dir.as_ref(), out.solution.as_ref()) {
             std::fs::create_dir_all(dir)?;
-            // Annotation background: rasters open directly; astro formats get a 1–99 percentile stretch to 8-bit
+            // Annotation background: rasters open directly; astro formats get the engine's
+            // auto-stretched preview at full size
             let mut rgb = match image::open(path) {
                 Ok(d) => d.to_rgb8(),
                 Err(_) => {
-                    let luma = frame.to_luma_f32()?;
-                    let mut sorted = luma.clone();
-                    sorted.sort_by(f32::total_cmp);
-                    let lo = sorted[(sorted.len() as f64 * 0.01) as usize];
-                    let hi = sorted[(sorted.len() as f64 * 0.999) as usize].max(lo + 1.0);
+                    let pv = unisolver_core::imageio::preview(&frame, w.max(h))?;
                     image::RgbImage::from_fn(w, h, |x, y| {
-                        let v = luma[(y * w + x) as usize];
-                        let g = (((v - lo) / (hi - lo)).clamp(0.0, 1.0) * 255.0) as u8;
+                        let g = pv.luma[(y * w + x) as usize];
                         image::Rgb([g, g, g])
                     })
                 }

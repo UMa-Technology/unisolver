@@ -21,11 +21,11 @@ jobs:
   rust-linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "clippy, rustfmt" }
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           # upstream's integration tests download their images (about 600 MB) on first use
           path: |
@@ -59,11 +59,11 @@ jobs:
     defaults:
       run: { shell: bash }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             third_party/tetra3/data/skyview_10deg_test_images
@@ -80,7 +80,7 @@ jobs:
     if: ${{ !github.event.repository.private || inputs.full }}
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with: { targets: "x86_64-pc-windows-msvc, aarch64-pc-windows-msvc" }
       - uses: Swatinem/rust-cache@v2
@@ -91,7 +91,7 @@ jobs:
     if: ${{ !github.event.repository.private || inputs.full }}
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2

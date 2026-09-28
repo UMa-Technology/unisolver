@@ -23,9 +23,9 @@ jobs:
           - { platform: windows-aarch64, os: windows-2022 }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
       - name: package
         shell: bash
@@ -33,7 +33,7 @@ jobs:
           version="$GITHUB_REF_NAME"
           [[ "$GITHUB_REF" == refs/tags/* ]] || version="dev-${GITHUB_SHA::7}"
           python scripts/ci/package_cabi.py "${{ matrix.platform }}" "$version" dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: cabi-${{ matrix.platform }}
           path: dist/*.zip
@@ -44,11 +44,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: the tag matches every manifest and the CHANGELOG
         run: cargo xtask release check "$GITHUB_REF_NAME"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with: { pattern: cabi-*, path: dist, merge-multiple: true }
       - name: names pack, checksums, notes
         run: |
@@ -57,7 +57,7 @@ jobs:
           (cd dist && sha256sum -- * > SHA256SUMS)
           cargo xtask release notes "$GITHUB_REF_NAME" > notes.md
           ls -l dist
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body_path: notes.md
           files: dist/*

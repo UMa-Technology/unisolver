@@ -136,6 +136,8 @@ struct SolutionJson {
     prob: f64,
     scale_arcsec_per_px: f64,
     wcs: core::Wcs,
+    /// The lens was fitted to this frame's stars (`fit_lens`): `wcs.camera` carries it
+    lens_fitted: bool,
 }
 
 /// Solve options as JSON. **Every field is optional** (`{}` or NULL keeps the defaults).
@@ -179,6 +181,9 @@ struct SolveOptsJson {
     /// tried first as a hint (±15%) and the ladder still follows; ignored when `fov_deg` or
     /// `camera` is given. Files read their own EXIF
     focal_length_35mm: Option<f32>,
+    /// Fit the lens to the stars of a wide frame (≥ 20°, ≥ 30 matches) and keep it when it
+    /// fits better (`solution.lens_fitted`); never with `camera`. Default true
+    fit_lens: bool,
 }
 
 impl Default for SolveOptsJson {
@@ -202,6 +207,7 @@ impl Default for SolveOptsJson {
             observation_unix_ms: None,
             observer_velocity_km_s: None,
             focal_length_35mm: None,
+            fit_lens: true,
         }
     }
 }
@@ -255,6 +261,7 @@ impl SolveOptsJson {
         o.observation_unix_ms = self.observation_unix_ms;
         o.observer_velocity_km_s = self.observer_velocity_km_s;
         o.focal_length_35mm = self.focal_length_35mm;
+        o.fit_lens = self.fit_lens;
         Ok((o, known))
     }
 }
@@ -293,6 +300,7 @@ fn build_solve_json(
             prob: g.prob,
             scale_arcsec_per_px: g.wcs.scale_arcsec_per_px(),
             wcs: g.wcs,
+            lens_fitted: g.lens_fitted,
         }),
     }
 }
@@ -2296,6 +2304,61 @@ mod tests {
         }
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The lens fit through the C surface: on by default for a wide, bent frame (the fitted
+    /// camera comes back in `wcs`), off with `"fit_lens": false`.
+    #[test]
+    fn lens_fit_via_c_surface() {
+        let mut err: *mut c_char = std::ptr::null_mut();
+        let solver = open_test_solver(&mut err);
+        let img = unisolver_synth::render(
+            unisolver_synth::test_db().star_catalog.stars(),
+            &unisolver_synth::look_at(210.0, -20.0, 25.0),
+            35.0,
+            1024,
+            768,
+            &unisolver_synth::RenderParams {
+                k1: 2.0e-8,
+                ..Default::default()
+            },
+            9,
+        );
+        let bytes: Vec<u8> = img.iter().flat_map(|v| v.to_ne_bytes()).collect();
+        let solve = |opts: &str| -> serde_json::Value {
+            let (k, o) = (
+                CString::new("luma_f32").unwrap(),
+                CString::new(opts).unwrap(),
+            );
+            let mut e: *mut c_char = std::ptr::null_mut();
+            let out = unsafe {
+                unisolver_solve_frame_json_opts(
+                    solver,
+                    bytes.as_ptr(),
+                    bytes.len(),
+                    1024,
+                    768,
+                    k.as_ptr(),
+                    0,
+                    o.as_ptr(),
+                    &mut e,
+                )
+            };
+            assert!(!out.is_null());
+            let v = serde_json::from_str(unsafe { CStr::from_ptr(out) }.to_str().unwrap()).unwrap();
+            unsafe { unisolver_string_free(out) };
+            v
+        };
+        let on = solve(r#"{"fov_deg":35.0}"#);
+        assert_eq!(on["solution"]["lens_fitted"], true, "{}", on["solution"]);
+        assert!(on["solution"]["wcs"]["camera"]["distortion"]["Radial"]["k1"].is_number());
+        let off = solve(r#"{"fov_deg":35.0,"fit_lens":false}"#);
+        assert_eq!(off["solution"]["lens_fitted"], false);
+        assert!(
+            on["solution"]["rmse_arcsec"].as_f64().unwrap()
+                < off["solution"]["rmse_arcsec"].as_f64().unwrap()
+        );
+        unsafe { unisolver_close(solver) };
     }
 
     #[test]

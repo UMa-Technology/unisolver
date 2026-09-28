@@ -43,6 +43,9 @@ struct Cli {
     /// Keep the pinhole solve: do not fit the lens to wide frames' stars
     #[arg(long)]
     no_fit_lens: bool,
+    /// Keep the scale the pattern match measured: do not re-measure it from the brightest stars
+    #[arg(long)]
+    no_refine_scale: bool,
     /// Calibration: feed every image to a CalibrationSession, fit radial distortion, write the camera JSON
     #[arg(long)]
     calibrate_out: Option<PathBuf>,
@@ -116,6 +119,8 @@ struct SolutionOut {
     scale_arcsec_per_px: f64,
     /// The lens was fitted to this frame's stars
     lens_fitted: bool,
+    /// The scale was re-measured from the brightest stars
+    scale_refined: bool,
     named_stars: Vec<String>,
     dso: Vec<String>,
     /// Solar-system bodies (with --at-unix-ms; the moon is topocentric only with --observer)
@@ -367,6 +372,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         base.timeout_ms = Some(4_000);
         base.thorough = cli.thorough;
         base.fit_lens = !cli.no_fit_lens;
+        base.refine_scale = !cli.no_refine_scale;
 
         // Observation time and place: the command line first, then the header (FITS/XISF time,
         // EXIF time with its zone and GPS position), as the library's file entries do
@@ -511,6 +517,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 prob: g.prob,
                 scale_arcsec_per_px: g.wcs.scale_arcsec_per_px(),
                 lens_fitted: g.lens_fitted,
+                scale_refined: g.scale_refined,
                 named_stars: ann
                     .named_stars
                     .iter()
@@ -679,12 +686,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             r.solution
                 .as_ref()
                 .map(|s| format!(
-                    ", ra={:.3} dec={:.3} fov={:.1} matches={} rmse={:.0}\"{}",
+                    ", ra={:.3} dec={:.3} fov={:.1} matches={} rmse={:.0}\"{}{}",
                     s.ra_deg,
                     s.dec_deg,
                     s.fov_deg,
                     s.num_matches,
                     s.rmse_arcsec,
+                    if s.scale_refined { " scale" } else { "" },
                     if s.lens_fitted { " lens" } else { "" }
                 ))
                 .unwrap_or_default()

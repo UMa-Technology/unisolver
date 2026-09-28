@@ -93,9 +93,12 @@ ladder.
   the remaining rungs. A frame without stars fails in under two seconds instead of 10–16,
   and slow edge cases got faster too. When the first rung is a hint (EXIF focal length, FITS
   `FOCALLEN` + `XPIXSZ`, `focalLength35mm`) or your own FOV rather than the built-in ladder's
-  guess, its probe gets 400 ms instead of 100, so borderline frames with few stars solve with
-  the hint too. Set `thorough: true` to append the exhaustive search (every rung, every
-  centroid, full timeout) when waiting beats missing.
+  guess, its probe checks four times as many patterns, so borderline frames with few stars
+  solve with the hint too. The probe is sized in patterns, not milliseconds, so a phone
+  reaches the same answer as a desktop, only later; the timeout still caps every pass. Set
+  `thorough: true` to append the exhaustive search (every rung, every centroid, full timeout)
+  when waiting beats missing: a frame without stars then takes about 20 s to fail on a
+  desktop instead of 2.
 - `ExtractionProfileDto`: the default `.phoneJpeg()` (σ10) suits compressed phone images;
   astro cameras and clean sensors want `.cleanSensor()` (σ5); for files of any origin use
   `.auto()` (σ10 first, the other profile on failure).

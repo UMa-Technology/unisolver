@@ -266,6 +266,21 @@ pub(crate) fn build_solve_config_with(
     })
 }
 
+/// The solve config of one staged-search pass: its pattern-star cap and, for the probes, its
+/// pattern budget (see `search`)
+pub(crate) fn pass_config(
+    opts: &SolveOptions,
+    w: u32,
+    h: u32,
+    pass: &crate::search::Pass,
+) -> Result<SolveConfig> {
+    let mut cfg = build_solve_config_with(opts, w, h, pass.pattern_stars)?;
+    if pass.max_patterns.is_some() {
+        cfg.max_patterns_checked = pass.max_patterns;
+    }
+    Ok(cfg)
+}
+
 impl Solver {
     pub fn from_file(path: &str) -> Result<Self> {
         Self::from_file_with_pool(path, build_pool()?)
@@ -606,7 +621,7 @@ impl Solver {
             o.fov_estimate_deg = p.fov_deg;
             o.fov_max_error_deg = Some(p.max_error_deg);
             o.timeout_ms = pass.timeout_ms;
-            let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
+            let cfg = pass_config(&o, w, h, pass)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.pool)?;
             let refine = Refine::from_opts(&o);
             let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
@@ -730,7 +745,7 @@ pub fn focal_35mm_hint(mm: f32, width: u32, height: u32) -> Option<FovPreset> {
 
 /// Whether `presets` starts with an informed guess: a first rung that is no rung of the
 /// built-in ladder for this frame shape came from a header, a focal-length hint or the
-/// caller, and the staged search probes it longer (`search::HINTED_PROBE_MS`).
+/// caller, and the staged search probes it longer (`search::HINTED_PROBE_PATTERNS`).
 pub(crate) fn first_rung_informed(presets: &[FovPreset], width: u32, height: u32) -> bool {
     let ladder = aspect_ladder(width, height);
     presets
@@ -804,5 +819,22 @@ mod tests {
         assert!(first_rung_informed(&own, w, h));
         // A portrait frame's ladder starts at 46°: 70° ±9° is a rung only of the landscape one
         assert!(!first_rung_informed(&own, h, w));
+    }
+
+    /// The probe reaches upstream as a pattern budget (the same search on every machine);
+    /// the other passes keep upstream's backstop.
+    #[test]
+    fn probes_carry_their_pattern_budget() {
+        let o = SolveOptions::new(40.0);
+        let passes = crate::search::schedule(3, Some(5000), false, false);
+        let cfg = |i: usize| pass_config(&o, 800, 600, &passes[i]).unwrap();
+        assert_eq!(
+            cfg(3).max_patterns_checked,
+            Some(crate::search::DEEP_PROBE_PATTERNS)
+        );
+        assert_eq!(
+            cfg(0).max_patterns_checked,
+            Some(SolveConfig::DEFAULT_MAX_PATTERNS_CHECKED)
+        );
     }
 }

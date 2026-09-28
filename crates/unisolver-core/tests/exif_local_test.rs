@@ -4,9 +4,9 @@
 //! pointing, within what two rungs give on a distorting wide lens (1% of the field; measured
 //! up to 0.49%, and the golden regression allows 0.3° at 73°).
 //!
-//! Edge frames solved plainly only when a rung was revisited (the 100 ms all-centroid probe;
-//! one takes 65–120 ms depending on the estimate). With EXIF that rung is informed and gets
-//! the longer probe, so the copy must solve too, if not on its first attempt. Without the
+//! Edge frames solved plainly only when a rung was revisited (the all-centroid probe; one
+//! needs 65–120 ms of it on a desktop depending on the estimate). With EXIF that rung is
+//! informed and gets the longer probe, so the copy must solve too, if not on its first attempt. Without the
 //! corpus the test prints a skipped line and passes.
 mod common;
 

@@ -8,8 +8,8 @@
 //!
 //! 1. the first (likeliest) rung with the brightest 28 centroids;
 //! 2. the next two rungs with the brightest 24;
-//! 3. the first rung again with every centroid, for 100 ms (400 ms when that rung is an
-//!    informed guess: a header or focal-length hint, or the caller's own FOV);
+//! 3. the first rung again with every centroid, for 120 000 patterns (480 000 when that rung
+//!    is an informed guess: a header or focal-length hint, or the caller's own FOV);
 //! 4. the remaining rungs with the brightest 24;
 //! 5. with `thorough`, every rung with every centroid and the full timeout (the old search).
 //!
@@ -20,6 +20,12 @@
 //! the FOV estimate, so a hint 0.02° off the ladder's rung tipped it out of 100 ms: an
 //! informed rung is usually right, and a frame without stars that carries one fails 0.3 s
 //! later instead.
+//!
+//! The probes count patterns, not milliseconds: 120 000 is what 100 ms bought on the machine
+//! the schedule was tuned on (an M2 Max checks about 1.2 million a second). Timed, a phone
+//! three to five times slower searched a third as far, and a frame the desktop solved at
+//! 85 000 patterns failed on the phone. Counted, every machine searches the same patterns and
+//! gets the same answer; the caller's timeout still caps every pass.
 
 /// Pattern stars for the first rung.
 pub(crate) const FIRST_RUNG_PATTERN_STARS: u32 = 28;
@@ -30,10 +36,10 @@ pub(crate) const SWEEP_RUNGS: usize = 3;
 /// Rungs that get a deep (all-centroid) probe: the likeliest only. Probing the next two as
 /// well rescued no frame in the measurements and added 200 ms to every failure.
 pub(crate) const DEEP_PROBE_RUNGS: usize = 1;
-/// Budget of each deep probe.
-pub(crate) const DEEP_PROBE_MS: u64 = 100;
+/// Budget of each deep probe, in image patterns (see the module docs).
+pub(crate) const DEEP_PROBE_PATTERNS: u64 = 120_000;
 /// Budget of the deep probe when the first rung is an informed guess
-pub(crate) const HINTED_PROBE_MS: u64 = 400;
+pub(crate) const HINTED_PROBE_PATTERNS: u64 = 480_000;
 
 /// One attempt of the schedule: which rung, how many pattern stars, how long.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +47,8 @@ pub(crate) struct Pass {
     pub rung: usize,
     pub pattern_stars: u32,
     pub timeout_ms: Option<u64>,
+    /// Image patterns to check at most (the probes); None keeps the solver's own backstop
+    pub max_patterns: Option<u64>,
 }
 
 /// The staged schedule over `rungs` ladder rungs (see the module docs); `informed` when the
@@ -51,27 +59,27 @@ pub(crate) fn schedule(
     thorough: bool,
     informed: bool,
 ) -> Vec<Pass> {
-    let pass = |rung, pattern_stars, timeout_ms| Pass {
+    let pass = |rung, pattern_stars, max_patterns| Pass {
         rung,
         pattern_stars,
         timeout_ms,
+        max_patterns,
     };
     if rungs == 0 {
         return Vec::new();
     }
     let sweep = SWEEP_RUNGS.min(rungs);
-    let budget = if informed {
-        HINTED_PROBE_MS
+    let probe = Some(if informed {
+        HINTED_PROBE_PATTERNS
     } else {
-        DEEP_PROBE_MS
-    };
-    let probe = Some(timeout_ms.map_or(budget, |t| t.min(budget)));
-    let mut v = vec![pass(0, FIRST_RUNG_PATTERN_STARS, timeout_ms)];
-    v.extend((1..sweep).map(|r| pass(r, SWEEP_PATTERN_STARS, timeout_ms)));
+        DEEP_PROBE_PATTERNS
+    });
+    let mut v = vec![pass(0, FIRST_RUNG_PATTERN_STARS, None)];
+    v.extend((1..sweep).map(|r| pass(r, SWEEP_PATTERN_STARS, None)));
     v.extend((0..DEEP_PROBE_RUNGS.min(rungs)).map(|r| pass(r, u32::MAX, probe)));
-    v.extend((sweep..rungs).map(|r| pass(r, SWEEP_PATTERN_STARS, timeout_ms)));
+    v.extend((sweep..rungs).map(|r| pass(r, SWEEP_PATTERN_STARS, None)));
     if thorough {
-        v.extend((0..rungs).map(|r| pass(r, u32::MAX, timeout_ms)));
+        v.extend((0..rungs).map(|r| pass(r, u32::MAX, None)));
     }
     v
 }
@@ -101,11 +109,12 @@ where
 mod tests {
     use super::*;
 
-    fn p(rung: usize, pattern_stars: u32, timeout_ms: Option<u64>) -> Pass {
+    fn p(rung: usize, pattern_stars: u32, timeout_ms: Option<u64>, max: Option<u64>) -> Pass {
         Pass {
             rung,
             pattern_stars,
             timeout_ms,
+            max_patterns: max,
         }
     }
 
@@ -115,12 +124,12 @@ mod tests {
         assert_eq!(
             schedule(5, t, false, false),
             [
-                p(0, 28, t),
-                p(1, 24, t),
-                p(2, 24, t),
-                p(0, u32::MAX, Some(100)),
-                p(3, 24, t),
-                p(4, 24, t),
+                p(0, 28, t, None),
+                p(1, 24, t, None),
+                p(2, 24, t, None),
+                p(0, u32::MAX, t, Some(DEEP_PROBE_PATTERNS)),
+                p(3, 24, t, None),
+                p(4, 24, t, None),
             ]
         );
     }
@@ -132,7 +141,7 @@ mod tests {
         assert_eq!(s.len(), 6 + 5);
         assert_eq!(&s[..6], schedule(5, t, false, false).as_slice());
         for (i, pass) in s[6..].iter().enumerate() {
-            assert_eq!(*pass, p(i, u32::MAX, t));
+            assert_eq!(*pass, p(i, u32::MAX, t, None));
         }
     }
 
@@ -155,13 +164,21 @@ mod tests {
 
     #[test]
     fn short_ladders_and_budgets() {
+        let t = Some(4000);
         assert_eq!(
-            schedule(1, Some(4000), false, false),
-            [p(0, 28, Some(4000)), p(0, u32::MAX, Some(100))]
+            schedule(1, t, false, false),
+            [
+                p(0, 28, t, None),
+                p(0, u32::MAX, t, Some(DEEP_PROBE_PATTERNS))
+            ]
         );
-        // A caller budget below the probe budget caps the probe; no budget means 100 ms
-        assert_eq!(schedule(1, Some(50), false, false)[1].timeout_ms, Some(50));
-        assert_eq!(schedule(1, None, false, false)[1].timeout_ms, Some(100));
+        // The probe counts patterns, so its outcome is the same on every machine; the
+        // caller's timeout still caps it, and without one the count alone bounds it
+        let probe = schedule(1, None, false, false)[1];
+        assert_eq!(
+            (probe.timeout_ms, probe.max_patterns),
+            (None, Some(DEEP_PROBE_PATTERNS))
+        );
         assert!(schedule(0, Some(4000), true, false).is_empty());
     }
 
@@ -169,7 +186,7 @@ mod tests {
     fn an_informed_first_rung_is_probed_longer() {
         let t = Some(4000);
         let s = schedule(5, t, false, true);
-        assert_eq!(s[3], p(0, u32::MAX, Some(400)));
+        assert_eq!(s[3], p(0, u32::MAX, t, Some(HINTED_PROBE_PATTERNS)));
         // Everything else is the uninformed schedule
         let plain = schedule(5, t, false, false);
         assert_eq!(s.len(), plain.len());
@@ -178,8 +195,7 @@ mod tests {
             .zip(&plain)
             .enumerate()
             .all(|(i, (a, b))| i == 3 || a == b));
-        // The caller's budget still caps it
+        // The caller's timeout still caps it
         assert_eq!(schedule(1, Some(250), false, true)[1].timeout_ms, Some(250));
-        assert_eq!(schedule(1, None, false, true)[1].timeout_ms, Some(400));
     }
 }

@@ -13,7 +13,7 @@
 //!    tiers first), not interleaved by FOV, to avoid paging between large mmaps.
 use crate::outcome::{SolveOutcome, SolveStatus};
 use crate::search::{self, Pass};
-use crate::solver::{build_solve_config_with, db_range_ladder, with_focal_hint, ExtractCache};
+use crate::solver::{db_range_ladder, pass_config, with_focal_hint, ExtractCache};
 use crate::{CoreError, FovPreset, Frame, Result, Solver};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -242,6 +242,7 @@ impl SolverPool {
                     rung,
                     pattern_stars: u32::MAX,
                     timeout_ms: base.timeout_ms,
+                    max_patterns: None,
                 })
                 .collect()
         };
@@ -260,7 +261,7 @@ impl SolverPool {
                 o.fov_max_error_deg = Some(p.max_error_deg);
             }
             o.timeout_ms = pass.timeout_ms;
-            let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
+            let cfg = pass_config(&o, w, h, pass)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
             let refine = crate::solver::Refine::from_opts(&o);
             let (mut out, _) = tier

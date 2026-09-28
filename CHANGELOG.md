@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+1. **Solves no longer depend on how fast the CPU is.** The staged search's all-centroid
+   probe of the likeliest rung ran for 100 ms (400 ms for a hinted rung). A phone three to
+   five times slower than a desktop searched a third as far in that time, so a borderline
+   photo the desktop solved at 85 000 patterns failed on the phone. The probe now checks a
+   fixed 120 000 patterns (480 000 for a hinted rung), what 100 ms covered on an M2 Max: every
+   machine searches the same patterns and gets the same result. On a Snapdragon 865 phone the
+   47 test photos now solve as on the desktop (44), and a frame without stars fails about
+   0.3 s later. The timeout still caps every pass; `thorough` stays off by default.
+
 ## 2026-09-29 — v0.4.1
 
 1. **FOV hints no longer lose borderline frames.** The staged search gives the likeliest

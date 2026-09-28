@@ -111,22 +111,14 @@ fn pairs(db: &SolverDatabase, g: &SolvedGeometry) -> Vec<Pair> {
 }
 
 /// Mean distance (pixels) between where the pairs were detected and where `wcs` puts their
-/// stars, over all of them and over those beyond half the half-diagonal (None when there are
-/// none). None when the lens model cannot place a star.
-fn residuals(pairs: &[Pair], wcs: &Wcs) -> Option<(f64, Option<f64>)> {
-    let (cx, cy) = (wcs.width as f64 / 2.0, wcs.height as f64 / 2.0);
-    let half = cx.hypot(cy);
-    let (mut all, mut edge) = (Vec::new(), Vec::new());
+/// stars. None without pairs, or when the lens model cannot place a star.
+fn residual(pairs: &[Pair], wcs: &Wcs) -> Option<f64> {
+    let mut total = 0.0;
     for p in pairs {
         let (px, py) = wcs.world_to_pixel(p.ra, p.dec)?;
-        let d = (p.x - px).hypot(p.y - py);
-        all.push(d);
-        if (p.x - cx).hypot(p.y - cy) > half / 2.0 {
-            edge.push(d);
-        }
+        total += (p.x - px).hypot(p.y - py);
     }
-    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
-    (!all.is_empty()).then(|| (mean(&all), (!edge.is_empty()).then(|| mean(&edge))))
+    (!pairs.is_empty()).then(|| total / pairs.len() as f64)
 }
 
 /// Focal length and k1 about the principal point, by least squares on every pair: with `u` a
@@ -176,7 +168,7 @@ fn fit_k1(pairs: &[Pair], wcs: &Wcs) -> Option<CameraParams> {
 
 /// The pinhole solve `(sol, g)` of a wide frame, refined with a lens fitted to its own stars:
 /// Some(refined) when the fitted lens tracks the frame and fits its matched stars better (mean
-/// residual down by [`MIN_GAIN`], the edge not worse); None keeps the pinhole solve.
+/// residual down by [`MIN_GAIN`]); None keeps the pinhole solve.
 pub(crate) fn refine(
     db: &SolverDatabase,
     ext: &Extracted,
@@ -190,16 +182,12 @@ pub(crate) fn refine(
         return None;
     }
     let pairs = pairs(db, g);
-    let (before, before_edge) = residuals(&pairs, &g.wcs)?;
+    let before = residual(&pairs, &g.wcs)?;
     let camera = fit_k1(&pairs, &g.wcs)?;
     let (refined, mut g2) = track(db, ext, cfg, w, h, sol, &camera)?;
     g2.scale_refined = g.scale_refined;
-    let (after, after_edge) = residuals(&pairs, &g2.wcs)?;
-    let edge_ok = match (before_edge, after_edge) {
-        (Some(b), Some(a)) => a <= b,
-        _ => true,
-    };
-    (after <= before * (1.0 - MIN_GAIN) && edge_ok).then(|| {
+    let after = residual(&pairs, &g2.wcs)?;
+    (after <= before * (1.0 - MIN_GAIN)).then(|| {
         g2.lens_fitted = true;
         (refined, g2)
     })

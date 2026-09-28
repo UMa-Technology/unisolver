@@ -39,7 +39,10 @@ impl CalibrationSession {
                 )));
             }
         }
-        let (out, raw) = self.solver.solve_inner(frame, opts)?;
+        // The session fits the lens over all its frames: each frame's own solve stays pinhole
+        let mut opts = opts.clone();
+        opts.fit_lens = false;
+        let (out, raw) = self.solver.solve_inner(frame, &opts)?;
         if let Some(pair) = raw {
             self.dims.get_or_insert((frame.width, frame.height));
             self.frames.push(pair);

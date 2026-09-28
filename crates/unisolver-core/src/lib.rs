@@ -15,6 +15,7 @@ pub mod frame;
 pub mod grid;
 #[cfg(feature = "imageio")]
 pub mod imageio;
+mod lens;
 mod names;
 pub mod names_pack;
 pub mod outcome;

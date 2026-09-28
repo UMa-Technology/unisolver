@@ -590,3 +590,67 @@ fn observation_time_leaves_the_solution_in_the_catalog_frame() {
     let shift = arcsec(&plain, &m);
     assert!(shift > 12.0 && shift < 19.0, "{shift}″");
 }
+
+/// A wide frame through a lens that bends the edges by ~6 px: the pinhole solve leaves that as
+/// residual, the lens fit (on by default) takes it out and recovers the distortion. Off, with a
+/// caller's camera, or in narrow fields the solve stays pinhole.
+#[test]
+fn wide_frames_fit_the_lens() {
+    let solver = Solver::from_file(&write_test_db()).unwrap();
+    let q = synth::look_at(210.0, -20.0, 25.0);
+    let render = |fov: f32, k1: f32| {
+        let img = synth::render(
+            synth::test_db().star_catalog.stars(),
+            &q,
+            fov,
+            1024,
+            768,
+            &synth::RenderParams {
+                k1,
+                ..Default::default()
+            },
+            9,
+        );
+        frame_from(img, 1024, 768)
+    };
+    let k1 = 2.0e-8; // 640³ · 2e-8 ≈ 5 px at the corners
+    let bent = render(35.0, k1);
+    let solve = |f: &Frame, o: SolveOptions| solver.solve(f, &o).unwrap().solution.expect("solved");
+
+    let fitted = solve(&bent, SolveOptions::new(35.0));
+    let mut off = SolveOptions::new(35.0);
+    off.fit_lens = false;
+    let pinhole = solve(&bent, off);
+    assert!(!pinhole.lens_fitted);
+    assert!(fitted.lens_fitted, "{} matches", fitted.num_matches);
+    assert!(
+        fitted.rmse_arcsec < pinhole.rmse_arcsec * 0.6,
+        "rmse {} vs pinhole {}",
+        fitted.rmse_arcsec,
+        pinhole.rmse_arcsec
+    );
+    match fitted.wcs.camera.distortion {
+        DistortionParams::Radial { k1: got, k2, .. } => {
+            assert!((got / k1 as f64 - 1.0).abs() < 0.3, "k1 {got:e}");
+            assert_eq!(k2, 0.0);
+        }
+        ref d => panic!("{d:?}"),
+    }
+
+    // A caller's camera is kept as given
+    let mut given = SolveOptions::new(35.0);
+    given.camera = Some(CameraParams::from_horizontal_fov(35.0, 1024, 768).unwrap());
+    assert!(!solve(&bent, given).lens_fitted);
+
+    // Narrow fields are left pinhole (distortion there is below a pixel)
+    assert!(!solve(&render(16.0, k1), SolveOptions::new(16.0)).lens_fitted);
+
+    // A clean lens: whatever the fit decides, the pointing stays where it was
+    let clean = render(35.0, 0.0);
+    let a = solve(&clean, SolveOptions::new(35.0));
+    let mut off = SolveOptions::new(35.0);
+    off.fit_lens = false;
+    let b = solve(&clean, off);
+    let sep = ((a.ra_deg - b.ra_deg) * a.dec_deg.to_radians().cos()).hypot(a.dec_deg - b.dec_deg);
+    assert!(sep * 3600.0 < 30.0, "{}″", sep * 3600.0);
+}

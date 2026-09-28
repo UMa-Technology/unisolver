@@ -254,7 +254,10 @@ impl SolverPool {
             o.timeout_ms = pass.timeout_ms;
             let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
-            let (mut out, _) = tier.solver.solve_extracted(&ext, &cfg, w, h, t_total)?;
+            let fit_lens = o.fit_lens && o.camera.is_none();
+            let (mut out, _) = tier
+                .solver
+                .solve_extracted(&ext, &cfg, w, h, t_total, fit_lens)?;
 
             // Profile retry, as in the single-database ladder: once per step, only on TooFew
             // (NoMatch more likely means a wrong FOV); tracking and Custom never retry.
@@ -265,7 +268,9 @@ impl SolverPool {
             {
                 if let Some(alt) = o.extraction.alternate() {
                     let ext2 = cache.get(frame, &alt.resolve(), &self.rayon)?;
-                    let (out2, _) = tier.solver.solve_extracted(&ext2, &cfg, w, h, t_total)?;
+                    let (out2, _) = tier
+                        .solver
+                        .solve_extracted(&ext2, &cfg, w, h, t_total, fit_lens)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;
                     }

@@ -128,6 +128,16 @@ pub struct SolveOptions {
     /// solves and when the FOV is known (camera or tracking).
     #[serde(default)]
     pub focal_length_35mm: Option<f32>,
+    /// Wide frames only (≥ 20°, ≥ 30 matched stars): after the pinhole solve, fit the focal
+    /// length and one radial distortion term to the matched stars and keep the result when it
+    /// fits them better, so annotations follow the lens. Never when `camera` is given.
+    /// Default on.
+    #[serde(default = "default_true")]
+    pub fit_lens: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl SolveOptions {
@@ -143,6 +153,7 @@ impl SolveOptions {
             extraction: ExtractionProfile::PhoneJpeg,
             retry_alternate_profile: true,
             thorough: false,
+            fit_lens: true,
             match_threshold: 1e-5,
             timeout_ms: Some(5000),
             observation_unix_ms: None,
@@ -289,15 +300,17 @@ impl Solver {
         let (w, h) = (frame.width, frame.height);
         let cfg = build_solve_config(opts, w, h)?;
 
+        let fit_lens = opts.fit_lens && opts.camera.is_none();
         let (mut out, mut raw) =
-            self.extract_and_solve(frame, &opts.extraction.resolve(), &cfg, t_total)?;
+            self.extract_and_solve(frame, &opts.extraction.resolve(), &cfg, t_total, fit_lens)?;
 
         // Profile retry: the fallback when the material guess was wrong. Triggers: see the field docs.
         let trigger = matches!(out.status, SolveStatus::TooFew)
             || (retry_on_nomatch && matches!(out.status, SolveStatus::NoMatch));
         if trigger && opts.retry_alternate_profile && opts.attitude_hint.is_none() {
             if let Some(alt) = opts.extraction.alternate() {
-                let (out2, raw2) = self.extract_and_solve(frame, &alt.resolve(), &cfg, t_total)?;
+                let (out2, raw2) =
+                    self.extract_and_solve(frame, &alt.resolve(), &cfg, t_total, fit_lens)?;
                 if matches!(out2.status, SolveStatus::Ok) {
                     let mut out2 = out2;
                     out2.extraction_retried = true;
@@ -323,14 +336,16 @@ impl Solver {
         extraction: &ExtractionOptions,
         cfg: &SolveConfig,
         t_total: Instant,
+        fit_lens: bool,
     ) -> Result<SolveInner> {
         let ext = extract_frame(frame, extraction, &self.pool)?;
-        self.solve_extracted(&ext, cfg, frame.width, frame.height, t_total)
+        self.solve_extracted(&ext, cfg, frame.width, frame.height, t_total, fit_lens)
     }
 
     /// Solves once from already-extracted centroids. **Extraction does not depend on the
     /// database**, so `SolverPool` extracts once and reuses it across tiers (a cross-tier
-    /// ladder can have a dozen rungs; extracting a 26 Mpx frame takes seconds).
+    /// ladder can have a dozen rungs; extracting a 26 Mpx frame takes seconds). With
+    /// `fit_lens` a wide solve is refined with a lens fitted to its own stars (`lens`).
     pub(crate) fn solve_extracted(
         &self,
         ext: &Extracted,
@@ -338,9 +353,21 @@ impl Solver {
         w: u32,
         h: u32,
         t_total: Instant,
+        fit_lens: bool,
     ) -> Result<SolveInner> {
         let t_solve = Instant::now();
-        let result = self.db.solve_from_centroids(&ext.centroids, cfg);
+        let result = self
+            .db
+            .solve_from_centroids(&ext.centroids, cfg)
+            .map(|sol| {
+                let g = geometry_from_solution(&sol, w, h, &ext.topleft);
+                if fit_lens {
+                    if let Some(refined) = crate::lens::refine(&self.db, ext, cfg, w, h, &sol, &g) {
+                        return refined;
+                    }
+                }
+                (sol, g)
+            });
         let solve_ms = t_solve.elapsed().as_secs_f32() * 1000.0;
         let timing = Timing {
             extract_ms: ext.extract_ms,
@@ -349,22 +376,19 @@ impl Solver {
         };
 
         match result {
-            Ok(sol) => {
-                let geometry = geometry_from_solution(&sol, w, h, &ext.topleft);
-                Ok((
-                    SolveOutcome {
-                        status: SolveStatus::Ok,
-                        solution: Some(geometry),
-                        centroids: ext.topleft.clone(),
-                        timing,
-                        extraction_retried: false,
-                        median_elongation: ext.median_elongation,
-                        observation_unix_ms: None,
-                        observer: None,
-                    },
-                    Some((sol, ext.centroids.clone())),
-                ))
-            }
+            Ok((sol, geometry)) => Ok((
+                SolveOutcome {
+                    status: SolveStatus::Ok,
+                    solution: Some(geometry),
+                    centroids: ext.topleft.clone(),
+                    timing,
+                    extraction_retried: false,
+                    median_elongation: ext.median_elongation,
+                    observation_unix_ms: None,
+                    observer: None,
+                },
+                Some((sol, ext.centroids.clone())),
+            )),
             Err(f) => {
                 let status = match f.status {
                     tetra3::SolveStatus::NoMatch => SolveStatus::NoMatch,
@@ -550,7 +574,8 @@ impl Solver {
             o.timeout_ms = pass.timeout_ms;
             let cfg = build_solve_config_with(&o, w, h, pass.pattern_stars)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.pool)?;
-            let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total)?;
+            let fit_lens = o.fit_lens && o.camera.is_none();
+            let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total, fit_lens)?;
             // Profile retry, once per rung and only on TooFew: inside a ladder NoMatch more
             // likely means a wrong FOV
             if first
@@ -560,7 +585,7 @@ impl Solver {
             {
                 if let Some(alt) = o.extraction.alternate() {
                     let ext2 = cache.get(frame, &alt.resolve(), &self.pool)?;
-                    let (out2, _) = self.solve_extracted(&ext2, &cfg, w, h, t_total)?;
+                    let (out2, _) = self.solve_extracted(&ext2, &cfg, w, h, t_total, fit_lens)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;
                     }

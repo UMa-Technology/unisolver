@@ -113,6 +113,10 @@ pub struct SolvedGeometry {
     pub prob: f64,
     pub wcs: Wcs,
     pub matched: Vec<MatchOut>,
+    /// The lens was fitted to this frame's stars (`SolveOptions::fit_lens`): `wcs.camera`
+    /// carries the fitted focal length and radial distortion
+    #[serde(default)]
+    pub lens_fitted: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,5 +234,6 @@ pub(crate) fn geometry_from_solution(
         prob: sol.prob,
         wcs,
         matched,
+        lens_fitted: false,
     }
 }

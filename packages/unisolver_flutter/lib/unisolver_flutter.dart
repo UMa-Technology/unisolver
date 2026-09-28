@@ -6,6 +6,7 @@ export 'src/db_manifest.dart';
 export 'src/rust/api/attribution.dart';
 export 'src/rust/api/install.dart';
 export 'src/rust/api/logging.dart';
+export 'src/rust/api/preview.dart';
 export 'src/rust/api/satellites.dart';
 export 'src/rust/api/solver.dart';
 export 'src/rust/api/types.dart';

@@ -6,6 +6,7 @@
 import 'api/attribution.dart';
 import 'api/install.dart';
 import 'api/logging.dart';
+import 'api/preview.dart';
 import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
@@ -263,6 +264,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
+  ImagePreviewDto dco_decode_image_preview_dto(dynamic raw);
 
   @protected
   LadderOutcomeDto dco_decode_ladder_outcome_dto(dynamic raw);
@@ -710,6 +714,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
+  ImagePreviewDto sse_decode_image_preview_dto(SseDeserializer deserializer);
 
   @protected
   LadderOutcomeDto sse_decode_ladder_outcome_dto(SseDeserializer deserializer);
@@ -1257,6 +1264,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_image_preview_dto(
+    ImagePreviewDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ladder_outcome_dto(

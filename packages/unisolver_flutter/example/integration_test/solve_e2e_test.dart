@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:unisolver_flutter/asset_installer.dart';
 import 'package:unisolver_flutter/src/rust/api/logging.dart' as rust_log;
 import 'package:unisolver_flutter/src/rust/api/solver.dart';
+import 'package:unisolver_flutter/src/rust/api/preview.dart';
 import 'package:unisolver_flutter/src/rust/api/types.dart';
 import 'package:unisolver_flutter/src/rust/api/wcs.dart';
 import 'package:unisolver_flutter/src/rust/frb_generated.dart';
@@ -122,6 +123,12 @@ void main() {
     expect(grid.layers.grid, isTrue);
     expect(grid.grid.where((l) => l.kind == GridKindDto.dec), isNotEmpty);
     expect(grid.grid.every((l) => l.label?.edge != null), isTrue);
+    // A display preview (the path FITS takes; any format works): box-averaged, stretched
+    final pv = await imagePreview(path: img.path, maxSide: 800);
+    // Integer box factor, never above the limit: 1920 / 800 rounds up to 3
+    expect((pv.width, pv.height), (640, 360));
+    expect((pv.sourceWidth, pv.sourceHeight), (w.width, w.height));
+    expect(pv.rgba.length, 640 * 360 * 4);
     final px = wcsSkyToPixels(wcs: w, radec: [g.raDeg, g.decDeg]);
     expect(px[0], closeTo((w.width - 1) / 2, 0.5));
     expect(px[1], closeTo((w.height - 1) / 2, 0.5));

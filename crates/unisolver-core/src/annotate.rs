@@ -50,6 +50,10 @@ pub struct AnnotateOptions {
     /// IAU constellation boundaries; needs the constellation pack
     #[serde(default)]
     pub constellation_boundaries: bool,
+    /// Mythology illustrations on the constellation figures (`constellations[].art`); needs
+    /// the constellation pack and `include_constellations`
+    #[serde(default)]
+    pub constellation_art: bool,
     /// Equatorial grid (J2000 right ascension and declination)
     #[serde(default)]
     pub equatorial_grid: bool,
@@ -85,6 +89,7 @@ impl Default for AnnotateOptions {
             language: "en".to_string(),
             include_constellations: false,
             constellation_boundaries: false,
+            constellation_art: false,
             equatorial_grid: false,
             horizontal_grid: false,
             grid_spacing_px: None,
@@ -792,6 +797,20 @@ impl Annotator {
                                             .unwrap_or_else(|| c.name.clone()),
                                         label,
                                         lines,
+                                        art: if opts.constellation_art {
+                                            if loaded.art_unusable(i) {
+                                                layers.reasons.push((
+                                                    "constellations".into(),
+                                                    format!(
+                                                        "{}: art anchors are collinear",
+                                                        c.abbr
+                                                    ),
+                                                ));
+                                            }
+                                            loaded.art(view, i)
+                                        } else {
+                                            None
+                                        },
                                     },
                                 );
                             }

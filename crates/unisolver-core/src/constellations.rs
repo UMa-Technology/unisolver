@@ -194,6 +194,21 @@ impl ConstellationPack {
     }
 }
 
+/// Vertices per side of the art mesh
+pub const ART_GRID: usize = 16;
+
+/// A constellation's illustration on the image: a grid over the whole illustration, row r and
+/// column c at uv = (c, r) / (ART_GRID − 1) (v down, as image rows), each vertex projected to
+/// pixels (top-left origin); None where the lens model cannot place it. Draw it textured, two
+/// triangles per cell, and skip any triangle with a missing vertex.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstellationArt {
+    pub cols: usize,
+    pub rows: usize,
+    /// Row-major
+    pub points: Vec<Option<[f64; 2]>>,
+}
+
 /// A constellation in the frame: its figure and label, projected to pixels.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstellationAnnotation {
@@ -207,6 +222,9 @@ pub struct ConstellationAnnotation {
     /// Figure polylines in pixels (top-left origin). They may run past the frame edge; a
     /// polyline breaks where the figure leaves the camera's view.
     pub lines: Vec<Vec<[f64; 2]>>,
+    /// The illustration's mesh (`constellation_art`); None without anchors or when not asked for
+    #[serde(default)]
+    pub art: Option<ConstellationArt>,
 }
 
 /// The constellation a position is in ([`crate::Annotator::constellation_at`]).
@@ -279,6 +297,7 @@ pub(crate) struct Loaded {
     pub pack: ConstellationPack,
     figure_caps: Vec<Vec<Cap>>,
     boundary_caps: Vec<Cap>,
+    art: Vec<Option<ArtMap>>,
 }
 
 impl Loaded {
@@ -289,11 +308,37 @@ impl Loaded {
             .map(|c| c.lines.iter().map(|l| Cap::of(l)).collect())
             .collect();
         let boundary_caps = pack.boundaries.iter().map(|b| Cap::of(&b.points)).collect();
+        let art = pack
+            .constellations
+            .iter()
+            .map(|c| c.art.as_ref().and_then(ArtMap::new))
+            .collect();
         Self {
             pack,
             figure_caps,
             boundary_caps,
+            art,
         }
+    }
+
+    /// Whether constellation `i` has anchors that could not be turned into a mapping
+    pub(crate) fn art_unusable(&self, i: usize) -> bool {
+        self.pack.constellations[i].art.is_some() && self.art[i].is_none()
+    }
+
+    /// The art mesh of constellation `i` in the view
+    pub(crate) fn art(&self, view: &View, i: usize) -> Option<ConstellationArt> {
+        let map = self.art[i]?;
+        let n = ART_GRID;
+        let step = 1.0 / (n - 1) as f64;
+        let points = (0..n * n)
+            .map(|k| view.pixel(map.direction((k % n) as f64 * step, (k / n) as f64 * step)))
+            .collect();
+        Some(ConstellationArt {
+            cols: n,
+            rows: n,
+            points,
+        })
     }
 
     /// Figure polylines of constellation `i` in the view

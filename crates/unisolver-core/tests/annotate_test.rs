@@ -700,7 +700,8 @@ fn dso_outlines_project_to_pixels() {
 #[test]
 fn constellation_layers_project_figures_boundaries_and_names() {
     use unisolver_core::constellations::{
-        BoundaryEdge, ConstellationFigure, ConstellationName, ConstellationPack, ZoneBand,
+        ArtAnchor, BoundaryEdge, ConstellationFigure, ConstellationName, ConstellationPack,
+        ZoneBand,
     };
     use unisolver_core::names_pack::NamesPack;
     let solver = Solver::from_file(&test_db_path()).unwrap();
@@ -718,7 +719,20 @@ fn constellation_layers_project_figures_boundaries_and_names() {
                     vec![[83.0, 0.0], [150.0, 0.0]],
                 ],
                 label: [83.0, 1.0],
-                art: None,
+                art: Some([
+                    ArtAnchor {
+                        uv: [0.0, 0.0],
+                        radec: betelgeuse,
+                    },
+                    ArtAnchor {
+                        uv: [1.0, 0.0],
+                        radec: bellatrix,
+                    },
+                    ArtAnchor {
+                        uv: [0.0, 1.0],
+                        radec: rigel,
+                    },
+                ]),
             },
             ConstellationFigure {
                 abbr: "Tau".into(),
@@ -841,6 +855,33 @@ fn constellation_layers_project_figures_boundaries_and_names() {
         .points
         .iter()
         .any(|p| p[0] >= 0.0 && p[0] < 1024.0 && p[1] >= 0.0 && p[1] < 768.0));
+
+    // Art only when asked; the grid's corners sit on the anchors (uv 0,0 / 1,0 / 0,1)
+    assert!(ori.art.is_none(), "not asked for");
+    let with_art = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            constellation_art: true,
+            ..both.clone()
+        },
+    );
+    let art = with_art.constellations[0].art.as_ref().expect("art");
+    assert_eq!((art.cols, art.rows, art.points.len()), (16, 16, 256));
+    for (k, star) in [(0usize, betelgeuse), (15, bellatrix), (240, rigel)] {
+        let p = art.points[k].expect("anchor in view");
+        let s = px(star);
+        assert!((p[0] - s.0).hypot(p[1] - s.1) < 1e-6, "{k}: {p:?} vs {s:?}");
+    }
+    // Asked for without the figures: nothing
+    let only_art = ann.annotate(
+        &wcs,
+        &AnnotateOptions {
+            include_constellations: false,
+            constellation_art: true,
+            ..both.clone()
+        },
+    );
+    assert!(only_art.constellations.is_empty());
 
     // Point lookup: localized where the names pack has the name, else the IAU name
     let named = |abbr: &str, name: &str| {
@@ -1020,11 +1061,22 @@ fn bundled_constellation_pack_draws_real_skies() {
         &AnnotateOptions {
             include_constellations: true,
             constellation_boundaries: true,
+            constellation_art: true,
             language: "zh_cn".into(),
             ..Default::default()
         },
     );
     let abbrs: Vec<&str> = a.constellations.iter().map(|c| c.abbr.as_str()).collect();
+    let ori_art = a
+        .constellations
+        .iter()
+        .find(|c| c.abbr == "Ori")
+        .unwrap()
+        .art
+        .as_ref()
+        .unwrap();
+    let placed = ori_art.points.iter().filter(|p| p.is_some()).count();
+    assert!(placed > 200, "{placed} of 256 placed");
     for want in ["Ori", "Tau", "Mon", "CMi", "Lep", "Eri"] {
         assert!(abbrs.contains(&want), "{want} missing from {abbrs:?}");
     }

@@ -654,3 +654,46 @@ fn wide_frames_fit_the_lens() {
     let sep = ((a.ra_deg - b.ra_deg) * a.dec_deg.to_radians().cos()).hypot(a.dec_deg - b.dec_deg);
     assert!(sep * 3600.0 < 30.0, "{}″", sep * 3600.0);
 }
+
+/// A lens whose distortion changes sign (barrel in the middle, pincushion at the edges) needs
+/// k2, which k1 alone cannot stand in for: the fit takes it and recovers both terms, the corners
+/// included, although the pinhole solve could not match the stars there.
+#[test]
+fn wide_frames_fit_k2_when_the_lens_needs_it() {
+    let solver = Solver::from_file(&write_test_db()).unwrap();
+    let (k1, k2) = (-2.0e-8, 1.0e-13); // at the corners (r = 640) −5.2 + 10.7 px
+    let img = synth::render(
+        synth::test_db().star_catalog.stars(),
+        &synth::look_at(210.0, -20.0, 25.0),
+        35.0,
+        1024,
+        768,
+        &synth::RenderParams {
+            k1: k1 as f32,
+            k2: k2 as f32,
+            ..Default::default()
+        },
+        9,
+    );
+    let g = solver
+        .solve(&frame_from(img, 1024, 768), &SolveOptions::new(35.0))
+        .unwrap()
+        .solution
+        .expect("solved");
+    assert!(g.lens_fitted, "{} matches", g.num_matches);
+    let DistortionParams::Radial {
+        k1: got1, k2: got2, ..
+    } = g.wcs.camera.distortion
+    else {
+        panic!("{:?}", g.wcs.camera.distortion);
+    };
+    assert!((got1 / k1 - 1.0).abs() < 0.1, "k1 {got1:e}");
+    assert!((got2 / k2 - 1.0).abs() < 0.2, "k2 {got2:e}");
+    let corner = |a: f64, b: f64| a * 640f64.powi(3) + b * 640f64.powi(5);
+    assert!(
+        (corner(got1, got2) - corner(k1, k2)).abs() < 0.5,
+        "corner {:.2} px, rendered {:.2}",
+        corner(got1, got2),
+        corner(k1, k2)
+    );
+}

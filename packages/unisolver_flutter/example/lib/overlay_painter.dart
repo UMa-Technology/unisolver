@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:unisolver_flutter/unisolver_flutter.dart';
@@ -101,6 +102,42 @@ Offset gridLabelOffset(GridEdgeDto edge, Size text) => switch (edge) {
   GridEdgeDto.inside => Offset(-text.width / 2, -text.height / 2),
 };
 
+/// A constellation illustration's mesh as textured triangles: two per grid cell, skipping any
+/// triangle with a vertex the lens model could not place. Positions go through [at] (image →
+/// screen); texture coordinates are in the illustration's pixels.
+({List<Offset> positions, List<Offset> textureCoordinates}) artTriangles(
+  ConstellationArtDto art,
+  Size image,
+  Offset Function(double x, double y) at,
+) {
+  final (cols, rows, p) = (art.cols, art.rows, art.points);
+  final positions = <Offset>[];
+  final tex = <Offset>[];
+  Offset? vertex(int r, int c) {
+    final i = (r * cols + c) * 2;
+    return p[i].isNaN || p[i + 1].isNaN ? null : at(p[i], p[i + 1]);
+  }
+
+  Offset uv(int r, int c) =>
+      Offset(c / (cols - 1) * image.width, r / (rows - 1) * image.height);
+  void triangle(List<(int, int)> t) {
+    final v = [for (final (r, c) in t) vertex(r, c)];
+    if (v.contains(null)) return;
+    for (var k = 0; k < 3; k++) {
+      positions.add(v[k]!);
+      tex.add(uv(t[k].$1, t[k].$2));
+    }
+  }
+
+  for (var r = 0; r + 1 < rows; r++) {
+    for (var c = 0; c + 1 < cols; c++) {
+      triangle([(r, c), (r, c + 1), (r + 1, c)]);
+      triangle([(r, c + 1), (r + 1, c + 1), (r + 1, c)]);
+    }
+  }
+  return (positions: positions, textureCoordinates: tex);
+}
+
 /// Solve and annotation overlay, drawn in **screen** space. The engine returns image-pixel
 /// geometry; [transform] (the viewer's image → screen matrix) moves the points, while strokes,
 /// markers and text keep their screen size at any zoom. Sizes the sky gives (a nebula's
@@ -114,12 +151,16 @@ class SolveOverlayPainter extends CustomPainter {
     required this.outcome,
     required this.annotations,
     this.diagnostics = false,
+    this.art = const {},
   }) : super(repaint: transform);
 
   final TransformationController transform;
   final SolveOutcomeDto? outcome;
   final AnnotationsDto? annotations;
   final bool diagnostics;
+
+  /// Decoded constellation illustrations by IAU abbreviation
+  final Map<String, ui.Image> art;
 
   static Paint _stroke(Color c, double w) => Paint()
     ..style = PaintingStyle.stroke
@@ -159,6 +200,41 @@ class SolveOverlayPainter extends CustomPainter {
 
     final a = annotations;
     if (a != null) {
+      // Illustrations first, under every line: black backgrounds vanish in a screen blend
+      for (final c in a.constellations) {
+        final mesh = c.art;
+        final image = art[c.abbr];
+        if (mesh == null || image == null) continue;
+        final t = artTriangles(
+          mesh,
+          Size(image.width.toDouble(), image.height.toDouble()),
+          at,
+        );
+        if (t.positions.isEmpty) continue;
+        canvas.saveLayer(
+          Offset.zero & size,
+          Paint()
+            ..blendMode = BlendMode.screen
+            ..color = const Color.fromRGBO(0, 0, 0, 0.55),
+        );
+        canvas.drawVertices(
+          ui.Vertices(
+            ui.VertexMode.triangles,
+            t.positions,
+            textureCoordinates: t.textureCoordinates,
+          ),
+          BlendMode.srcOver,
+          Paint()
+            ..filterQuality = FilterQuality.medium
+            ..shader = ImageShader(
+              image,
+              TileMode.clamp,
+              TileMode.clamp,
+              Matrix4.identity().storage,
+            ),
+        );
+        canvas.restore();
+      }
       for (final g in a.grid) {
         final paint = g.kind == GridKindDto.horizon
             ? _horizon
@@ -327,5 +403,6 @@ class SolveOverlayPainter extends CustomPainter {
       old.outcome != outcome ||
       old.annotations != annotations ||
       old.diagnostics != diagnostics ||
+      old.art != art ||
       old.transform != transform;
 }

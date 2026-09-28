@@ -67,4 +67,37 @@ void main() {
     expect(outlineLabelAnchor(-80, 10, outlines, size), const Offset(20, 30));
     expect(outlineLabelAnchor(50, 50, outlines, size), const Offset(50, 50));
   });
+
+  test('art mesh becomes textured triangles, skipping unplaced vertices', () {
+    // 3 × 3 grid on a 100 × 100 image; the lower-right vertex cannot be placed
+    final pts = <double>[];
+    for (var r = 0; r < 3; r++) {
+      for (var c = 0; c < 3; c++) {
+        final missing = r == 2 && c == 2;
+        pts.addAll(missing ? [double.nan, double.nan] : [c * 10.0, r * 10.0]);
+      }
+    }
+    final art = ConstellationArtDto(
+      cols: 3,
+      rows: 3,
+      points: Float64List.fromList(pts),
+    );
+    final tri = artTriangles(art, const Size(100, 100), (x, y) => Offset(x, y));
+    // 4 cells × 2 triangles, less the one triangle using the missing vertex
+    expect(tri.positions.length, 7 * 3);
+    expect(tri.textureCoordinates.length, tri.positions.length);
+    expect(tri.textureCoordinates.first, Offset.zero);
+    expect(tri.textureCoordinates, contains(const Offset(100, 50)));
+    expect(tri.positions, contains(const Offset(20, 10)));
+    final none = artTriangles(
+      ConstellationArtDto(
+        cols: 2,
+        rows: 2,
+        points: Float64List.fromList(List.filled(8, double.nan)),
+      ),
+      const Size(1, 1),
+      (x, y) => Offset(x, y),
+    );
+    expect(none.positions, isEmpty);
+  });
 }

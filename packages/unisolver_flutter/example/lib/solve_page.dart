@@ -88,6 +88,9 @@ class _SolvePageState extends State<SolvePage> {
 
   @override
   void dispose() {
+    for (final i in _art.values) {
+      i.dispose();
+    }
     _dropAnnotators();
     _viewer.dispose();
     super.dispose();
@@ -195,6 +198,25 @@ class _SolvePageState extends State<SolvePage> {
   bool _raDecGrid = true;
   bool _altAzGrid = false;
   bool _diagnostics = false;
+  bool _showArt = true;
+
+  /// Decoded illustrations by IAU abbreviation (the bundled western_new set)
+  Map<String, ui.Image> _art = const {};
+
+  Future<void> _loadArt(AnnotationsDto a) async {
+    final loaded = Map.of(_art);
+    for (final c in a.constellations) {
+      if (c.art == null || loaded.containsKey(c.abbr)) continue;
+      // Null when the set has no illustration for it: the figure is drawn alone
+      final bytes = await ConstellationArtSet.westernNew.load(c.abbr);
+      if (bytes == null) continue;
+      final codec = await ui.instantiateImageCodec(bytes);
+      loaded[c.abbr] = (await codec.getNextFrame()).image;
+    }
+    if (loaded.length != _art.length && mounted) {
+      setState(() => _art = Map.unmodifiable(loaded));
+    }
+  }
 
   /// Annotations are requested for one viewport at a time; a reply for an older one is dropped
   int _annotateSeq = 0;
@@ -260,6 +282,7 @@ class _SolvePageState extends State<SolvePage> {
         observer: out.observer,
         includeConstellations: true,
         constellationBoundaries: true,
+        constellationArt: _showArt,
         equatorialGrid: _raDecGrid,
         horizontalGrid: _altAzGrid && _canAltAz,
         viewport: _viewport(),
@@ -276,6 +299,7 @@ class _SolvePageState extends State<SolvePage> {
         _annotations = ann;
         _centre = centre;
       });
+      if (_showArt) _loadArt(ann);
     }
   }
 
@@ -338,6 +362,7 @@ class _SolvePageState extends State<SolvePage> {
                                 outcome: _outcome,
                                 annotations: _annotations,
                                 diagnostics: _diagnostics,
+                                art: _showArt ? _art : const {},
                               ),
                             ),
                           ),
@@ -373,6 +398,14 @@ class _SolvePageState extends State<SolvePage> {
                         }
                       : null,
                 ),
+              ),
+              FilterChip(
+                label: const Text('Art'),
+                selected: _showArt,
+                onSelected: (v) {
+                  setState(() => _showArt = v);
+                  _annotate();
+                },
               ),
               FilterChip(
                 label: const Text('Detections'),

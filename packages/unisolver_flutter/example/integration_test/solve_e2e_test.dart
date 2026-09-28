@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:unisolver_flutter/asset_installer.dart';
+import 'package:unisolver_flutter/constellation_art.dart';
 import 'package:unisolver_flutter/src/rust/api/logging.dart' as rust_log;
 import 'package:unisolver_flutter/src/rust/api/solver.dart';
 import 'package:unisolver_flutter/src/rust/api/preview.dart';
@@ -103,6 +104,35 @@ void main() {
     );
     expect(centre?.abbr, 'Oph');
     expect(centre?.name, '蛇夫座');
+    // The art mesh for Scorpius, and its bundled illustration
+    final withArt = await ann.annotate(
+      wcs: g.wcs,
+      opts: AnnotateOptionsDto(
+        starMaxMag: base.starMaxMag,
+        maxStars: base.maxStars,
+        includeStarNames: false,
+        includeDso: false,
+        dsoOutlines: false,
+        maxOutlineLevel: 3,
+        language: 'zh_cn',
+        includeSolarSystem: false,
+        includeConstellations: true,
+        constellationArt: true,
+      ),
+    );
+    final scoArt = withArt.constellations
+        .firstWhere((c) => c.abbr == 'Sco')
+        .art!;
+    expect(scoArt.cols * scoArt.rows * 2, scoArt.points.length);
+    final placed = [
+      for (var i = 0; i < scoArt.points.length; i += 2)
+        if (scoArt.points[i].isFinite) i,
+    ];
+    expect(placed.length, greaterThan(scoArt.cols * scoArt.rows ~/ 2));
+    final webp = await rootBundle.load(
+      ConstellationArtSet.westernNew.assetFor('Sco'),
+    );
+    expect(webp.lengthInBytes, greaterThan(10000));
 
     // A grid for a zoomed view: finer lines, labels on the view's edges; and the batch
     // transform agrees with the solution's boresight

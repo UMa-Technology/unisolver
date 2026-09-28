@@ -1,6 +1,7 @@
 library;
 
 export 'asset_installer.dart';
+export 'constellation_art.dart';
 export 'src/db_manager.dart';
 export 'src/db_manifest.dart';
 export 'src/rust/api/attribution.dart';

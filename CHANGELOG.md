@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+1. **The plugin accepts Dart 3.12.2 and Flutter 3.44.4 or later.** It used to require Dart 3.13,
+   so apps on an earlier Flutter release could not add it.
+
 ## 2026-09-29 — v0.4.3
 
 1. **Both constellation illustration sets are credited to their artist.** The painted set

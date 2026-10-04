@@ -59,3 +59,7 @@ required-features = ["imageio"]
 [[test]]
 name = "narrow_test"
 required-features = ["narrow"]
+
+[[test]]
+name = "pool_narrow_test"
+required-features = ["narrow"]

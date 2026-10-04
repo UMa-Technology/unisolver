@@ -1,7 +1,7 @@
 //! Narrow-field engine on a synthetic sky: blind and hinted solves, the outcome fields,
 //! refusals, deadlines and opening real index / star tile files.
 use std::time::{Duration, Instant};
-use unisolver_core::narrow::testkit::{centroids_for, synthetic_sky, Lcg};
+use unisolver_core::narrow::testkit::{centroids_for, synthetic_sky, write_package, Lcg};
 use unisolver_core::narrow::{NarrowEngine, NarrowMode, NarrowRequest};
 use unisolver_core::{CentroidOut, SolveStatus};
 
@@ -163,21 +163,9 @@ fn too_few_centroids_are_refused_up_front() {
 
 #[test]
 fn opens_an_index_and_star_tiles_from_files() {
-    use seiza::catalog::StarCatalog;
     let dir = std::env::temp_dir().join(format!("unisolver-narrow-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let sky = synthetic_sky(7);
-    let idx = dir.join("synthetic.idx");
-    seiza::blind::BlindIndex::build(&sky, &index_params())
-        .write_to(&idx)
-        .unwrap();
-    let mut tiles = seiza::catalog::TileSetBuilder::new(16, 2026.0, "synthetic test sky");
-    for s in sky.all_brighter_than(30.0) {
-        tiles.add(s.ra, s.dec, s.mag);
-    }
-    let stars = dir.join("synthetic.stars");
-    tiles.write_to(&stars).unwrap();
-
+    let (idx, stars) = write_package(&synthetic_sky(7), (1.0, 15.0), &dir, "synthetic");
     let e = NarrowEngine::open(idx.to_str().unwrap(), stars.to_str().unwrap()).unwrap();
     assert_eq!(e.info().name, "synthetic");
     assert_eq!(e.info().num_stars, 129_000);

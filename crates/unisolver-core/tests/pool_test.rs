@@ -210,3 +210,15 @@ fn a_corrupt_file_is_skipped_not_fatal() {
     assert_eq!(skipped.len(), 1);
     assert!(skipped[0].0.ends_with("junk.db"));
 }
+
+/// Builds without the narrow-field engine refuse a package rather than ignore it
+#[cfg(not(feature = "narrow"))]
+#[test]
+fn builds_without_the_engine_refuse_a_narrow_package() {
+    let e = SolverPool::new()
+        .unwrap()
+        .register_narrow("a.idx", "a.stars")
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("no narrow-field engine"), "{e}");
+}

@@ -77,11 +77,21 @@ struct Tier {
     solver: Solver,
 }
 
+#[cfg(feature = "narrow")]
+#[allow(dead_code)] // the engine runs from the next commit
+struct NarrowTier {
+    info: TierInfo,
+    engine: crate::narrow::NarrowEngine,
+}
+
 /// A pool of tier databases. Registration is explicit (`register` / `open_dir`); the pool
 /// never downloads anything, which is the integration layer's job (Flutter `DbManager`).
 pub struct SolverPool {
     rayon: Arc<rayon::ThreadPool>,
     tiers: Vec<Tier>,
+    /// The narrow-field engine: one package at most
+    #[cfg(feature = "narrow")]
+    narrow: Option<NarrowTier>,
 }
 
 impl std::fmt::Debug for SolverPool {
@@ -90,14 +100,9 @@ impl std::fmt::Debug for SolverPool {
             .field(
                 "tiers",
                 &self
-                    .tiers
+                    .tiers()
                     .iter()
-                    .map(|t| {
-                        format!(
-                            "{} [{:.1}–{:.1}°]",
-                            t.info.name, t.info.min_fov_deg, t.info.max_fov_deg
-                        )
-                    })
+                    .map(|t| format!("{} [{:.1}–{:.1}°]", t.name, t.min_fov_deg, t.max_fov_deg))
                     .collect::<Vec<_>>(),
             )
             .finish()
@@ -109,28 +114,47 @@ impl SolverPool {
         Ok(Self {
             rayon: crate::solver::build_pool()?,
             tiers: Vec::new(),
+            #[cfg(feature = "narrow")]
+            narrow: None,
         })
     }
 
-    /// Registers every `*.db` in `dir`, ordered wide to narrow. A file that fails to open
+    /// Registers every `*.db` in `dir`, ordered wide to narrow, and the narrow-field package
+    /// when there is one: its blind index and star tiles are recognized by their headers, never
+    /// by name (one of each pairs up; otherwise files sharing a stem). A file that fails to open
     /// is skipped and listed in `skipped`, so one bad file does not sink the pool; but if
-    /// **none** opens it is an error rather than an empty pool that never solves.
+    /// **nothing** opens it is an error rather than an empty pool that never solves.
     pub fn open_dir(dir: &str) -> Result<(Self, Vec<(String, String)>)> {
         let mut pool = Self::new()?;
         let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
             .map_err(|e| CoreError::InvalidInput(format!("read_dir {dir}: {e}")))?
             .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("db")))
+            .filter(|p| p.is_file())
             .collect();
         files.sort();
         let mut skipped = Vec::new();
-        for f in &files {
-            let path = f.to_string_lossy().to_string();
-            if let Err(e) = pool.register(&path) {
-                skipped.push((path, e.to_string()));
+        let (mut indexes, mut tiles) = (Vec::new(), Vec::new());
+        for f in files {
+            if f.extension().is_some_and(|x| x.eq_ignore_ascii_case("db")) {
+                let path = f.to_string_lossy().to_string();
+                if let Err(e) = pool.register(&path) {
+                    skipped.push((path, e.to_string()));
+                }
+                continue;
+            }
+            match magic(&f).as_ref().map(|m| &m[..]) {
+                Some(b"SEIZABI1") => indexes.push(f),
+                Some(b"SEIZAST1" | b"SEIZAST2") => tiles.push(f),
+                _ => {}
             }
         }
-        if pool.tiers.is_empty() {
+        for (index, stars) in pair_narrow(indexes, tiles, &mut skipped) {
+            let (index, stars) = (index.to_string_lossy(), stars.to_string_lossy());
+            if let Err(e) = pool.register_narrow(&index, &stars) {
+                skipped.push((index.to_string(), e.to_string()));
+            }
+        }
+        if pool.is_empty() {
             let why = if skipped.is_empty() {
                 format!("no *.db files in {dir}")
             } else {
@@ -150,9 +174,7 @@ impl SolverPool {
     /// Registers one tier. Registering the same path again is idempotent (returns the
     /// existing entry): install-then-register flows easily report a file twice.
     pub fn register(&mut self, path: &str) -> Result<TierInfo> {
-        let key = std::fs::canonicalize(path)
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| path.to_string());
+        let key = canonical(path);
         if let Some(t) = self.tiers.iter().find(|t| t.info.path == key) {
             return Ok(t.info.clone());
         }
@@ -182,16 +204,75 @@ impl SolverPool {
         Ok(info)
     }
 
+    /// Registers the narrow-field engine: a seiza blind index (`SEIZABI1`) and its star tiles
+    /// (`SEIZAST1`/`SEIZAST2`). Both are memory mapped and only their headers are read, so it
+    /// is as quick as registering a tetra3 tier. One package per pool: registering the same
+    /// index again returns it, another one is an error (open a new pool to replace it). Builds
+    /// without the narrow-field engine (mobile) return an error.
+    pub fn register_narrow(&mut self, index_path: &str, stars_path: &str) -> Result<TierInfo> {
+        #[cfg(feature = "narrow")]
+        {
+            let key = canonical(index_path);
+            if let Some(n) = &self.narrow {
+                return if n.info.path == key {
+                    Ok(n.info.clone())
+                } else {
+                    Err(CoreError::InvalidInput(format!(
+                        "a narrow-field package is already registered ({}); open a new pool to replace it",
+                        n.info.name
+                    )))
+                };
+            }
+            let engine = crate::narrow::NarrowEngine::open_with_pool(
+                index_path,
+                stars_path,
+                self.rayon.clone(),
+            )?;
+            let i = engine.info();
+            let info = TierInfo {
+                name: i.name.clone(),
+                path: key,
+                min_fov_deg: i.min_fov_deg,
+                max_fov_deg: crate::narrow::NARROW_MAX_FOV_DEG.min(i.max_fov_deg),
+                num_stars: i.num_stars,
+                num_patterns: i.num_patterns.min(u32::MAX as u64) as u32,
+                star_max_magnitude: i.index_mag_limit,
+                kind: TierKind::Narrow,
+            };
+            self.narrow = Some(NarrowTier {
+                info: info.clone(),
+                engine,
+            });
+            Ok(info)
+        }
+        #[cfg(not(feature = "narrow"))]
+        {
+            let _ = (index_path, stars_path);
+            Err(CoreError::InvalidInput(
+                "this build has no narrow-field engine (desktop builds only)".into(),
+            ))
+        }
+    }
+
+    /// Registered tiers: the tetra3 tiers wide to narrow, then the narrow-field engine
     pub fn tiers(&self) -> Vec<TierInfo> {
-        self.tiers.iter().map(|t| t.info.clone()).collect()
+        #[allow(unused_mut)]
+        let mut v: Vec<TierInfo> = self.tiers.iter().map(|t| t.info.clone()).collect();
+        #[cfg(feature = "narrow")]
+        v.extend(self.narrow.as_ref().map(|n| n.info.clone()));
+        v
     }
 
     pub fn len(&self) -> usize {
-        self.tiers.len()
+        #[cfg(feature = "narrow")]
+        let narrow = usize::from(self.narrow.is_some());
+        #[cfg(not(feature = "narrow"))]
+        let narrow = 0;
+        self.tiers.len() + narrow
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tiers.is_empty()
+        self.len() == 0
     }
 
     /// The underlying `Solver` by name (annotation uses the tier that solved: narrow tiers are denser).
@@ -200,6 +281,24 @@ impl SolverPool {
             .iter()
             .find(|t| t.info.name == name)
             .map(|t| &t.solver)
+    }
+
+    /// The tetra3 tier to annotate a solve with: the tier named `db` (pass the one that solved,
+    /// since narrow tiers have denser catalogs); for the narrow-field engine, which has no
+    /// tetra3 catalog, the narrowest tetra3 tier; None picks the widest. None when there is no
+    /// such tier.
+    pub fn annotation_solver(&self, db: Option<&str>) -> Option<&Solver> {
+        let Some(name) = db else {
+            return self.tiers.first().map(|t| &t.solver);
+        };
+        if let Some(s) = self.solver(name) {
+            return Some(s);
+        }
+        #[cfg(feature = "narrow")]
+        if self.narrow.as_ref().is_some_and(|n| n.info.name == name) {
+            return self.tiers.last().map(|t| &t.solver);
+        }
+        None
     }
 
     /// Solves a frame without naming a database. `hints` is the single-database ladder
@@ -214,7 +313,7 @@ impl SolverPool {
         base: &crate::SolveOptions,
         hints: &[FovPreset],
     ) -> Result<PoolOutcome> {
-        if self.tiers.is_empty() {
+        if self.is_empty() {
             return Err(CoreError::InvalidInput(
                 "solver pool is empty: register a database first".into(),
             ));
@@ -234,7 +333,7 @@ impl SolverPool {
         let steps: Vec<(usize, Option<FovPreset>)> = match known_fov(base, w) {
             Some(fov) => {
                 let mut cands = covering(&spans, fov);
-                if cands.is_empty() {
+                if cands.is_empty() && !spans.is_empty() {
                     // Out of every range: let the nearest tier try once rather than
                     // fail outright (the tolerance is conservative; edge frames often solve).
                     cands = vec![nearest(&spans, fov)];
@@ -355,6 +454,53 @@ impl SolverPool {
         meta.apply_place(&mut r.outcome);
         Ok(r)
     }
+}
+
+/// A path as registered: canonical when it resolves, so the same file registers once
+fn canonical(path: &str) -> String {
+    std::fs::canonicalize(path)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string())
+}
+
+/// The first 8 bytes of a file (narrow-field files are recognized by their headers)
+fn magic(path: &std::path::Path) -> Option<[u8; 8]> {
+    use std::io::Read;
+    let mut m = [0u8; 8];
+    std::fs::File::open(path).ok()?.read_exact(&mut m).ok()?;
+    Some(m)
+}
+
+/// Pairs blind indexes with star-tile files: one of each pair up, otherwise files sharing a
+/// stem; the rest go into `skipped`
+fn pair_narrow(
+    indexes: Vec<std::path::PathBuf>,
+    mut tiles: Vec<std::path::PathBuf>,
+    skipped: &mut Vec<(String, String)>,
+) -> Vec<(std::path::PathBuf, std::path::PathBuf)> {
+    if indexes.len() == 1 && tiles.len() == 1 {
+        return vec![(indexes[0].clone(), tiles.remove(0))];
+    }
+    let mut pairs = Vec::new();
+    for index in indexes {
+        match tiles
+            .iter()
+            .position(|t| t.file_stem() == index.file_stem())
+        {
+            Some(i) => pairs.push((index, tiles.remove(i))),
+            None => skipped.push((
+                index.to_string_lossy().to_string(),
+                "narrow-field index without a matching star-tile file".into(),
+            )),
+        }
+    }
+    for t in tiles {
+        skipped.push((
+            t.to_string_lossy().to_string(),
+            "star-tile file without a matching narrow-field index".into(),
+        ));
+    }
+    pairs
 }
 
 /// The two sources of a known FOV: a calibrated camera and tracking (previous attitude and FOV).

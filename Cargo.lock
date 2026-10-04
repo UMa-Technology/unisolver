@@ -2015,6 +2015,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "unisolver-starmatch"
+version = "0.4.4"
+dependencies = [
+ "memmap2",
+ "rayon",
+ "rustc-hash",
+ "thiserror",
+]
+
+[[package]]
 name = "unisolver-synth"
 version = "0.4.4"
 dependencies = [

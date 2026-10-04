@@ -17,7 +17,7 @@ for a in "$@"; do
   esac
 done
 
-PKGS="-p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask"
+PKGS="-p unisolver-starmatch -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask"
 FEATURES="imageio satellites narrow"
 
 step() {

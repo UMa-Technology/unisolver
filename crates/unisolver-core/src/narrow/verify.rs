@@ -11,7 +11,6 @@ pub(crate) const CHECK_CENTROIDS: usize = 60;
 /// Match radius, pixels
 pub(crate) const MATCH_RADIUS_PX: f64 = 3.0;
 
-#[allow(dead_code)] // read by the engine
 pub(crate) struct Verified {
     pub matched: Vec<MatchOut>,
     pub rmse_arcsec: f32,
@@ -21,7 +20,6 @@ pub(crate) struct Verified {
     pub prob: f64,
 }
 
-#[allow(dead_code)] // used by the engine
 pub(crate) fn verify(wcs: &Wcs, centroids: &[CentroidOut], catalog: &dyn StarCatalog) -> Verified {
     let mut order: Vec<usize> = (0..centroids.len()).collect();
     order.sort_by(|&a, &b| {

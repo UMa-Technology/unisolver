@@ -41,6 +41,8 @@ numeris = "0.5"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # Decompresses the bundled database for the golden regression (tests only; pure Rust)
 ruzstd = "0.8"
+# The narrow engine's integration tests build indexes with seiza directly
+seiza = { path = "../../third_party/seiza/seiza" }
 
 [[test]]
 name = "imageio_local_test"
@@ -53,3 +55,7 @@ required-features = ["imageio"]
 [[test]]
 name = "exif_local_test"
 required-features = ["imageio"]
+
+[[test]]
+name = "narrow_test"
+required-features = ["narrow"]

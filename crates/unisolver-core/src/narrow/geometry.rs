@@ -10,7 +10,6 @@ use crate::outcome::Wcs;
 /// tetra3's model is CD = (1/f)·[[p·cos θ, −sin θ], [p·sin θ, cos θ]] (p = −1 when mirrored).
 /// An affine CD is projected onto the nearest such similarity: parity from the sign of the
 /// determinant, f from its magnitude, θ from both columns.
-#[allow(dead_code)] // used by the engine
 pub(crate) fn wcs_from_seiza(sw: &seiza::Wcs, width: u32, height: u32) -> Wcs {
     let cd = [
         [sw.cd[0][0].to_radians(), sw.cd[0][1].to_radians()],
@@ -39,7 +38,6 @@ pub(crate) fn wcs_from_seiza(sw: &seiza::Wcs, width: u32, height: u32) -> Wcs {
 /// ICRS→camera attitude of a WCS as tetra3's `qicrs2cam` [w, x, y, z]: camera +Z at the
 /// tangent point, +X and +Y the camera tangent-plane axes turned by the roll. Parity lives in
 /// the camera model, not in the attitude.
-#[allow(dead_code)] // used by the engine
 pub(crate) fn attitude_wxyz(wcs: &Wcs) -> [f32; 4] {
     let (ra, dec) = (wcs.crval_deg[0].to_radians(), wcs.crval_deg[1].to_radians());
     let z = [dec.cos() * ra.cos(), dec.cos() * ra.sin(), dec.sin()];

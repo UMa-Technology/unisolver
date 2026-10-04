@@ -165,6 +165,14 @@ impl SolverPool {
         let mut skipped = Vec::new();
         let (mut indexes, mut tiles) = (Vec::new(), Vec::new());
         for f in files {
+            // Downloads and decompressions in progress (or left by a crash) are not databases
+            let name = f
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if name.ends_with(".tmp") || name.ends_with(".part") {
+                continue;
+            }
             if f.extension().is_some_and(|x| x.eq_ignore_ascii_case("db")) {
                 let path = f.to_string_lossy().to_string();
                 if let Err(e) = pool.register(&path) {

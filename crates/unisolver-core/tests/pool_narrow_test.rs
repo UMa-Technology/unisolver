@@ -102,6 +102,28 @@ fn open_dir_recognizes_the_package_by_its_headers() {
 }
 
 #[test]
+fn a_leftover_temporary_file_is_not_paired_into_a_package() {
+    // A crash mid-install leaves `x.stars.tmp` (a valid header, maybe truncated) beside `x.idx`:
+    // as the only index and star file they would pair regardless of their names
+    for leftover in ["x.stars.tmp", "x.stars.part"] {
+        let dir = dir_with(
+            "unisolver_pool_narrow_leftover",
+            &[
+                (&format!("{WIDE}.db"), &format!("{WIDE}.db")),
+                ("patch.idx", "x.idx"),
+                ("patch.stars", leftover),
+            ],
+        );
+        let (p, _) = SolverPool::open_dir(dir.to_str().unwrap()).unwrap();
+        assert!(
+            p.tiers().iter().all(|t| t.kind != TierKind::Narrow),
+            "{leftover}: {:?}",
+            p.tiers()
+        );
+    }
+}
+
+#[test]
 fn unpaired_narrow_files_are_skipped() {
     let dir = dir_with(
         "unisolver_pool_narrow_unpaired",

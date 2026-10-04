@@ -53,6 +53,7 @@ pub struct NarrowInfo {
     pub index_mag_limit: f32,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum NarrowMode {
     /// No position: horizontal FOV range, degrees
     Blind { min_fov_deg: f64, max_fov_deg: f64 },

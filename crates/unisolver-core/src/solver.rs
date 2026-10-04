@@ -91,6 +91,36 @@ pub struct FovAttempt {
     pub solve_ms: f32,
 }
 
+/// Approximate pointing for the narrow-field engine: a mount's position, or a header's RA/Dec.
+/// A hint, never truth: when the search around it fails, the engine solves blind.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PointingHint {
+    /// ICRS right ascension, degrees
+    pub ra_deg: f64,
+    /// ICRS declination, degrees
+    pub dec_deg: f64,
+    /// Search radius, degrees; None searches max(1°, 3 × the FOV)
+    #[serde(default)]
+    pub radius_deg: Option<f64>,
+}
+
+impl PointingHint {
+    pub(crate) fn validate(&self) -> Result<()> {
+        let ok = self.ra_deg.is_finite()
+            && (-90.0..=90.0).contains(&self.dec_deg)
+            && self
+                .radius_deg
+                .is_none_or(|r| r.is_finite() && r > 0.0 && r <= 180.0);
+        if ok {
+            Ok(())
+        } else {
+            Err(CoreError::InvalidInput(format!(
+                "pointing_hint invalid: {self:?}"
+            )))
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolveOptions {
     pub fov_estimate_deg: f32,
@@ -140,6 +170,20 @@ pub struct SolveOptions {
     /// frames. Never with `camera` or a tracking hint. Default on.
     #[serde(default = "default_true")]
     pub refine_scale: bool,
+    /// Pools with the narrow-field engine only: approximate pointing (a mount's position). File
+    /// entries fill it from the header's RA/Dec when it is None. The tetra3 tiers never use it,
+    /// and it changes no routing.
+    #[serde(default)]
+    pub pointing_hint: Option<PointingHint>,
+    /// Pools with the narrow-field engine only: when the FOV is unknown, blind-solve once over
+    /// the engine's range after every tetra3 tier failed. Off by default, so frames of unknown
+    /// FOV (phones, frames without stars) fail as fast as without the engine.
+    #[serde(default)]
+    pub narrow_blind: bool,
+    /// Pools with the narrow-field engine only: the most time (ms) it gets after the tetra3
+    /// tiers failed, also capped by `timeout_ms`; 0 never runs it after them. Default 2000.
+    #[serde(default = "default_narrow_fallback_ms")]
+    pub narrow_fallback_ms: u64,
 }
 
 /// The refinements a solve runs after it succeeds
@@ -162,6 +206,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_narrow_fallback_ms() -> u64 {
+    2000
+}
+
 impl SolveOptions {
     pub fn new(fov_estimate_deg: f32) -> Self {
         Self {
@@ -182,6 +230,9 @@ impl SolveOptions {
             observation_unix_ms: None,
             observer_velocity_km_s: None,
             focal_length_35mm: None,
+            pointing_hint: None,
+            narrow_blind: false,
+            narrow_fallback_ms: default_narrow_fallback_ms(),
         }
     }
 }
@@ -836,5 +887,45 @@ mod tests {
             cfg(0).max_patterns_checked,
             Some(SolveConfig::DEFAULT_MAX_PATTERNS_CHECKED)
         );
+    }
+
+    /// The narrow-field options are off unless asked for, and pointing hints are checked
+    #[test]
+    fn narrow_options_default_off_and_pointing_hints_are_checked() {
+        let o = SolveOptions::new(2.0);
+        assert!(o.pointing_hint.is_none() && !o.narrow_blind);
+        assert_eq!(o.narrow_fallback_ms, 2000);
+        let ok = PointingHint {
+            ra_deg: 83.8,
+            dec_deg: -5.4,
+            radius_deg: None,
+        };
+        assert!(ok.validate().is_ok());
+        assert!(PointingHint {
+            radius_deg: Some(2.0),
+            ..ok
+        }
+        .validate()
+        .is_ok());
+        for bad in [
+            PointingHint {
+                dec_deg: 91.0,
+                ..ok
+            },
+            PointingHint {
+                ra_deg: f64::NAN,
+                ..ok
+            },
+            PointingHint {
+                radius_deg: Some(0.0),
+                ..ok
+            },
+            PointingHint {
+                radius_deg: Some(f64::INFINITY),
+                ..ok
+            },
+        ] {
+            assert!(bad.validate().is_err(), "{bad:?}");
+        }
     }
 }

@@ -45,13 +45,14 @@ pub use frame::{Frame, PixelData};
 pub use grid::{GridEdge, GridKind, GridLabel, GridLineAnnotation, GridSystem};
 pub use names_pack::NamesPack;
 pub use outcome::{CentroidOut, MatchOut, SolveOutcome, SolveStatus, SolvedGeometry, Timing, Wcs};
-pub use pool::{PoolAttempt, PoolOutcome, SolverPool, TierInfo};
+pub use pool::{PoolAttempt, PoolOutcome, SolverPool, TierInfo, TierKind};
 pub use sky::Viewport;
 #[cfg(feature = "imageio")]
 pub use solver::presets_with_hints;
 pub use solver::{aspect_ladder, focal_35mm_hint, ladder_after_hints};
 pub use solver::{
-    DbProperties, ExtractionOptions, ExtractionProfile, FovAttempt, FovPreset, SolveOptions, Solver,
+    DbProperties, ExtractionOptions, ExtractionProfile, FovAttempt, FovPreset, PointingHint,
+    SolveOptions, Solver,
 };
 
 #[doc(hidden)]

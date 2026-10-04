@@ -19,10 +19,22 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
+/// What answers for a registered tier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TierKind {
+    /// A tetra3 pattern database (`*.db`)
+    #[default]
+    Tetra3,
+    /// The narrow-field engine: a blind index and its star tiles (desktop builds)
+    Narrow,
+}
+
 /// Public information about a registered tier.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TierInfo {
-    /// Tier name = file name without extension (e.g. `unisolver_10_80`), same as the manifest `name`
+    /// Tier name = file name without extension (e.g. `unisolver_10_80`; for the narrow-field
+    /// engine, its index file), same as the manifest `name`
     pub name: String,
     pub path: String,
     pub min_fov_deg: f32,
@@ -30,6 +42,9 @@ pub struct TierInfo {
     pub num_stars: u64,
     pub num_patterns: u32,
     pub star_max_magnitude: f32,
+    /// tetra3 database or narrow-field engine
+    #[serde(default)]
+    pub kind: TierKind,
 }
 
 /// One cross-tier attempt (a `FovAttempt` plus the database it used).
@@ -37,6 +52,9 @@ pub struct TierInfo {
 pub struct PoolAttempt {
     /// Database used for this attempt
     pub db: String,
+    /// Engine of the database used
+    #[serde(default)]
+    pub kind: TierKind,
     pub fov_deg: f32,
     pub status: SolveStatus,
     pub solve_ms: f32,
@@ -152,6 +170,7 @@ impl SolverPool {
             num_stars: p.num_stars as u64,
             num_patterns: p.num_patterns,
             star_max_magnitude: p.star_max_magnitude,
+            kind: TierKind::Tetra3,
         };
         self.tiers.push(Tier {
             info: info.clone(),
@@ -199,6 +218,9 @@ impl SolverPool {
             return Err(CoreError::InvalidInput(
                 "solver pool is empty: register a database first".into(),
             ));
+        }
+        if let Some(p) = &base.pointing_hint {
+            p.validate()?;
         }
         let t_total = Instant::now();
         let (w, h) = (frame.width, frame.height);
@@ -290,6 +312,7 @@ impl SolverPool {
 
             attempts.push(PoolAttempt {
                 db: tier.info.name.clone(),
+                kind: tier.info.kind,
                 fov_deg: o.fov_estimate_deg,
                 status: out.status,
                 solve_ms: out.timing.solve_ms,

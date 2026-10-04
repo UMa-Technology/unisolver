@@ -1,6 +1,0 @@
-# Pinned upstream for third_party/seiza, managed by `cargo xtask upstream` (docs/upstream.md)
-repo    = "https://github.com/theatrus/seiza"
-tag     = "v0.19.2"
-commit  = "65cc182273db2590630a1b70729c5e063cc04814"
-# Upstream paths copied into the vendored tree
-include = ["LICENSE", "seiza/Cargo.toml", "seiza/README.md", "seiza/src", "seiza-calibration/Cargo.toml", "seiza-calibration/README.md", "seiza-calibration/src", "seiza-imgproc/Cargo.toml", "seiza-imgproc/README.md", "seiza-imgproc/src", "seiza-stats/Cargo.toml", "seiza-stats/README.md", "seiza-stats/src"]

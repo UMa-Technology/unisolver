@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["third_party/tetra3", "third_party/seiza/seiza", "third_party/seiza/seiza-calibration", "third_party/seiza/seiza-imgproc", "third_party/seiza/seiza-stats", "crates/unisolver-synth", "crates/unisolver-starmatch", "crates/unisolver-core", "tools/namesgen", "tools/solvecli", "packages/unisolver_flutter/rust", "crates/unisolver-cabi", "tools/xtask"]
+members = ["third_party/tetra3", "crates/unisolver-synth", "crates/unisolver-starmatch", "crates/unisolver-core", "tools/namesgen", "tools/solvecli", "packages/unisolver_flutter/rust", "crates/unisolver-cabi", "tools/xtask"]
 exclude = ["internal"]
 
 [workspace.package]

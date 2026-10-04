@@ -1,11 +1,10 @@
 # Upstreams: vendored crates as patch queues
 
-Two upstream projects are vendored as generated trees, each managed by `cargo xtask upstream`:
+One upstream project is vendored as a generated tree, managed by `cargo xtask upstream`:
 
 | Name | Upstream | Vendored tree | Patches |
 |---|---|---|---|
 | `tetra3` | [tetra3rs](https://github.com/ssmichael1/tetra3rs) | `third_party/tetra3` | [third_party/tetra3-patches/README.md](../third_party/tetra3-patches/README.md) |
-| `seiza` | [seiza](https://github.com/theatrus/seiza) | `third_party/seiza` | [third_party/seiza-patches/README.md](../third_party/seiza-patches/README.md) |
 
 `third_party/<name>` is upstream at the commit pinned in `third_party/<name>.lock`, filtered to the
 lock's `include` paths, with the patches in `third_party/<name>-patches/` applied in `series` order.
@@ -23,8 +22,8 @@ README.
 | `target/upstream/<name>/cache` | clone of upstream that `check` resets freely (not tracked) |
 | `target/upstream/<name>/work` | clone where the queue is edited, branch `unisolver` (not tracked) |
 
-Set `UNISOLVER_TETRA3_REPO` or `UNISOLVER_SEIZA_REPO` to fetch from a mirror instead of the lock's
-`repo`. Only the first run needs the network; after that `check` works offline from the cache clone.
+Set `UNISOLVER_TETRA3_REPO` to fetch from a mirror instead of the lock's `repo`. Only the first run
+needs the network; after that `check` works offline from the cache clone.
 
 ## Commands
 
@@ -51,10 +50,6 @@ Patches may change only paths in `include`; `export` refuses anything else. Expo
 a fixed author, `unisolver <patches@unisolver.invalid>`, so no maintainer address is published.
 Describe a new patch in the queue's README.
 
-seiza's work clone is upstream's whole workspace, which no longer loads once patch 0001 drops the
-`downloads` feature its CLI uses: build and test seiza patches from this repository instead
-(commit or `--amend` in the work clone, `export`, then `cargo test -p seiza --release`).
-
 ## Syncing to a new upstream release
 
 ```bash
@@ -62,11 +57,12 @@ cargo xtask upstream --name tetra3 sync <tag>
 ```
 
 A sync is a reviewed change, never automatic. tetra3's patch 0003 replaces the pattern-table
-container, so a release can change solver behavior or the database format; a seiza release can
-change the blind index schema or the star tile format, which the narrow-field package is built
-from. Before committing, go through the checklist the command prints: the `!!` entries, the
-"Sync history" line in the queue's README, and a CHANGELOG entry. Commit as
-`chore(<name>): sync to <tag>`.
+container, so a release can change solver behavior or the database format. Before committing, go
+through the checklist the command prints: the `!!` entries, the "Sync history" line in the queue's
+README, and a CHANGELOG entry. Commit as `chore(<name>): sync to <tag>`.
+
+The narrow-field engine's matching core was ported from seiza into `crates/unisolver-starmatch`
+(see that crate's documentation); it is our own code and does not follow seiza releases.
 
 ## Rules
 

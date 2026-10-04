@@ -23,7 +23,7 @@ struct Cli {
 enum Cmd {
     /// Vendored upstreams and their patch queues (docs/upstream.md)
     Upstream {
-        /// Upstream to act on (tetra3, seiza); `check` without it checks every upstream
+        /// Upstream to act on (tetra3); `check` without it checks every upstream
         #[arg(long)]
         name: Option<String>,
         #[command(subcommand)]
@@ -105,7 +105,7 @@ fn upstream_main(root: &Path, name: Option<String>, cmd: UpstreamCmd) -> ExitCod
     };
     if !matches!(cmd, UpstreamCmd::Check) && specs.len() != 1 {
         return fail(anyhow::anyhow!(
-            "name the upstream: `cargo xtask upstream --name <tetra3|seiza> ...`"
+            "name the upstream: `cargo xtask upstream --name <tetra3> ...`"
         ));
     }
     let load = |s: &'static upstream::Spec| Ctx::load(root, s, std::env::var(s.repo_env).ok());

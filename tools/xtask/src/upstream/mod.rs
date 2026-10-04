@@ -36,20 +36,13 @@ pub struct Spec {
     pub review_hint: &'static str,
 }
 
-pub static UPSTREAMS: [Spec; 2] = [
+pub static UPSTREAMS: [Spec; 1] = [
     Spec {
         name: "tetra3",
         repo_env: "UNISOLVER_TETRA3_REPO",
         keep: &["data"],
         test_packages: &["tetra3"],
         review_hint: "does the packed entry layout (PACKED_ENTRY_BYTES) or the database format version change, and must the tiers be re-encoded?",
-    },
-    Spec {
-        name: "seiza",
-        repo_env: "UNISOLVER_SEIZA_REPO",
-        keep: &[],
-        test_packages: &["seiza"],
-        review_hint: "does the blind index schema (INDEX_TIER_SCHEMA) or the star tile format change, so the narrow package must be rebuilt?",
     },
 ];
 
@@ -156,24 +149,24 @@ mod tests {
 
     #[test]
     fn every_upstream_has_its_own_paths() {
-        let seiza = spec("seiza").unwrap();
+        let tetra3 = spec("tetra3").unwrap();
         let ctx = Ctx {
             root: PathBuf::from("/r"),
-            spec: seiza,
+            spec: tetra3,
             lock: sample_lock(),
             repo_url: String::new(),
         };
-        assert_eq!(ctx.vendored(), PathBuf::from("/r/third_party/seiza"));
+        assert_eq!(ctx.vendored(), PathBuf::from("/r/third_party/tetra3"));
         assert_eq!(
             ctx.patches_dir(),
-            PathBuf::from("/r/third_party/seiza-patches")
+            PathBuf::from("/r/third_party/tetra3-patches")
         );
-        assert_eq!(ctx.lock_path(), PathBuf::from("/r/third_party/seiza.lock"));
+        assert_eq!(ctx.lock_path(), PathBuf::from("/r/third_party/tetra3.lock"));
         assert_eq!(
             ctx.cache_dir(),
-            PathBuf::from("/r/target/upstream/seiza/cache")
+            PathBuf::from("/r/target/upstream/tetra3/cache")
         );
-        assert_eq!(spec("tetra3").unwrap().keep, ["data"]);
-        assert!(spec("nope").is_err());
+        assert_eq!(tetra3.keep, ["data"]);
+        assert!(spec("seiza").is_err());
     }
 }

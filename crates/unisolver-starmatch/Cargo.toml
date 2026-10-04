@@ -14,6 +14,4 @@ rustc-hash = "2"
 thiserror = "2"
 
 [dev-dependencies]
-# Parity with the code this crate was ported from (tests/seiza_parity.rs); removed with it
-seiza = { path = "../../third_party/seiza/seiza", default-features = false }
 sha2 = "0.10"

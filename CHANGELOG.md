@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-05 — v0.5.0
+
 1. **Databases in tetra3's format 2 (breaking).** The engine moves to tetra3 0.14 and its
    database format 2, whose pattern table keeps only the occupied slots: installed databases
    take about half the space (the bundled 10–80° tier 61 → 29 MB; 5–10° 80 → 41 MB, 2.5–5°

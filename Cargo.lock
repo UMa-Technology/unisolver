@@ -2021,6 +2021,8 @@ dependencies = [
  "memmap2",
  "rayon",
  "rustc-hash",
+ "seiza",
+ "sha2 0.10.9",
  "thiserror",
 ]
 

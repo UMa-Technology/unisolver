@@ -16,6 +16,10 @@ unisolver-core = { path = "../unisolver-core", features = ["imageio", "satellite
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 
+# The narrow-field engine on desktop targets only; iOS and Android builds stay as they are
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+unisolver-core = { path = "../unisolver-core", features = ["narrow"] }
+
 [dev-dependencies]
 unisolver-synth = { path = "../unisolver-synth" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

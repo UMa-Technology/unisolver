@@ -7,4 +7,6 @@
 set -e
 cargo check -p unisolver-core --target x86_64-pc-windows-msvc
 cargo check -p unisolver-core --target aarch64-pc-windows-msvc
-echo "windows check OK: unisolver-core on both arches (frb layer needs a Windows host, see comments)"
+cargo check -p unisolver-core --features narrow --target x86_64-pc-windows-msvc
+cargo check -p unisolver-core --features narrow --target aarch64-pc-windows-msvc
+echo "windows check OK: unisolver-core (with and without narrow) on both arches (frb layer needs a Windows host, see comments)"

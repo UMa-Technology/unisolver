@@ -123,6 +123,9 @@ struct AttemptJson {
     /// Tier used for this attempt (pool entries only)
     #[serde(skip_serializing_if = "Option::is_none")]
     db: Option<String>,
+    /// Engine of this attempt, `tetra3` or `narrow` (pool entries only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<core::TierKind>,
 }
 
 #[derive(serde::Serialize)]
@@ -190,6 +193,18 @@ struct SolveOptsJson {
     /// stars and keep it when they land closer to catalog stars (`solution.scale_refined`);
     /// never with `camera` or an attitude hint. Default true
     refine_scale: bool,
+    /// Pools with the narrow-field engine (desktop builds) only: approximate pointing,
+    /// `{"ra_deg", "dec_deg", "radius_deg"}` in degrees (the radius is optional: max(1°, 3 ×
+    /// FOV)). Pool file entries fill it from the header's RA/Dec when absent. The tetra3 tiers
+    /// never use it
+    pointing_hint: Option<core::PointingHint>,
+    /// Pools with the narrow-field engine only: with an unknown FOV, blind-solve once over its
+    /// range after every tetra3 tier failed. Default false, so frames of unknown FOV fail as
+    /// fast as without it
+    narrow_blind: bool,
+    /// Pools with the narrow-field engine only: the most time it gets after the tetra3 tiers
+    /// failed, ms (also capped by `timeout_ms`); 0 never runs it after them. Default 2000
+    narrow_fallback_ms: u64,
 }
 
 impl Default for SolveOptsJson {
@@ -215,6 +230,9 @@ impl Default for SolveOptsJson {
             focal_length_35mm: None,
             fit_lens: true,
             refine_scale: true,
+            pointing_hint: None,
+            narrow_blind: d.narrow_blind,
+            narrow_fallback_ms: d.narrow_fallback_ms,
         }
     }
 }
@@ -270,6 +288,9 @@ impl SolveOptsJson {
         o.focal_length_35mm = self.focal_length_35mm;
         o.fit_lens = self.fit_lens;
         o.refine_scale = self.refine_scale;
+        o.pointing_hint = self.pointing_hint;
+        o.narrow_blind = self.narrow_blind;
+        o.narrow_fallback_ms = self.narrow_fallback_ms;
         Ok((o, known))
     }
 }
@@ -280,6 +301,7 @@ fn attempt_json(a: &core::FovAttempt, db: Option<&str>) -> AttemptJson {
         status: format!("{:?}", a.status),
         solve_ms: a.solve_ms,
         db: db.map(str::to_string),
+        kind: None,
     }
 }
 
@@ -340,6 +362,7 @@ fn solve_frame_with_opts(
             status: format!("{:?}", out.status),
             solve_ms: out.timing.solve_ms,
             db: None,
+            kind: None,
         }];
         (out, a)
     } else {
@@ -390,6 +413,7 @@ fn pool_solve_frame_with_opts(
             status: format!("{:?}", a.status),
             solve_ms: a.solve_ms,
             db: Some(a.db.clone()),
+            kind: Some(a.kind),
         })
         .collect();
     serde_json::to_string(&build_solve_json(r.outcome, attempts, r.db)).map_err(|e| e.to_string())
@@ -421,6 +445,7 @@ fn pool_solve_file_with_opts(
     let (mut base, _) = opts.into_core()?;
     fit_camera_fov(&mut base, frame.width);
     meta.apply_time(&mut base);
+    meta.apply_pointing(&mut base);
     let fallback = core::presets_with_hints(&meta, frame.width, frame.height);
     let hints = hints_for(fov_deg, &base, fallback);
     pool_solve_frame_with_opts(pool, &frame, &base, &hints, Some(&meta))
@@ -616,6 +641,8 @@ struct TierJson {
     num_stars: u64,
     num_patterns: u32,
     star_max_magnitude: f32,
+    /// `tetra3` or `narrow`
+    kind: core::TierKind,
 }
 
 #[derive(serde::Serialize)]
@@ -633,11 +660,14 @@ fn tier_json(t: &core::TierInfo) -> TierJson {
         num_stars: t.num_stars,
         num_patterns: t.num_patterns,
         star_max_magnitude: t.star_max_magnitude,
+        kind: t.kind,
     }
 }
 
-/// Opens a pool, registering every `*.db` in `dir`. A file that fails to open is only
-/// recorded in `skipped` (see [`unisolver_pool_tiers_json`]); it fails only when **none** opens.
+/// Opens a pool, registering every `*.db` in `dir` and the narrow-field package there when
+/// there is one (desktop builds; recognized by its file headers). A file that fails to open is
+/// only recorded in `skipped` (see [`unisolver_pool_tiers_json`]); it fails only when
+/// **nothing** opens.
 ///
 /// # Safety
 /// `dir` must be a valid NUL-terminated string; `error_out` is NULL or a writable pointer slot.
@@ -680,6 +710,42 @@ pub unsafe extern "C" fn unisolver_pool_register(
         let pool = pool.as_mut().ok_or("pool is NULL")?;
         let path = cstr(db_path, "db_path")?;
         let info = pool.pool.register(path).map_err(|e| e.to_string())?;
+        serde_json::to_string(&tier_json(&info)).map_err(|e| e.to_string())
+    };
+    match run() {
+        Ok(s) => to_owned_cstring(s),
+        Err(e) => {
+            set_error(error_out, &e);
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Registers the narrow-field package (desktop builds): its blind index and star-tile files.
+/// Only their headers are read, so this is as quick as [`unisolver_pool_register`]. Returns the
+/// tier as OWNED JSON (`"kind":"narrow"`). Registering the same index again returns it; a
+/// second package is an error, and so is every call on iOS and Android builds, which have no
+/// narrow-field engine.
+///
+/// # Safety
+/// `pool` is live and **no other call may be in flight** (this call changes the pool);
+/// `index_path` and `stars_path` are valid NUL-terminated strings.
+#[no_mangle]
+pub unsafe extern "C" fn unisolver_pool_register_narrow(
+    pool: *mut UnisolverPool,
+    index_path: *const c_char,
+    stars_path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    clear_error(error_out);
+    let run = || -> Result<String, String> {
+        let pool = pool.as_mut().ok_or("pool is NULL")?;
+        let index = cstr(index_path, "index_path")?;
+        let stars = cstr(stars_path, "stars_path")?;
+        let info = pool
+            .pool
+            .register_narrow(index, stars)
+            .map_err(|e| e.to_string())?;
         serde_json::to_string(&tier_json(&info)).map_err(|e| e.to_string())
     };
     match run() {
@@ -1035,7 +1101,8 @@ pub unsafe extern "C" fn unisolver_annotator_open(
 
 /// Builds an annotator from **one tier** of a pool. Pass the tier that solved the frame (the
 /// `db` field of the solve JSON); NULL uses the widest tier. Narrow tiers have denser
-/// catalogs, so annotate with the one that solved.
+/// catalogs, so annotate with the one that solved. A narrow-field solve (`db` names the
+/// package) annotates with the narrowest tetra3 tier.
 ///
 /// # Safety
 /// `pool` is live; `db_name` is NULL or a valid NUL-terminated string; the rest as above.
@@ -1050,19 +1117,18 @@ pub unsafe extern "C" fn unisolver_pool_annotator_open(
     clear_error(error_out);
     let run = || -> Result<UnisolverAnnotator, String> {
         let pool = pool.as_ref().ok_or("pool is NULL")?;
-        let tiers = pool.pool.tiers();
         let name = if db_name.is_null() {
-            tiers
-                .first()
-                .map(|t| t.name.clone())
-                .ok_or("pool is empty")?
+            None
         } else {
-            cstr(db_name, "db_name")?.to_string()
+            Some(cstr(db_name, "db_name")?)
         };
         let solver = pool
             .pool
-            .solver(&name)
-            .ok_or_else(|| format!("no such tier in pool: {name}"))?;
+            .annotation_solver(name)
+            .ok_or_else(|| match name {
+                Some(n) => format!("no tetra3 tier in the pool to annotate {n} with"),
+                None => "pool has no tetra3 tier".to_string(),
+            })?;
         open_annotator(solver, dso_path, names_path)
     };
     match run() {
@@ -1374,6 +1440,7 @@ pub unsafe extern "C" fn unisolver_calibration_add_image_json(
             status: format!("{:?}", out.status),
             solve_ms: out.timing.solve_ms,
             db: None,
+            kind: None,
         }];
         serde_json::to_string(&build_solve_json(out, a, None)).map_err(|e| e.to_string())
     };
@@ -1619,6 +1686,80 @@ mod tests {
             unisolver_pool_close(pool);
             unisolver_pool_close(std::ptr::null_mut());
         }
+    }
+
+    #[test]
+    fn narrow_package_and_options_via_c_surface() {
+        let dir = std::env::temp_dir().join(format!("cabi_narrow_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sky = core::narrow::testkit::patch_sky((80.0, 30.0), 2.0, 20.0, 5);
+        let (idx, stars) = core::narrow::testkit::write_package(&sky, (1.0, 15.0), &dir, "patch");
+        let mut err: *mut c_char = std::ptr::null_mut();
+        let cdir = CString::new(dir.to_str().unwrap()).unwrap();
+        let pool = unsafe { unisolver_pool_open(cdir.as_ptr(), &mut err) };
+        assert!(!pool.is_null() && err.is_null());
+        let tiers = unsafe { unisolver_pool_tiers_json(pool, &mut err) };
+        let tj = unsafe { CStr::from_ptr(tiers) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            tj.contains("\"name\":\"patch\"") && tj.contains("\"kind\":\"narrow\""),
+            "{tj}"
+        );
+        unsafe { unisolver_string_free(tiers) };
+
+        // Registering the same package again returns it
+        let (ci, cs) = (
+            CString::new(idx.to_str().unwrap()).unwrap(),
+            CString::new(stars.to_str().unwrap()).unwrap(),
+        );
+        let reg =
+            unsafe { unisolver_pool_register_narrow(pool, ci.as_ptr(), cs.as_ptr(), &mut err) };
+        assert!(!reg.is_null());
+        let rj = unsafe { CStr::from_ptr(reg) }.to_str().unwrap().to_string();
+        assert!(rj.contains("\"kind\":\"narrow\""), "{rj}");
+        unsafe { unisolver_string_free(reg) };
+        let bad = unsafe {
+            unisolver_pool_register_narrow(pool, std::ptr::null(), cs.as_ptr(), &mut err)
+        };
+        assert!(bad.is_null() && !err.is_null());
+        unsafe { unisolver_string_free(err) };
+        err = std::ptr::null_mut();
+
+        // No tetra3 tier to annotate a narrow solve with: a clear error
+        let ann = unsafe {
+            unisolver_pool_annotator_open(
+                pool,
+                c"patch".as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                &mut err,
+            )
+        };
+        assert!(ann.is_null() && !err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_string_lossy().to_string();
+        assert!(msg.contains("tetra3"), "{msg}");
+        unsafe { unisolver_string_free(err) };
+        unsafe { unisolver_pool_close(pool) };
+
+        let (o, _) = SolveOptsJson::parse(
+            c"{\"pointing_hint\":{\"ra_deg\":83.8,\"dec_deg\":-5.4},\"narrow_blind\":true,\"narrow_fallback_ms\":500}"
+                .as_ptr(),
+        )
+        .unwrap()
+        .into_core()
+        .unwrap();
+        let hint = o.pointing_hint.unwrap();
+        assert_eq!(
+            (hint.ra_deg, hint.dec_deg, hint.radius_deg),
+            (83.8, -5.4, None)
+        );
+        assert!(o.narrow_blind);
+        assert_eq!(o.narrow_fallback_ms, 500);
+        let (d, _) = SolveOptsJson::default().into_core().unwrap();
+        assert!(d.pointing_hint.is_none() && !d.narrow_blind && d.narrow_fallback_ms == 2000);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

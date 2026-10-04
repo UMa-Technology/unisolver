@@ -149,8 +149,10 @@ char *unisolver_solve_frame_json_opts(const UnisolverSolver *solver,
                                       char **error_out);
 
 /**
- * Opens a pool, registering every `*.db` in `dir`. A file that fails to open is only
- * recorded in `skipped` (see [`unisolver_pool_tiers_json`]); it fails only when **none** opens.
+ * Opens a pool, registering every `*.db` in `dir` and the narrow-field package there when
+ * there is one (desktop builds; recognized by its file headers). A file that fails to open is
+ * only recorded in `skipped` (see [`unisolver_pool_tiers_json`]); it fails only when
+ * **nothing** opens.
  *
  * # Safety
  * `dir` must be a valid NUL-terminated string; `error_out` is NULL or a writable pointer slot.
@@ -166,6 +168,22 @@ UnisolverPool *unisolver_pool_open(const char *dir, char **error_out);
  * `db_path` is a valid NUL-terminated string.
  */
 char *unisolver_pool_register(UnisolverPool *pool, const char *db_path, char **error_out);
+
+/**
+ * Registers the narrow-field package (desktop builds): its blind index and star-tile files.
+ * Only their headers are read, so this is as quick as [`unisolver_pool_register`]. Returns the
+ * tier as OWNED JSON (`"kind":"narrow"`). Registering the same index again returns it; a
+ * second package is an error, and so is every call on iOS and Android builds, which have no
+ * narrow-field engine.
+ *
+ * # Safety
+ * `pool` is live and **no other call may be in flight** (this call changes the pool);
+ * `index_path` and `stars_path` are valid NUL-terminated strings.
+ */
+char *unisolver_pool_register_narrow(UnisolverPool *pool,
+                                     const char *index_path,
+                                     const char *stars_path,
+                                     char **error_out);
 
 /**
  * Registered tiers plus the files skipped at open, as OWNED JSON.
@@ -255,7 +273,8 @@ UnisolverAnnotator *unisolver_annotator_open(const UnisolverSolver *solver,
 /**
  * Builds an annotator from **one tier** of a pool. Pass the tier that solved the frame (the
  * `db` field of the solve JSON); NULL uses the widest tier. Narrow tiers have denser
- * catalogs, so annotate with the one that solved.
+ * catalogs, so annotate with the one that solved. A narrow-field solve (`db` names the
+ * package) annotates with the narrowest tetra3 tier.
  *
  * # Safety
  * `pool` is live; `db_name` is NULL or a valid NUL-terminated string; the rest as above.

@@ -17,7 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = ROOT / "THIRD_PARTY_LICENSES.md"
 BEGIN, END = "<!-- rust-licenses:begin -->", "<!-- rust-licenses:end -->"
-OURS = {"unisolver-core", "unisolver-cabi", "unisolver_frb", "tetra3"}
+OURS = {"unisolver-core", "unisolver-cabi", "unisolver_frb", "tetra3",
+        "seiza", "seiza-calibration", "seiza-imgproc", "seiza-stats"}
 # Crates that ship a license file instead of an SPDX expression (checked by hand)
 LICENSE_FILE = {"allo-isolate": "Apache-2.0 (license file)"}
 

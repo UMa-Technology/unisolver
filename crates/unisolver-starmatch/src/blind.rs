@@ -842,6 +842,9 @@ fn solve_blind_with_global_ladder(
                             continue;
                         };
                         stat_quads += 1;
+                        if crate::deadline_passed(deadline) {
+                            return Err(crate::Error::Timeout);
+                        }
                         let desc = descriptor(&points);
                         for key in descriptor_keys(&desc) {
                             let candidates = index.lookup(key)?;
@@ -936,6 +939,9 @@ fn solve_blind_with_global_ladder(
                                 continue;
                             };
                             stat_quads += 1;
+                            if crate::deadline_passed(deadline) {
+                                return Err(crate::Error::Timeout);
+                            }
                             let desc = descriptor(&points);
                             for key in descriptor_keys(&desc) {
                                 let candidates = index.lookup(key)?;
@@ -1024,6 +1030,10 @@ fn solve_blind_with_global_ladder(
         .into_par_iter()
         .take(score_count)
         .map(|(votes, center, scale, coarse_wcs)| {
+            // Past the deadline: no more catalog reads; the verification loop below returns
+            if crate::deadline_passed(deadline) {
+                return (0, votes, center, scale, coarse_wcs);
+            }
             let matches = coarse_match_count(
                 &coarse_wcs,
                 center,
@@ -1695,6 +1705,46 @@ pub(crate) mod tests {
         assert!(index.validate().is_err());
         drop(index);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_passed_deadline_stops_the_pattern_search() {
+        let mut rng = Lcg(5);
+        let catalog = whole_sky_catalog(&mut rng);
+        let dims = (4000u32, 3000u32);
+        let truth =
+            Wcs::from_center_scale_rotation((47.0, 12.0), (2000.0, 1500.0), 6.0, 20.0, false);
+        let detected = detections_for(&truth, &catalog, dims, &mut rng);
+        let params = BlindParams {
+            min_scale_arcsec_px: 1.0,
+            max_scale_arcsec_px: 15.0,
+            ..Default::default()
+        };
+        let index = BlindIndex::build(&catalog, &params);
+        let rr = crate::solve::RankRobustTables::build(&detected, dims);
+        let ladder = [8, 10, 12, 16, 20, 26, 32];
+        let search = |deadline| {
+            solve_blind_with_global_ladder(
+                &detected, &catalog, &index, &params, dims, &ladder, &rr, deadline,
+            )
+        };
+
+        let t = std::time::Instant::now();
+        let _ = search(None);
+        let unbounded = t.elapsed();
+        assert!(
+            unbounded.as_millis() >= 50,
+            "the frame must make the search work: {unbounded:?}"
+        );
+
+        let t = std::time::Instant::now();
+        let err = search(Some(std::time::Instant::now())).unwrap_err();
+        let bounded = t.elapsed();
+        assert!(matches!(err, crate::Error::Timeout), "{err}");
+        assert!(
+            bounded * 20 < unbounded,
+            "stopped after {bounded:?} of {unbounded:?}"
+        );
     }
 
     #[test]

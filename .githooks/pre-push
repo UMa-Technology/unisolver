@@ -7,7 +7,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 done
 [ "$push_to_main" -eq 1 ] || exit 0
 cd "$(git rev-parse --show-toplevel)" || exit 1
-PKGS="-p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask"
+PKGS="-p unisolver-starmatch -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask"
 if [ -f scripts/ci/check_public_text.py ]; then
   python3 scripts/ci/check_public_text.py || exit 1
 fi

@@ -200,6 +200,57 @@ fn draw_line(img: &mut image::RgbImage, a: [f64; 2], b: [f64; 2], color: [u8; 3]
     }
 }
 
+/// Catalog overlays of an annotated PNG: boundaries, figures, stars, names, deep-sky objects, bodies
+fn draw_annotations(rgb: &mut image::RgbImage, ann: &Annotations) {
+    for b in &ann.boundaries {
+        for s in b.points.windows(2) {
+            draw_line(rgb, s[0], s[1], [110, 110, 130]);
+        }
+    }
+    for c in &ann.constellations {
+        for s in c.lines.iter().flat_map(|l| l.windows(2)) {
+            draw_line(rgb, s[0], s[1], [120, 170, 255]);
+        }
+    }
+    for s in &ann.stars {
+        draw_circle(rgb, s.x, s.y, 5, [255, 210, 60]);
+    }
+    for n in &ann.named_stars {
+        draw_circle(rgb, n.x, n.y, 16, [80, 200, 255]);
+    }
+    for o in &ann.objects {
+        if o.outlines.is_empty() {
+            draw_circle(
+                rgb,
+                o.x,
+                o.y,
+                o.semi_major_px.max(14.0) as i32,
+                [200, 120, 255],
+            );
+        }
+        for c in o.outlines.iter().flat_map(|l| &l.contours) {
+            for s in c.points.windows(2) {
+                draw_line(rgb, s[0], s[1], [200, 120, 255]);
+            }
+            if let (true, Some(a), Some(b)) = (c.closed, c.points.last(), c.points.first()) {
+                draw_line(rgb, *a, *b, [200, 120, 255]);
+            }
+        }
+    }
+    for b in &ann.solar {
+        draw_circle(
+            rgb,
+            b.x,
+            b.y,
+            b.angular_radius_px.unwrap_or(10.0).max(10.0) as i32,
+            [255, 160, 60],
+        );
+    }
+    for s in &ann.satellites {
+        draw_circle(rgb, s.x, s.y, 7, [120, 255, 255]);
+    }
+}
+
 /// Loads any supported format (imageio: FITS/XISF/PNG/JPEG/TIFF, by magic bytes)
 fn load_frame(
     path: &std::path::Path,
@@ -274,6 +325,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         ""
                     }
                 );
+            }
+            if p.annotation_solver(None).is_none() {
+                eprintln!("pool: no tetra3 tier, so solutions are not annotated");
             }
 
             Some(p)
@@ -376,7 +430,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Annotate with the catalog of **the tier that solved it** (narrow tiers are denser); one annotator per tier
     let dso_arg = cli.dso.as_ref().and_then(|p| p.to_str());
     let names_arg = cli.names.as_ref().and_then(|p| p.to_str());
-    let mut annotators: std::collections::HashMap<String, Annotator> =
+    let mut annotators: std::collections::HashMap<String, Option<Annotator>> =
         std::collections::HashMap::new();
     let mut results = Vec::new();
     let mut prev: Option<([f32; 4], f32)> = None;
@@ -523,29 +577,35 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
         let ann_key = db_used.clone().unwrap_or_default();
         if !annotators.contains_key(&ann_key) {
-            annotators.insert(
-                ann_key.clone(),
-                solver_of(db_used.as_deref())?
-                    .annotator(dso_arg, names_arg)?
-                    .with_constellations(cli.constellations.as_ref().and_then(|p| p.to_str())),
-            );
+            // Annotation reads a tetra3 tier's catalog: a pool of only the narrow-field package
+            // solves but does not annotate
+            let annotator = match solver_of(db_used.as_deref()) {
+                Ok(s) => Some(
+                    s.annotator(dso_arg, names_arg)?
+                        .with_constellations(cli.constellations.as_ref().and_then(|p| p.to_str())),
+                ),
+                Err(_) => None,
+            };
+            annotators.insert(ann_key.clone(), annotator);
         }
-        let annotator = &annotators[&ann_key];
+        let annotator = annotators[&ann_key].as_ref();
 
         if let Some(g) = out.solution.as_ref() {
             prev = Some((g.quat_icrs2cam_wxyz, g.fov_deg));
         }
         let solution = out.solution.as_ref().map(|g| {
-            let ann = annotator.annotate(
-                &g.wcs,
-                &AnnotateOptions {
-                    language: cli.language.clone(),
-                    observation_unix_ms: at_unix_ms,
-                    observer,
-                    satellite_tle: tle_text.clone(),
-                    ..Default::default()
-                },
-            );
+            let ann = annotator.map(|a| {
+                a.annotate(
+                    &g.wcs,
+                    &AnnotateOptions {
+                        language: cli.language.clone(),
+                        observation_unix_ms: at_unix_ms,
+                        observer,
+                        satellite_tle: tle_text.clone(),
+                        ..Default::default()
+                    },
+                )
+            });
             SolutionOut {
                 ra_deg: g.ra_deg,
                 dec_deg: g.dec_deg,
@@ -559,13 +619,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 lens_fitted: g.lens_fitted,
                 scale_refined: g.scale_refined,
                 named_stars: ann
-                    .named_stars
                     .iter()
+                    .flat_map(|a| &a.named_stars)
                     .map(|n| format!("{} ({:.0},{:.0})", n.name, n.x, n.y))
                     .collect(),
                 dso: ann
-                    .objects
                     .iter()
+                    .flat_map(|a| &a.objects)
                     .take(12)
                     .map(|o| {
                         format!(
@@ -587,21 +647,24 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     })
                     .collect(),
                 solar: ann
-                    .solar
                     .iter()
+                    .flat_map(|a| &a.solar)
                     .map(|b| format!("{} ({:.0},{:.0})", b.name, b.x, b.y))
                     .collect(),
                 satellites: ann
-                    .satellites
                     .iter()
+                    .flat_map(|a| &a.satellites)
                     .map(|s| format!("{} ({:.0},{:.0}) {:.0}km", s.name, s.x, s.y, s.range_km))
                     .collect(),
-                layer_notes: ann
-                    .layers
-                    .reasons
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {v}"))
-                    .collect(),
+                layer_notes: match &ann {
+                    Some(a) => a
+                        .layers
+                        .reasons
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect(),
+                    None => vec!["annotation: the pool has no tetra3 tier".into()],
+                },
             }
         });
 
@@ -625,70 +688,25 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             for m in &g.matched {
                 draw_circle(&mut rgb, m.x, m.y, 12, [255, 80, 80]);
             }
-            let ann = annotator.annotate(
-                &g.wcs,
-                &AnnotateOptions {
-                    language: cli.language.clone(),
-                    // Keep the overlay clean: bright stars and well-known deep-sky objects (dso_max_mag drops IC
-                    // entries without a magnitude)
-                    star_max_mag: Some(5.0),
-                    max_stars: 120,
-                    dso_max_mag: Some(8.0),
-                    observation_unix_ms: at_unix_ms,
-                    observer,
-                    satellite_tle: tle_text.clone(),
-                    include_constellations: cli.constellations.is_some(),
-                    constellation_boundaries: cli.constellations.is_some(),
-                    ..Default::default()
-                },
-            );
-            for b in &ann.boundaries {
-                for s in b.points.windows(2) {
-                    draw_line(&mut rgb, s[0], s[1], [110, 110, 130]);
-                }
-            }
-            for c in &ann.constellations {
-                for s in c.lines.iter().flat_map(|l| l.windows(2)) {
-                    draw_line(&mut rgb, s[0], s[1], [120, 170, 255]);
-                }
-            }
-            for s in &ann.stars {
-                draw_circle(&mut rgb, s.x, s.y, 5, [255, 210, 60]);
-            }
-            for n in &ann.named_stars {
-                draw_circle(&mut rgb, n.x, n.y, 16, [80, 200, 255]);
-            }
-            for o in &ann.objects {
-                if o.outlines.is_empty() {
-                    draw_circle(
-                        &mut rgb,
-                        o.x,
-                        o.y,
-                        o.semi_major_px.max(14.0) as i32,
-                        [200, 120, 255],
-                    );
-                }
-                for c in o.outlines.iter().flat_map(|l| &l.contours) {
-                    for s in c.points.windows(2) {
-                        draw_line(&mut rgb, s[0], s[1], [200, 120, 255]);
-                    }
-                    if let (true, Some(a), Some(b)) = (c.closed, c.points.last(), c.points.first())
-                    {
-                        draw_line(&mut rgb, *a, *b, [200, 120, 255]);
-                    }
-                }
-            }
-            for b in &ann.solar {
-                draw_circle(
-                    &mut rgb,
-                    b.x,
-                    b.y,
-                    b.angular_radius_px.unwrap_or(10.0).max(10.0) as i32,
-                    [255, 160, 60],
+            if let Some(a) = annotator {
+                let ann = a.annotate(
+                    &g.wcs,
+                    &AnnotateOptions {
+                        language: cli.language.clone(),
+                        // Keep the overlay clean: bright stars and well-known deep-sky objects (dso_max_mag drops IC
+                        // entries without a magnitude)
+                        star_max_mag: Some(5.0),
+                        max_stars: 120,
+                        dso_max_mag: Some(8.0),
+                        observation_unix_ms: at_unix_ms,
+                        observer,
+                        satellite_tle: tle_text.clone(),
+                        include_constellations: cli.constellations.is_some(),
+                        constellation_boundaries: cli.constellations.is_some(),
+                        ..Default::default()
+                    },
                 );
-            }
-            for s in &ann.satellites {
-                draw_circle(&mut rgb, s.x, s.y, 7, [120, 255, 255]);
+                draw_annotations(&mut rgb, &ann);
             }
             let name = path.file_stem().unwrap().to_string_lossy();
             rgb.save(dir.join(format!("{name}_annotated.png")))?;

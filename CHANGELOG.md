@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+1. **solvecli solves with a pool of only the narrow-field package.** It used to stop at the first
+   frame with "the pool has no tetra3 tier to annotate with". Annotation needs a tetra3 tier's
+   catalog, so such a pool now solves without annotating: it says so once at start and in each
+   solution's `layer_notes`, and `--annotate-dir` draws only the centroids and matched stars.
+
 ## 2026-10-05 — v0.5.0
 
 1. **Databases in tetra3's format 2 (breaking).** The engine moves to tetra3 0.14 and its

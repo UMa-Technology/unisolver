@@ -12,7 +12,7 @@
 
 use crate::catalog::{CatalogStar, StarCatalog};
 use crate::detect::DetectedStar;
-use crate::solve::{Solution, SolveHint, solve};
+use crate::solve::{Solution, SolveHint};
 use crate::wcs::Wcs;
 use memmap2::{Mmap, MmapOptions};
 use rayon::prelude::*;
@@ -709,6 +709,20 @@ pub fn solve_blind(
     params: &BlindParams,
     dimensions: (u32, u32),
 ) -> Result<Solution, crate::Error> {
+    solve_blind_until(stars, catalog, index, params, dimensions, None)
+}
+
+/// [`solve_blind`] that gives up with [`crate::Error::Timeout`] once `deadline` passes:
+/// checked before hypothesis scoring, before each verification batch and at the start of
+/// every hypothesis verification.
+pub fn solve_blind_until(
+    stars: &[DetectedStar],
+    catalog: &(dyn StarCatalog + Sync),
+    index: &BlindIndex,
+    params: &BlindParams,
+    dimensions: (u32, u32),
+    deadline: Option<std::time::Instant>,
+) -> Result<Solution, crate::Error> {
     if stars.len() < 6 {
         return Err(crate::Error::Solve(format!(
             "only {} stars detected; need at least 6",
@@ -727,6 +741,7 @@ pub fn solve_blind(
         dimensions,
         &[8],
         &rr_tables,
+        deadline,
     ) {
         Ok(solution) => solution,
         Err(crate::Error::Solve(_)) => solve_blind_with_global_ladder(
@@ -737,6 +752,7 @@ pub fn solve_blind(
             dimensions,
             &[8, 10, 12, 16, 20, 26, 32],
             &rr_tables,
+            deadline,
         )?,
         Err(error) => return Err(error),
     };
@@ -755,7 +771,7 @@ pub fn solve_blind(
         scale_tolerance: 0.05,
         sip_order: params.sip_order,
     };
-    match solve(stars, catalog, &hint, dimensions) {
+    match crate::solve::solve_until(stars, catalog, &hint, dimensions, deadline) {
         Ok(refined) if refined.matched_stars >= solution.matched_stars => Ok(refined),
         _ => Ok(solution),
     }
@@ -773,6 +789,7 @@ fn solve_blind_with_global_ladder(
     dimensions: (u32, u32),
     global_ladder: &[usize],
     rr_tables: &crate::solve::RankRobustTables,
+    deadline: Option<std::time::Instant>,
 ) -> Result<Solution, crate::Error> {
     // Image patterns: each of the brightest stars with 3-subsets of its
     // nearest bright neighbors, mirroring the index construction. The
@@ -998,6 +1015,9 @@ fn solve_blind_with_global_ladder(
         stars.iter().take(200),
         (width.min(height) / 250.0).clamp(8.0, 32.0),
     );
+    if crate::deadline_passed(deadline) {
+        return Err(crate::Error::Timeout);
+    }
     let mut ranked: Vec<RankedHypothesis> = ranked
         .into_par_iter()
         .take(score_count)
@@ -1045,10 +1065,16 @@ fn solve_blind_with_global_ladder(
     let mut batch = max_batch.min(4);
     let mut attempted = 0;
     while attempted < ranked.len() {
+        if crate::deadline_passed(deadline) {
+            return Err(crate::Error::Timeout);
+        }
         let end = (attempted + batch).min(ranked.len());
         let chunk = &ranked[attempted..end];
         let solution = chunk.par_iter().find_map_any(
             |(coarse_matches, _votes, center, scale, _coarse_wcs)| {
+                if crate::deadline_passed(deadline) {
+                    return None;
+                }
                 // The implied center is precise and its error scales with
                 // the field, so the search radius does too: a fixed radius
                 // makes fine-scale verification cover dozens of FOV-sized
@@ -1075,6 +1101,7 @@ fn solve_blind_with_global_ladder(
                     &hint,
                     dimensions,
                     rank_robust,
+                    deadline,
                 )
                 .ok()
                 .filter(|s| {
@@ -1090,6 +1117,9 @@ fn solve_blind_with_global_ladder(
         batch = (batch * 2).min(max_batch);
     }
 
+    if crate::deadline_passed(deadline) {
+        return Err(crate::Error::Timeout);
+    }
     Err(crate::Error::Solve(format!(
         "no hypothesis verified (tried {})",
         ranked.len()
@@ -1663,6 +1693,56 @@ pub(crate) mod tests {
         assert!(index.validate().is_err());
         drop(index);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn solves_give_up_at_a_passed_deadline() {
+        let mut rng = Lcg(99);
+        let catalog = whole_sky_catalog(&mut rng);
+        let dims = (4000u32, 3000u32);
+        let truth =
+            Wcs::from_center_scale_rotation((212.4, -35.7), (2000.0, 1500.0), 6.0, 74.0, false);
+        let detected = detections_for(&truth, &catalog, dims, &mut rng);
+        let params = BlindParams {
+            min_scale_arcsec_px: 1.0,
+            max_scale_arcsec_px: 15.0,
+            ..Default::default()
+        };
+        let index = BlindIndex::build(&catalog, &params);
+
+        let started = std::time::Instant::now();
+        let err = solve_blind_until(
+            &detected,
+            &catalog,
+            &index,
+            &params,
+            dims,
+            Some(std::time::Instant::now()),
+        )
+        .unwrap_err();
+        assert!(matches!(err, crate::Error::Timeout), "{err}");
+        assert!(started.elapsed().as_secs_f64() < 2.0);
+
+        let hint = SolveHint {
+            center: (213.4, -35.2),
+            radius_deg: 3.0,
+            scale_arcsec_px: 6.0,
+            scale_tolerance: 0.1,
+            sip_order: 0,
+        };
+        let err = crate::solve::solve_until(
+            &detected,
+            &catalog,
+            &hint,
+            dims,
+            Some(std::time::Instant::now()),
+        )
+        .unwrap_err();
+        assert!(matches!(err, crate::Error::Timeout), "{err}");
+
+        // Without a deadline the same field still solves both ways
+        assert!(solve_blind_until(&detected, &catalog, &index, &params, dims, None).is_ok());
+        assert!(crate::solve::solve_until(&detected, &catalog, &hint, dims, None).is_ok());
     }
 }
 

@@ -16,3 +16,11 @@
 The four `Cargo.toml` files: every `*.workspace = true` field and dependency becomes the explicit
 value from upstream's workspace root, which is not vendored; the `downloads` feature and its optional
 `seiza-download` dependency are removed (with the matching re-export in `seiza/src/lib.rs`).
+
+## 0002-solve-deadlines
+
+Optional wall-clock deadlines, so a caller can bound a failing solve: NEW `Error::Timeout`,
+`solve::solve_until` and `blind::solve_blind_until` (`solve` and `solve_blind` forward with no
+deadline, unchanged). Checked before each hinted search window and rank-robust quad, before blind
+hypothesis scoring, before each verification batch and at the start of every hypothesis
+verification. Test: `blind::tests::solves_give_up_at_a_passed_deadline`.

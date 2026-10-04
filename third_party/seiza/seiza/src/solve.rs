@@ -71,6 +71,18 @@ pub fn solve(
     hint: &SolveHint,
     dimensions: (u32, u32),
 ) -> Result<Solution, crate::Error> {
+    solve_until(stars, catalog, hint, dimensions, None)
+}
+
+/// [`solve`] that gives up with [`crate::Error::Timeout`] once `deadline` passes: checked
+/// before each search window and each rank-robust quad.
+pub fn solve_until(
+    stars: &[DetectedStar],
+    catalog: &dyn StarCatalog,
+    hint: &SolveHint,
+    dimensions: (u32, u32),
+    deadline: Option<std::time::Instant>,
+) -> Result<Solution, crate::Error> {
     // Mount coordinates are usually already inside the image. Try that one
     // FOV-sized window before constructing triangles for every window in the
     // fallback radius. A 2-degree search on a fine-scale frame can contain
@@ -87,7 +99,7 @@ pub fn solve(
             scale_tolerance: hint.scale_tolerance,
             sip_order: hint.sip_order,
         };
-        if let Ok(solution) = solve_search(stars, catalog, &center_hint, dimensions)
+        if let Ok(solution) = solve_search(stars, catalog, &center_hint, dimensions, deadline)
             && solution.matched_stars >= FAST_HINT_MIN_INLIERS
             && solution.rms_arcsec < FAST_HINT_MAX_RMS_PX * hint.scale_arcsec_px
         {
@@ -95,16 +107,27 @@ pub fn solve(
         }
     }
 
-    match solve_search(stars, catalog, hint, dimensions) {
+    match solve_search(stars, catalog, hint, dimensions, deadline) {
         Ok(solution) => Ok(solution),
+        Err(crate::Error::Timeout) => Err(crate::Error::Timeout),
         // Triangle matching assumes the list's flux ordering tracks real
         // brightness; when it fails, retry with the rank-robust quad
         // search that treats ordering as a prior only.
         Err(triangle_error) => {
             let tables = RankRobustTables::build(stars, dimensions);
-            solve_rank_robust(stars, catalog, hint, dimensions, &tables, RR_PROBE_BUDGET).map_err(
-                |robust_error| crate::Error::Solve(format!("{triangle_error}; {robust_error}")),
+            solve_rank_robust(
+                stars,
+                catalog,
+                hint,
+                dimensions,
+                &tables,
+                RR_PROBE_BUDGET,
+                deadline,
             )
+            .map_err(|robust_error| match robust_error {
+                crate::Error::Timeout => crate::Error::Timeout,
+                e => crate::Error::Solve(format!("{triangle_error}; {e}")),
+            })
         }
     }
 }
@@ -121,16 +144,28 @@ pub(crate) fn solve_for_blind_hypothesis(
     hint: &SolveHint,
     dimensions: (u32, u32),
     tables: Option<&RankRobustTables>,
+    deadline: Option<std::time::Instant>,
 ) -> Result<Solution, crate::Error> {
-    match solve_search(stars, catalog, hint, dimensions) {
+    match solve_search(stars, catalog, hint, dimensions, deadline) {
         Ok(solution) => Ok(solution),
+        Err(crate::Error::Timeout) => Err(crate::Error::Timeout),
         Err(triangle_error) => {
             let Some(tables) = tables else {
                 return Err(triangle_error);
             };
-            solve_rank_robust(stars, catalog, hint, dimensions, tables, RR_PROBE_BUDGET).map_err(
-                |robust_error| crate::Error::Solve(format!("{triangle_error}; {robust_error}")),
+            solve_rank_robust(
+                stars,
+                catalog,
+                hint,
+                dimensions,
+                tables,
+                RR_PROBE_BUDGET,
+                deadline,
             )
+            .map_err(|robust_error| match robust_error {
+                crate::Error::Timeout => crate::Error::Timeout,
+                e => crate::Error::Solve(format!("{triangle_error}; {e}")),
+            })
         }
     }
 }
@@ -144,6 +179,7 @@ fn solve_search(
     catalog: &dyn StarCatalog,
     hint: &SolveHint,
     dimensions: (u32, u32),
+    deadline: Option<std::time::Instant>,
 ) -> Result<Solution, crate::Error> {
     if stars.len() < 4 {
         return Err(crate::Error::Solve(format!(
@@ -197,6 +233,9 @@ fn solve_search(
 
     let mut candidates: Vec<(f64, Affine)> = Vec::new();
     for &(ox, oy) in &windows {
+        if crate::deadline_passed(deadline) {
+            return Err(crate::Error::Timeout);
+        }
         let mut in_window: Vec<(f64, f64)> = cat
             .iter()
             .filter(|&&(x, y, _)| (x - ox).hypot(y - oy) <= fov_radius_deg)
@@ -482,6 +521,7 @@ fn solve_rank_robust(
     dimensions: (u32, u32),
     tables: &RankRobustTables,
     probe_budget: usize,
+    deadline: Option<std::time::Instant>,
 ) -> Result<Solution, crate::Error> {
     if stars.len() < RR_MIN_STARS {
         return Err(crate::Error::Solve(format!(
@@ -554,6 +594,9 @@ fn solve_rank_robust(
     let mut probes_left = probe_budget;
 
     for quad in &quads {
+        if crate::deadline_passed(deadline) {
+            return Err(crate::Error::Timeout);
+        }
         // Backbone: the quad's widest pair; the other two verify.
         let mut backbone = (0, 1);
         let mut widest = 0.0;

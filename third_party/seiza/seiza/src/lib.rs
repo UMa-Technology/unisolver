@@ -34,4 +34,11 @@ pub enum Error {
     Catalog(String),
     #[error("solve failed: {0}")]
     Solve(String),
+    #[error("solve timed out")]
+    Timeout,
+}
+
+/// Whether an optional solve deadline has passed.
+pub(crate) fn deadline_passed(deadline: Option<std::time::Instant>) -> bool {
+    deadline.is_some_and(|d| std::time::Instant::now() >= d)
 }

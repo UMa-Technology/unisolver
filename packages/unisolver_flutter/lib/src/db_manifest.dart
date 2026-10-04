@@ -38,6 +38,7 @@ class DbTier implements DbItem {
     required this.bundled,
     this.key,
     this.rawBytes,
+    this.rawSha256,
     this.format,
     this.minEngine,
     this.numStars,
@@ -68,6 +69,9 @@ class DbTier implements DbItem {
 
   /// Decompressed size in bytes (disk use); may be missing
   final int? rawBytes;
+
+  /// sha256 of the decompressed database, checked as it is decompressed; may be missing
+  final String? rawSha256;
 
   /// sha256 of the archive (verify it after every download)
   @override
@@ -108,6 +112,7 @@ class DbTier implements DbItem {
         maxFovDeg: (j['max_fov_deg'] as num).toDouble(),
         bytes: (j['bytes'] as num).toInt(),
         rawBytes: (j['raw_bytes'] as num?)?.toInt(),
+        rawSha256: (j['raw_sha256'] as String?)?.toLowerCase(),
         sha256: (j['sha256'] as String).toLowerCase(),
         // A missing field means "not for mobile": better to let the user opt in than to silently
         // install a tier a phone cannot hold
@@ -123,6 +128,150 @@ class DbTier implements DbItem {
       );
 }
 
+/// One file of a package: downloaded, verified, decompressed to [localFile], verified again.
+class DbPackageFile implements DbItem {
+  const DbPackageFile({
+    required this.package,
+    required this.role,
+    required this.file,
+    required this.key,
+    required this.bytes,
+    required this.sha256,
+    required this.rawBytes,
+    required this.rawSha256,
+  });
+
+  /// Name of the package this file belongs to
+  final String package;
+
+  /// `index` or `stars`
+  final String role;
+
+  /// `<package>/<role>`, as progress reports and errors name it
+  @override
+  String get name => '$package/$role';
+
+  @override
+  final String file;
+
+  @override
+  final String? key;
+
+  @override
+  final int bytes;
+
+  @override
+  final String sha256;
+
+  /// Size and sha256 of the decompressed file
+  final int rawBytes;
+  final String rawSha256;
+
+  /// Installed file name: the archive name without `.zst`
+  String get localFile =>
+      file.endsWith('.zst') ? file.substring(0, file.length - 4) : file;
+
+  factory DbPackageFile.fromJson(String package, Map<String, dynamic> j) =>
+      DbPackageFile(
+        package: package,
+        role: j['role'] as String,
+        file: j['file'] as String,
+        key: j['key'] as String?,
+        bytes: (j['bytes'] as num).toInt(),
+        sha256: (j['sha256'] as String).toLowerCase(),
+        rawBytes: (j['raw_bytes'] as num).toInt(),
+        rawSha256: (j['raw_sha256'] as String).toLowerCase(),
+      );
+}
+
+/// A multi-file download: the desktop narrow-field package (a blind index and its star tiles).
+class DbPackage {
+  const DbPackage({
+    required this.name,
+    required this.kind,
+    required this.minFovDeg,
+    required this.maxFovDeg,
+    required this.mobile,
+    required this.files,
+    this.minEngine,
+    this.builder,
+    this.numPatterns,
+    this.numStars,
+    this.license,
+    this.attribution,
+  });
+
+  final String name;
+  final String kind;
+  final double minFovDeg;
+  final double maxFovDeg;
+
+  /// Narrow-field packages are desktop only (`false`): mobile engines are built without them
+  final bool mobile;
+  final String? minEngine;
+  final String? builder;
+  final int? numPatterns;
+  final int? numStars;
+  final String? license;
+  final String? attribution;
+  final List<DbPackageFile> files;
+
+  DbPackageFile _role(String r) => files.firstWhere((f) => f.role == r);
+
+  /// The blind index
+  DbPackageFile get index => _role('index');
+
+  /// The star tiles
+  DbPackageFile get stars => _role('stars');
+
+  int get downloadBytes => files.fold(0, (s, f) => s + f.bytes);
+  int get installedBytes => files.fold(0, (s, f) => s + f.rawBytes);
+
+  /// Peak disk use: every installed file plus the largest archive while it is decompressed
+  int get diskBytesNeeded =>
+      installedBytes + files.fold(0, (m, f) => f.bytes > m ? f.bytes : m);
+
+  String get fovLabel =>
+      '${DbTier._fov(minFovDeg)}–${DbTier._fov(maxFovDeg)}°';
+
+  factory DbPackage.fromJson(Map<String, dynamic> j) {
+    final name = j['name'] as String;
+    return DbPackage(
+      name: name,
+      kind: (j['kind'] as String?) ?? '',
+      minFovDeg: (j['min_fov_deg'] as num).toDouble(),
+      maxFovDeg: (j['max_fov_deg'] as num).toDouble(),
+      mobile: j['mobile'] as bool? ?? false,
+      minEngine: j['min_engine'] as String?,
+      builder: j['builder'] as String?,
+      numPatterns: (j['num_patterns'] as num?)?.toInt(),
+      numStars: (j['num_stars'] as num?)?.toInt(),
+      license: j['license'] as String?,
+      attribution: j['attribution'] as String?,
+      files: ((j['files'] as List?) ?? const [])
+          .map((e) => DbPackageFile.fromJson(name, e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+/// Whether [engine] (`x.y.z`) is at least [minEngine]; a missing or unreadable requirement passes
+bool engineSatisfies(String engine, String? minEngine) {
+  if (minEngine == null) return true;
+  List<int>? parts(String v) {
+    final p = v.split('.').map(int.tryParse).toList();
+    return p.contains(null) ? null : p.cast<int>();
+  }
+
+  final a = parts(engine), b = parts(minEngine);
+  if (a == null || b == null) return true;
+  for (var i = 0; i < 3; i++) {
+    final x = i < a.length ? a[i] : 0, y = i < b.length ? b[i] : 0;
+    if (x != y) return x > y;
+  }
+  return true;
+}
+
 /// A manifest.
 class DbManifest {
   const DbManifest({
@@ -130,6 +279,7 @@ class DbManifest {
     required this.baseUrl,
     required this.tiers,
     this.assets = const [],
+    this.packages = const [],
   });
 
   final int version;
@@ -143,6 +293,9 @@ class DbManifest {
   /// Optional downloadable assets (the multilingual names pack); empty in older manifests
   final List<DbAsset> assets;
 
+  /// Multi-file downloads (the desktop narrow-field package); empty in older manifests
+  final List<DbPackage> packages;
+
   /// Supported manifest version. A newer one may change the meaning of `key`, so ask for an
   /// engine upgrade instead of guessing; an older one lists databases in a format this engine no
   /// longer reads.
@@ -153,6 +306,9 @@ class DbManifest {
 
   DbAsset? assetByName(String name) =>
       assets.where((a) => a.name == name).firstOrNull;
+
+  DbPackage? packageByName(String name) =>
+      packages.where((p) => p.name == name).firstOrNull;
 
   /// Tiers covering this FOV (with the solver's [0.8×min, 1.25×max] tolerance)
   List<DbTier> covering(double fovDeg) => tiers
@@ -181,11 +337,15 @@ class DbManifest {
     final assets = ((j['assets'] as List?) ?? const [])
         .map((e) => DbAsset.fromJson(e as Map<String, dynamic>))
         .toList();
+    final packages = ((j['packages'] as List?) ?? const [])
+        .map((e) => DbPackage.fromJson(e as Map<String, dynamic>))
+        .toList();
     return DbManifest(
       version: v,
       baseUrl: (j['base_url'] as String?) ?? '',
       tiers: tiers,
       assets: assets,
+      packages: packages,
     );
   }
 }

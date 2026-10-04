@@ -21,11 +21,15 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"],
 lz4_flex = { version = "0.11", optional = true }
 ruzstd = { version = "0.8", optional = true }
 sgp4 = { version = "2", optional = true }
+# narrow: the narrow-field engine (desktop builds; off by default)
+seiza = { path = "../../third_party/seiza/seiza", optional = true }
 
 [features]
 imageio = ["dep:image", "dep:quick-xml", "dep:flate2", "dep:lz4_flex", "dep:ruzstd"]
 # Satellite pass annotation (TLE + SGP4 + topocentric conversion)
 satellites = ["dep:sgp4"]
+# Narrow-field engine on seiza's blind index (desktop builds)
+narrow = ["dep:seiza"]
 
 [dev-dependencies]
 # Integration tests are separate crates: to `use` tetra3/numeris directly they must

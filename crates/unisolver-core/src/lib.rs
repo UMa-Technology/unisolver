@@ -18,6 +18,8 @@ pub mod imageio;
 mod lens;
 mod names;
 pub mod names_pack;
+#[cfg(feature = "narrow")]
+pub mod narrow;
 pub mod outcome;
 pub mod pool;
 mod quat;

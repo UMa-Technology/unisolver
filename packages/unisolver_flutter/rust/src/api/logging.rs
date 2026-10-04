@@ -1,4 +1,4 @@
-//! Logging bridge: tracing → a Dart StreamSink.
+//! Logging bridge: tracing events, and `log` records (tetra3's), → a Dart StreamSink.
 use flutter_rust_bridge::frb;
 use std::sync::{Mutex, OnceLock};
 
@@ -24,8 +24,9 @@ fn forward(level: &str, target: &str, message: &str) {
     }
 }
 
-/// Registers the Dart log stream; the first call installs the global subscriber, later calls
-/// replace the sink.
+/// Registers the Dart log stream; the first call installs the global subscriber (which also
+/// takes `log` records through tracing-subscriber's `tracing-log` bridge), later calls replace
+/// the sink.
 #[frb]
 pub fn set_log_stream(sink: Sink) -> anyhow::Result<()> {
     let cell = SINK.get_or_init(|| Mutex::new(None));

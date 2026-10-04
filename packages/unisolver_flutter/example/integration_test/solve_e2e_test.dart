@@ -177,8 +177,14 @@ void main() {
       reason: a.namedStars.map((n) => n.name).join(' '),
     );
 
-    // The log bridge received at least the attach event
+    // The log bridge received the attach event and tetra3's own records (it writes through
+    // the `log` facade): opening the database reports the mapped file
     expect(logs, isNotEmpty);
+    expect(
+      logs.any((l) => l.contains('Mapped database')),
+      isTrue,
+      reason: logs.join('\n'),
+    );
   });
 
   // The HEIC path: the app decodes the photo itself and passes its EXIF focal length and

@@ -1,4 +1,6 @@
-/// Dart model of the tier manifest (`manifest.json`, version 2).
+/// Dart model of the tier manifest (`manifest-v3.json`, version 3: databases in tetra3's
+/// format 2). Version 2 (`manifest.json`) lists the older format and stays published for
+/// earlier plugin releases.
 ///
 /// The manifest is the single entry point of distribution: clients read it, then fetch tiers
 /// by `key`. Fields match the manifest generator one to one; change both together.
@@ -141,9 +143,10 @@ class DbManifest {
   /// Optional downloadable assets (the multilingual names pack); empty in older manifests
   final List<DbAsset> assets;
 
-  /// Highest supported manifest version. A newer one may change the meaning of `key`, so ask
-  /// for an engine upgrade instead of guessing.
-  static const int supportedVersion = 2;
+  /// Supported manifest version. A newer one may change the meaning of `key`, so ask for an
+  /// engine upgrade instead of guessing; an older one lists databases in a format this engine no
+  /// longer reads.
+  static const int supportedVersion = 3;
 
   DbTier? byName(String name) =>
       tiers.where((t) => t.name == name).firstOrNull;
@@ -163,6 +166,12 @@ class DbManifest {
       throw DbManifestException(
         'manifest version $v is newer than this engine supports '
         '($supportedVersion) — upgrade unisolver_flutter',
+      );
+    }
+    if (v < supportedVersion) {
+      throw DbManifestException(
+        'manifest version $v lists databases in a format this engine no longer reads; '
+        'the host must publish manifest-v3.json',
       );
     }
     final tiers = ((j['tiers'] as List?) ?? const [])

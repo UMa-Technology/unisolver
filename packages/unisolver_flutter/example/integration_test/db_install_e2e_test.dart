@@ -116,9 +116,9 @@ void main() {
         'mobile': true,
       };
       final cdn = LocalCdn({
-        'manifest.json': utf8.encode(
+        'manifest-v3.json': utf8.encode(
           json.encode({
-            'version': 2,
+            'version': 3,
             'base_url': '',
             'tiers': [tier()],
             'assets': [
@@ -134,9 +134,9 @@ void main() {
             ],
           }),
         ),
-        'bad/manifest.json': utf8.encode(
+        'bad/manifest-v3.json': utf8.encode(
           json.encode({
-            'version': 2,
+            'version': 3,
             'base_url': '',
             'tiers': [tier(shaOverride: '0' * 64)],
           }),
@@ -190,13 +190,14 @@ void main() {
       );
       expect(phases, contains(DbPhase.registering));
 
-      // (4) The result is a real database (UNISOLV2 magic, plausible size) and is registered
+      // (4) The result is a real database (format 2 header, plausible size) and is registered
       final f = File(dbPath);
-      expect(f.lengthSync(), greaterThan(50 * 1000 * 1000));
-      expect(
-        String.fromCharCodes((await f.open().then((r) => r.read(8)))),
-        'UNISOLV2',
-      );
+      expect(f.lengthSync(), greaterThan(20 * 1000 * 1000));
+      expect(await f.open().then((r) => r.read(6)), [
+        ...'T3DB'.codeUnits,
+        2,
+        0,
+      ]);
       final tiers = await pool.tiers();
       expect(tiers.map((e) => e.name), contains(name));
 

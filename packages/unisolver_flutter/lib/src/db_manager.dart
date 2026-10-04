@@ -1,7 +1,7 @@
 /// Tier acquisition: manifest → download (resumable) → sha256 check → install → register.
 ///
 /// This layer **only acquires**; using installed tiers is `UniSolverPool`'s job. The contract
-/// is plain static HTTP (`manifest.json` + fixed paths + `Range` resume + sha256), so any
+/// is plain static HTTP (`manifest-v3.json` + fixed paths + `Range` resume + sha256), so any
 /// static server can host it, including `scripts/ci/serve_tiers.py` for local rehearsals.
 library;
 
@@ -107,9 +107,12 @@ class DbManager {
   final HttpClient Function() _newClient;
   final bool _isMobile;
 
-  static const _manifestFile = 'manifest.json';
+  /// Version 3: databases in tetra3's format 2. Hosts keep version 2 (`manifest.json`) for
+  /// earlier plugin releases, which cannot read format 2.
+  static const _manifestFile = 'manifest-v3.json';
 
-  /// Fetches the manifest and caches it at `dir/manifest.json` ([cachedManifest] works offline).
+  /// Fetches the manifest and caches it at `dir/manifest-v3.json` ([cachedManifest] works
+  /// offline).
   Future<DbManifest> fetchManifest({
     Duration timeout = const Duration(seconds: 15),
   }) async {

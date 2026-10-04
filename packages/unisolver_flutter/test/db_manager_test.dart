@@ -1,5 +1,5 @@
 /// Unit tests of `DbManager`'s download path, all against a **local HTTP server** that mimics
-/// the host contract (manifest.json + fixed paths + `Range` resume + sha256): no native
+/// the host contract (manifest-v3.json + fixed paths + `Range` resume + sha256): no native
 /// library, no network.
 ///
 /// Decompression and hashing are injected fakes here (the real ones are locked with real tier
@@ -126,7 +126,7 @@ void main() {
     namesBytes = List<int>.generate(210 * 1024, (i) => (i * 17 + 3) & 0xFF);
     namesSha = sha256.convert(namesBytes).toString();
     manifestText = json.encode({
-      'version': 2,
+      'version': 3,
       'base_url': 'https://example.invalid/unisolver/',
       'tiers': [
         {
@@ -177,7 +177,7 @@ void main() {
       ],
     });
     cdn = FakeCdn({
-      'manifest.json': utf8.encode(manifestText),
+      'manifest-v3.json': utf8.encode(manifestText),
       'db/deadbeef/tier_5_10.db.zst': tierBytes,
       'db/cafef00d/tier_0p5_1.db.zst': tierBytes,
       'assets/0badf00d/unisolver_names.bin': namesBytes,
@@ -198,9 +198,17 @@ void main() {
     expect(m.tiers.first.key, isNull);
     expect(m.byName('tier_5_10')!.rawBytes, tierBytes.length * 3);
     // Cached on disk → tiers can be listed offline
-    expect(File('${tmp.path}/manifest.json').existsSync(), isTrue);
+    expect(File('${tmp.path}/manifest-v3.json').existsSync(), isTrue);
     final offline = DbManager(dir: tmp.path, installer: fakeInstall, digest: realDigest);
     expect(offline.cachedManifest()!.tiers.length, 3);
+  });
+
+  test('a version 2 manifest lists databases this engine no longer reads', () {
+    expect(
+      () => DbManifest.parse('{"version": 2, "tiers": []}'),
+      throwsA(isA<DbManifestException>()
+          .having((e) => e.toString(), 'message', contains('manifest-v3.json'))),
+    );
   });
 
   test('a manifest newer than the engine is an error, not a guess', () {
@@ -370,7 +378,7 @@ void main() {
     expect(names.kind, 'names');
     expect(names.license, 'GPL-2.0-or-later');
     expect(names.attribution, contains('Stellarium'));
-    expect(DbManifest.parse('{"version": 2, "tiers": []}').assets, isEmpty);
+    expect(DbManifest.parse('{"version": 3, "tiers": []}').assets, isEmpty);
   });
 
   test('installAsset downloads and verifies, with no decompression', () async {

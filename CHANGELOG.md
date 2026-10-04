@@ -2,7 +2,17 @@
 
 ## Unreleased
 
-1. **A narrow-field engine for desktop pools.** Desktop builds (macOS, Windows, Linux) of the
+1. **Databases in tetra3's format 2 (breaking).** The engine moves to tetra3 0.14 and its
+   database format 2, whose pattern table keeps only the occupied slots: installed databases
+   take about half the space (the bundled 10–80° tier 61 → 29 MB; 5–10° 80 → 41 MB, 2.5–5°
+   322 → 165 MB, 1–2.5° 715 → 400 MB) and downloads shrink by 6–12%. Files are still
+   memory-mapped, and star extraction is about 15% faster with identical output. Databases
+   from earlier releases (the `UNISOLV2` container) no longer load — the error says to download
+   them again: `UnisolverAssets.ensureInstalled` replaces the bundled tier, and `DbManager`
+   counts an old file as not installed, so `install` fetches the tier again. `DbManager` reads
+   `manifest-v3.json` (manifest version 3); hosts keep `manifest.json` (version 2) for earlier
+   releases.
+2. **A narrow-field engine for desktop pools.** Desktop builds (macOS, Windows, Linux) of the
    C library and the Flutter plugin can register a narrow-field package (a blind pattern index
    and its star tiles) next to the tetra3 tiers: `SolverPool::register_narrow`,
    `unisolver_pool_register_narrow`, `UniSolverPool.registerNarrow`, and directory opens find
@@ -12,7 +22,7 @@
    and frames without stars fail as fast as before. Tiers and pool attempts report a `kind`
    (`tetra3` or `narrow`); a narrow-field solve annotates with the narrowest tetra3 tier. iOS
    and Android builds are unchanged.
-2. **Pointing hints.** `pointing_hint` (`ra_deg`, `dec_deg`, optional `radius_deg`) gives the
+3. **Pointing hints.** `pointing_hint` (`ra_deg`, `dec_deg`, optional `radius_deg`) gives the
    narrow-field engine the approximate pointing of a mount; without a radius it searches one FOV
    around it, for at most half its time, and solves blind when that fails. FITS and XISF file
    entries read one from the header when the caller gives none (`RA`/`DEC`, `OBJCTRA`/`OBJCTDEC`,

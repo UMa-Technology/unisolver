@@ -450,7 +450,8 @@ final tier = manifest.byName('my_narrow_tier')!;
 await mgr.install(tier, onProgress: (p) => print('${p.phase} ${p.fraction}'));
 ```
 
-Manifest fields (`manifest.json`, version 2):
+Manifest fields (`manifest-v3.json`, version 3; hosts keep `manifest.json`, version 2, for
+releases before database format 2):
 
 | Field | Purpose |
 |---|---|
@@ -467,10 +468,10 @@ with `Range`; a server ignoring `Range` gets a clean restart; a digest mismatch 
 the bad content (otherwise every resume would continue from bad bytes); a failed
 decompression leaves no partial database and reports the space needed.
 
-Databases use the `UNISOLV2` mmap format, so **resident memory follows the pages touched,
-not the file size**: a deep database handle measured about 124 MB, and the bundled
-database plus a phone frame about 130 MB end to end. Each extra tier costs its small
-header plus the pages it touches.
+Databases are tetra3's format 2, memory-mapped: the pattern table stays on the file, so
+**resident memory follows the pages touched, not the file size** (the bundled database plus
+a phone frame peaks at about 57 MB). Each extra tier costs its star catalog plus the pages
+it touches.
 
 ### 1.7 Logs and errors
 
@@ -722,12 +723,13 @@ tracing-subscriber layer.
 
 | File | Purpose | Size (zstd / raw) | Distribution |
 |---|---|---|---|
-| `unisolver_10_80.db` | wide field 10–80° (phones) | 16 MB / 61 MB | bundled with the plugin |
+| `unisolver_10_80.db` | wide field 10–80° (phones) | 14 MB / 29 MB | bundled with the plugin |
 | `unisolver_dso.bin` | DSO catalog (NGC / IC / Messier) with outlines | 796 KB | bundled with the plugin |
 | `unisolver_constellations.bin` | 88 IAU constellation figures and boundaries | 200 KB | bundled with the plugin |
 | `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 229 KB | opt-in: declared by the app, or downloaded |
 
-- Databases use the `UNISOLV2` mmap container; the engine still reads old postcard v1 files.
+- Databases are tetra3's format 2, memory-mapped. Files from releases before it (the
+  `UNISOLV2` container) no longer load; download them again.
 - Only the wide tier is bundled; narrower tiers are yours to generate and host (see
   section 1.6).
 - Mobile devices should stay at ≥ 2.5° tiers: phones have no narrower fields, and deeper

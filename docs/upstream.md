@@ -58,7 +58,7 @@ seiza's work clone is upstream's whole workspace, which no longer loads once pat
 ## Syncing to a new upstream release
 
 ```bash
-cargo xtask upstream --name tetra3 sync v0.14.0
+cargo xtask upstream --name tetra3 sync <tag>
 ```
 
 A sync is a reviewed change, never automatic. tetra3's patch 0003 replaces the pattern-table

@@ -74,7 +74,7 @@ unisolver/
 | `dso.rs`、`coords.rs`、`quat.rs`、`frame.rs`、`aberration.rs` | DSO 表、坐标换算、四元数、帧（含行距）、观测时刻 |
 
 测试在 `crates/unisolver-core/tests/`：`solve_test`（梯子、档位、裁剪）、`pool_test`
-（路由）、`storage_test`（UNISOLV2 mmap 等价与容错）、`annotate_test`、`calibrate_test`，
+（路由）、`storage_test`（数据库文件 mmap 加载与容错）、`annotate_test`、`calibrate_test`，
 以及依赖私有实拍素材的测试——素材不在时打印 `skipped` 并通过（见
 [testdata/README.md](testdata/README.md)）。
 
@@ -92,9 +92,9 @@ unisolver/
 
 ### third_party/tetra3
 
-上游 **v0.13.0** 加上 [third_party/tetra3-patches/](third_party/tetra3-patches/README.md)
-里的补丁队列：两条 Cargo.toml 调整，以及 `UNISOLV2` mmap 存储（`src/solver/storage.rs`，
-把模式表留在磁盘按需分页，深库常驻内存从 1.1 GB 降到 124 MB）。这棵树是生成的：只能经
+上游 **v0.14.0** 加上 [third_party/tetra3-patches/](third_party/tetra3-patches/README.md)
+里的补丁队列：两条 Cargo.toml 调整，以及 `open_mapped`——把数据库文件（tetra3 的格式 2）
+mmap 进来，模式表留在磁盘按需分页。这棵树是生成的：只能经
 `cargo xtask upstream edit` / `export` 修改，动手前先读 rebase 注意事项
 （[docs/upstream.md](docs/upstream.md)）。
 

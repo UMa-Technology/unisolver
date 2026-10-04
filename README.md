@@ -77,7 +77,7 @@ The **single source** of behaviour; the Flutter and C layers only marshal.
 | `dso.rs`, `coords.rs`, `quat.rs`, `frame.rs`, `aberration.rs` | DSO catalog, coordinate conversions, quaternions, frames (with row stride), observation time |
 
 Tests live in `crates/unisolver-core/tests/`: `solve_test` (ladders, profiles, clamping),
-`pool_test` (routing), `storage_test` (UNISOLV2 mmap equivalence and corruption),
+`pool_test` (routing), `storage_test` (memory-mapped database files and corruption),
 `annotate_test`, `calibrate_test`, plus tests on a private corpus of real captures that
 print `skipped` when it is absent (see [testdata/README.md](testdata/README.md)).
 
@@ -97,11 +97,10 @@ print `skipped` when it is absent (see [testdata/README.md](testdata/README.md))
 
 ### third_party/tetra3
 
-Upstream **v0.13.0** plus the patch queue in
+Upstream **v0.14.0** plus the patch queue in
 [third_party/tetra3-patches/](third_party/tetra3-patches/README.md): two Cargo.toml
-adjustments and the `UNISOLV2` mmap storage (`src/solver/storage.rs`, which keeps the
-pattern table on disk and pages it in on demand: a deep database's resident memory drops
-from 1.1 GB to 124 MB). The tree is generated: change it only through
+adjustments and `open_mapped`, which memory-maps a database file (tetra3's format 2) so the
+pattern table stays on disk and pages in on demand. The tree is generated: change it only through
 `cargo xtask upstream edit` / `export`, and read the rebase notes first
 ([docs/upstream.md](docs/upstream.md)).
 

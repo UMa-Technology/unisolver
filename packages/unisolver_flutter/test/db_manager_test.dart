@@ -93,10 +93,18 @@ void main() {
   late List<int> namesBytes;
   late String namesSha;
   late String manifestText;
+  late List<int> idxRaw;
+  late List<int> starsRaw;
+  late Map<String, List<int>> cdnFiles;
 
-  /// Fake decompression: copies the "archive" to the database file as-is (this tests the path, not zstd)
-  Future<BigInt> fakeInstall({required String zstPath, required String outPath}) async {
+  /// Fake decompression: copies the "archive" to the database file as-is (this tests the path,
+  /// not zstd), refusing a different decompressed digest the way the Rust installer does
+  Future<BigInt> fakeInstall({required String zstPath, required String outPath, String? rawSha256}) async {
     final b = File(zstPath).readAsBytesSync();
+    final got = sha256.convert(b).toString();
+    if (rawSha256 != null && got != rawSha256) {
+      throw Exception('raw sha256 mismatch: expected $rawSha256, got $got');
+    }
     File(outPath).writeAsBytesSync(b, flush: true);
     return BigInt.from(b.length);
   }
@@ -107,8 +115,11 @@ void main() {
   DbManager manager({
     bool isMobile = false,
     DbRegister? register,
+    DbRegisterPackage? registerPackage,
     String? baseUrl,
     DbInstaller? installer,
+    DbFreeSpace? freeSpace,
+    DbEngineVersion? engineVersion,
   }) =>
       DbManager(
         dir: tmp.path,
@@ -116,6 +127,9 @@ void main() {
         installer: installer ?? fakeInstall,
         digest: realDigest,
         register: register,
+        registerPackage: registerPackage,
+        freeSpace: freeSpace ?? (_) async => 1 << 40,
+        engineVersion: engineVersion ?? () => '0.5.0',
         isMobile: isMobile,
       );
 
@@ -129,6 +143,10 @@ void main() {
     tierSha = sha256.convert(tierBytes).toString();
     namesBytes = List<int>.generate(210 * 1024, (i) => (i * 17 + 3) & 0xFF);
     namesSha = sha256.convert(namesBytes).toString();
+    // A two-file package headed like a blind index (UNIBLIX1) and star tiles (UNISTAR1)
+    idxRaw = [0x55, 0x4e, 0x49, 0x42, 0x4c, 0x49, 0x58, 0x31, ...List<int>.generate(300 * 1024, (i) => (i * 13 + 1) & 0xFF)];
+    starsRaw = [0x55, 0x4e, 0x49, 0x53, 0x54, 0x41, 0x52, 0x31, ...List<int>.generate(200 * 1024, (i) => (i * 7 + 5) & 0xFF)];
+    final idxSha = sha256.convert(idxRaw).toString(), starsSha = sha256.convert(starsRaw).toString();
     manifestText = json.encode({
       'version': 3,
       'base_url': 'https://example.invalid/unisolver/',
@@ -151,6 +169,7 @@ void main() {
           'max_fov_deg': 10.0,
           'bytes': tierBytes.length,
           'raw_bytes': tierBytes.length * 3,
+          'raw_sha256': tierSha,
           'sha256': tierSha,
           'mobile': true,
           'license': 'CC-BY-SA-3.0-IGO',
@@ -167,6 +186,20 @@ void main() {
           'mobile': false,
         },
       ],
+      'packages': [
+        {
+          'name': 'np',
+          'kind': 'blind-index',
+          'min_fov_deg': 0.18,
+          'max_fov_deg': 3.1,
+          'mobile': false,
+          'min_engine': '0.5.0',
+          'files': [
+            {'role': 'index', 'file': 'np.idx.zst', 'key': 'pkg/aaaa/np.idx.zst', 'bytes': idxRaw.length, 'sha256': idxSha, 'raw_bytes': idxRaw.length, 'raw_sha256': idxSha},
+            {'role': 'stars', 'file': 'np.stars.zst', 'key': 'pkg/bbbb/np.stars.zst', 'bytes': starsRaw.length, 'sha256': starsSha, 'raw_bytes': starsRaw.length, 'raw_sha256': starsSha},
+          ],
+        },
+      ],
       'assets': [
         {
           'name': 'unisolver_names',
@@ -180,12 +213,15 @@ void main() {
         },
       ],
     });
-    cdn = FakeCdn({
+    cdnFiles = {
       'manifest-v3.json': utf8.encode(manifestText),
       'db/deadbeef/tier_5_10.db.zst': tierBytes,
       'db/cafef00d/tier_0p5_1.db.zst': tierBytes,
       'assets/0badf00d/unisolver_names.bin': namesBytes,
-    });
+      'pkg/aaaa/np.idx.zst': idxRaw,
+      'pkg/bbbb/np.stars.zst': starsRaw,
+    };
+    cdn = FakeCdn(cdnFiles);
     await cdn.start();
   });
 
@@ -354,7 +390,7 @@ void main() {
 
   test('a failed decompression (e.g. a full disk) leaves no partial database and states the space needed', () async {
     final m = manager(
-      installer: ({required String zstPath, required String outPath}) async {
+      installer: ({required String zstPath, required String outPath, String? rawSha256}) async {
         File(outPath).writeAsBytesSync([1, 2, 3]); // partial
         throw const FileSystemException('No space left on device');
       },
@@ -441,5 +477,125 @@ void main() {
     expect(n1.license, 'CC-BY-SA-3.0-IGO');
     expect(n1.attribution, contains('Gaia'));
     expect(m.byName('tier_0p5_1')!.license, isNull); // older entries have none
+  });
+
+  group('packages', () {
+    Future<DbPackage> pkg() async => (await manager().fetchManifest()).packageByName('np')!;
+
+    test('both files install, verify twice and register once with both paths', () async {
+      final p = await pkg();
+      final calls = <(String, String)>[];
+      final progress = <DbProgress>[];
+      final m = manager(registerPackage: (i, s) async => calls.add((i, s)));
+      final paths = await m.installPackage(p, onProgress: progress.add);
+      expect(File(paths.indexPath).readAsBytesSync(), idxRaw);
+      expect(File(paths.starsPath).readAsBytesSync(), starsRaw);
+      expect(paths.indexPath, '${tmp.path}/np.idx');
+      expect(calls, [(paths.indexPath, paths.starsPath)]);
+      expect(m.isPackageInstalled(p), isTrue);
+      expect(progress.last.phase, DbPhase.done);
+      expect(tmp.listSync().where((e) => e.path.endsWith('.zst') || e.path.endsWith('.part')), isEmpty);
+      // Installed already: nothing is downloaded again
+      final requests = cdn.ranges.length;
+      await m.installPackage(p);
+      expect(cdn.ranges.length, requests);
+    });
+
+    test('mobile refuses a package outright', () async {
+      final p = await pkg();
+      await expectLater(manager(isMobile: true).installPackage(p), throwsA(isA<DbException>()));
+    });
+
+    test('an engine older than min_engine is told to upgrade', () async {
+      final p = await pkg();
+      await expectLater(
+        manager(engineVersion: () => '0.4.4').installPackage(p),
+        throwsA(isA<DbException>().having((e) => e.message, 'message', contains('upgrade'))),
+      );
+    });
+
+    test('too little free disk is refused before downloading', () async {
+      final p = await pkg();
+      final requests = cdn.ranges.length;
+      await expectLater(manager(freeSpace: (_) async => 10).installPackage(p), throwsA(isA<DbException>()));
+      expect(cdn.ranges.length, requests);
+    });
+
+    test('a decompressed file with the wrong digest is refused and removed', () async {
+      final p = await pkg();
+      final s = p.stars;
+      final bad = DbPackage(
+        name: p.name,
+        kind: p.kind,
+        minFovDeg: p.minFovDeg,
+        maxFovDeg: p.maxFovDeg,
+        mobile: p.mobile,
+        minEngine: p.minEngine,
+        files: [
+          p.index,
+          DbPackageFile(package: p.name, role: 'stars', file: s.file, key: s.key, bytes: s.bytes, sha256: s.sha256, rawBytes: s.rawBytes, rawSha256: '0' * 64),
+        ],
+      );
+      await expectLater(manager().installPackage(bad), throwsA(isA<DbChecksumException>()));
+      expect(File('${tmp.path}/np.stars').existsSync(), isFalse);
+      expect(File('${tmp.path}/np.stars.zst').existsSync(), isFalse);
+      expect(manager().isPackageInstalled(bad), isFalse);
+    });
+
+    test('a failed second file keeps the first, and the next install fetches only the second', () async {
+      final p = await pkg();
+      final stars = cdnFiles.remove('pkg/bbbb/np.stars.zst')!;
+      await expectLater(manager().installPackage(p), throwsA(isA<DbHttpException>()));
+      expect(File('${tmp.path}/np.idx').existsSync(), isTrue);
+      expect(manager().isPackageInstalled(p), isFalse);
+      cdnFiles['pkg/bbbb/np.stars.zst'] = stars;
+      final requests = cdn.ranges.length;
+      await manager().installPackage(p);
+      expect(cdn.ranges.length, requests + 1, reason: 'only the star tiles are fetched');
+      expect(manager().isPackageInstalled(p), isTrue);
+    });
+
+    test('a dropped download resumes', () async {
+      final p = await pkg();
+      cdn.truncateAt = 100;
+      await expectLater(manager().installPackage(p), throwsA(isA<DbException>()));
+      await manager().installPackage(p);
+      expect(cdn.ranges, contains('bytes=100-'));
+      expect(manager().isPackageInstalled(p), isTrue);
+    });
+
+    test('a wrong header or size is not installed; remove cleans up', () async {
+      final p = await pkg();
+      await manager().installPackage(p);
+      File('${tmp.path}/np.stars').writeAsBytesSync([0, 1, 2]);
+      expect(manager().isPackageInstalled(p), isFalse);
+      await manager().removePackage(p);
+      expect(tmp.listSync().where((e) => e.path.contains('np.')), isEmpty);
+    });
+  });
+
+  test('tiers hand their decompressed digest to the installer and refuse a newer min_engine', () async {
+    final m0 = await manager().fetchManifest();
+    final t = m0.byName('tier_5_10')!;
+    String? seen;
+    final m = manager(installer: ({required zstPath, required outPath, rawSha256}) async {
+      seen = rawSha256;
+      return fakeInstall(zstPath: zstPath, outPath: outPath, rawSha256: rawSha256);
+    });
+    await m.install(t);
+    expect(seen, t.rawSha256);
+    final newer = DbTier(
+      name: 'tier_new',
+      file: t.file,
+      key: t.key,
+      minFovDeg: t.minFovDeg,
+      maxFovDeg: t.maxFovDeg,
+      bytes: t.bytes,
+      sha256: t.sha256,
+      mobile: true,
+      bundled: false,
+      minEngine: '9.0.0',
+    );
+    await expectLater(manager().install(newer), throwsA(isA<DbException>().having((e) => e.message, 'message', contains('upgrade'))));
   });
 }

@@ -13,15 +13,26 @@ import 'db_format.dart';
 import 'db_manifest.dart';
 import 'rust/api/install.dart' as rust;
 
-/// Decompress-and-install (defaults to Rust's streaming zstd). Injectable for pure-Dart tests.
+/// Decompress-and-install (defaults to Rust's streaming zstd), checking the decompressed
+/// sha256 when the manifest gives one. Injectable for pure-Dart tests.
 typedef DbInstaller = Future<BigInt> Function(
-    {required String zstPath, required String outPath});
+    {required String zstPath, required String outPath, String? rawSha256});
 
 /// File sha256 (defaults to Rust's streaming implementation). Injectable for pure-Dart tests.
 typedef DbDigest = Future<String> Function({required String path});
 
 /// Called after a tier is installed (usually `pool.register`).
 typedef DbRegister = Future<void> Function(String dbPath);
+
+/// Called after a package is installed (usually `pool.registerNarrow`).
+typedef DbRegisterPackage = Future<void> Function(
+    String indexPath, String starsPath);
+
+/// Free bytes on the volume holding a directory (defaults to Rust). Injectable for tests.
+typedef DbFreeSpace = Future<int> Function(String dir);
+
+/// This engine's version (defaults to Rust's `engineVersion`). Injectable for tests.
+typedef DbEngineVersion = String Function();
 
 enum DbPhase { downloading, verifying, decompressing, registering, done }
 
@@ -88,11 +99,17 @@ class DbManager {
     DbInstaller? installer,
     DbDigest? digest,
     this.register,
+    this.registerPackage,
+    DbFreeSpace? freeSpace,
+    DbEngineVersion? engineVersion,
     HttpClient Function()? httpClient,
     bool? isMobile,
   })  : _baseUrlOverride = baseUrl,
-        _install = installer ?? rust.installCompressedDb,
+        _install = installer ?? rust.installCompressedFile,
         _digest = digest ?? rust.sha256File,
+        _freeSpace = freeSpace ??
+            ((d) async => (await rust.availableDiskBytes(path: d)).toInt()),
+        _engineVersion = engineVersion ?? rust.engineVersion,
         _newClient = httpClient ?? HttpClient.new,
         _isMobile = isMobile ?? (Platform.isAndroid || Platform.isIOS);
 
@@ -105,6 +122,11 @@ class DbManager {
 
   /// Called after a tier is installed (usually `pool.register`); omit to register yourself
   final DbRegister? register;
+
+  /// Called after a package is installed (usually `pool.registerNarrow`); omit to register yourself
+  final DbRegisterPackage? registerPackage;
+  final DbFreeSpace _freeSpace;
+  final DbEngineVersion _engineVersion;
   final HttpClient Function() _newClient;
   final bool _isMobile;
 
@@ -201,6 +223,7 @@ class DbManager {
         'UnisolverAssets.ensureInstalled(), not from the network',
       );
     }
+    _requireEngine(t.name, t.minEngine);
     if (_isMobile && !t.mobile && !allowNonMobile) {
       throw DbException(
         '${t.name} is not marked mobile in the manifest '
@@ -223,11 +246,17 @@ class DbManager {
     final old = File(out);
     if (old.existsSync()) old.deleteSync();
     try {
-      await _install(zstPath: zst.path, outPath: out);
+      await _install(zstPath: zst.path, outPath: out, rawSha256: t.rawSha256);
     } on Object catch (e) {
       // Decompression failed (usually a full disk): keep the .zst to save a download, drop the database
       final f = File(out);
       if (f.existsSync()) f.deleteSync();
+      final mismatch = _rawMismatch(e);
+      if (mismatch != null) {
+        // The archive passed its own check, so it is the published one: drop it and start over
+        zst.deleteSync();
+        throw mismatch;
+      }
       throw DbException(
         '${t.name}: decompression failed — needs about '
         '${(t.diskBytesNeeded / 1e6).round()} MB free',
@@ -248,6 +277,152 @@ class DbManager {
     onProgress?.call(DbProgress(
         name: t.name, phase: DbPhase.done, received: t.bytes, total: t.bytes));
     return out;
+  }
+
+  /// Refuses an item that needs a newer engine than this one
+  void _requireEngine(String name, String? minEngine) {
+    if (minEngine == null) return;
+    final engine = _engineVersion();
+    if (!engineSatisfies(engine, minEngine)) {
+      throw DbException('$name needs engine $minEngine or newer (this is $engine) — '
+          'upgrade unisolver_flutter');
+    }
+  }
+
+  static final RegExp _mismatch = RegExp(
+      r'raw sha256 mismatch: expected ([0-9a-f]{64}), got ([0-9a-f]{64})');
+
+  /// The installer's digest refusal as a [DbChecksumException] (Rust reports it as text)
+  static DbChecksumException? _rawMismatch(Object e) {
+    final m = _mismatch.firstMatch(e.toString());
+    return m == null
+        ? null
+        : DbChecksumException(expected: m.group(1)!, actual: m.group(2)!);
+  }
+
+  /// Local path of a package file (the archive name without `.zst`)
+  String packageFilePath(DbPackageFile f) => '$dir/${f.localFile}';
+
+  static const Map<String, List<int>> _headers = {
+    'index': [0x55, 0x4e, 0x49, 0x42, 0x4c, 0x49, 0x58, 0x31], // UNIBLIX1
+    'stars': [0x55, 0x4e, 0x49, 0x53, 0x54, 0x41, 0x52, 0x31], // UNISTAR1
+  };
+
+  bool _fileInstalled(DbPackageFile f) {
+    final file = File(packageFilePath(f));
+    if (!file.existsSync() || file.lengthSync() != f.rawBytes) return false;
+    final want = _headers[f.role];
+    if (want == null) return true;
+    final raf = file.openSync();
+    try {
+      final head = raf.readSync(8);
+      if (head.length != 8) return false;
+      for (var i = 0; i < 8; i++) {
+        if (head[i] != want[i]) return false;
+      }
+      return true;
+    } finally {
+      raf.closeSync();
+    }
+  }
+
+  /// Whether every file of [p] is on disk with the manifest's size and the right header (the
+  /// digests are checked as they are installed)
+  bool isPackageInstalled(DbPackage p) => p.files.every(_fileInstalled);
+
+  /// Installs a package file by file: download (resumable) → verify → decompress → verify the
+  /// decompressed digest. A file already in place is kept, so a failed install resumes where it
+  /// stopped; once every file is in place the package is registered. Desktop only: mobile engines
+  /// are built without the narrow-field engine. Returns the installed paths.
+  Future<({String indexPath, String starsPath})> installPackage(
+    DbPackage p, {
+    void Function(DbProgress)? onProgress,
+    DbCancel? cancel,
+  }) async {
+    final paths = (
+      indexPath: packageFilePath(p.index),
+      starsPath: packageFilePath(p.stars),
+    );
+    if (_isMobile) {
+      throw DbException('${p.name} is for desktop builds only');
+    }
+    _requireEngine(p.name, p.minEngine);
+    if (!isPackageInstalled(p)) {
+      Directory(dir).createSync(recursive: true);
+      final inPlace =
+          p.files.where(_fileInstalled).fold(0, (s, f) => s + f.rawBytes);
+      final need = p.diskBytesNeeded - inPlace;
+      final free = await _freeSpace(dir);
+      if (free < need) {
+        throw DbException('${p.name} needs about ${(need / 1e6).round()} MB '
+            'free, ${(free / 1e6).round()} MB available');
+      }
+      for (final f in p.files) {
+        if (_fileInstalled(f)) continue;
+        final part =
+            await _fetchVerified(f, onProgress: onProgress, cancel: cancel);
+        final zst = File('$dir/${f.file}');
+        if (zst.existsSync()) zst.deleteSync();
+        part.renameSync(zst.path);
+        onProgress?.call(DbProgress(
+            name: f.name,
+            phase: DbPhase.decompressing,
+            received: f.bytes,
+            total: f.bytes));
+        final out = File(packageFilePath(f));
+        if (out.existsSync()) out.deleteSync();
+        try {
+          await _install(
+              zstPath: zst.path, outPath: out.path, rawSha256: f.rawSha256);
+        } on Object catch (e) {
+          if (out.existsSync()) out.deleteSync();
+          final mismatch = _rawMismatch(e);
+          if (mismatch != null) {
+            // The archive passed its own check, so it is the published one: start over
+            zst.deleteSync();
+            throw mismatch;
+          }
+          throw DbException(
+            '${f.name}: decompression failed — needs about '
+            '${(f.rawBytes / 1e6).round()} MB free',
+            cause: e,
+          );
+        }
+        zst.deleteSync();
+      }
+    }
+    final reg = registerPackage;
+    if (reg != null) {
+      onProgress?.call(DbProgress(
+          name: p.name,
+          phase: DbPhase.registering,
+          received: p.downloadBytes,
+          total: p.downloadBytes));
+      await reg(paths.indexPath, paths.starsPath);
+    }
+    onProgress?.call(DbProgress(
+        name: p.name,
+        phase: DbPhase.done,
+        received: p.downloadBytes,
+        total: p.downloadBytes));
+    return paths;
+  }
+
+  /// Removes a package's files with any leftover download or decompression. A pool that
+  /// registered it keeps it until the pool is reopened (and on Windows the mapped files cannot be
+  /// deleted until then).
+  Future<void> removePackage(DbPackage p) async {
+    for (final f in p.files) {
+      for (final path in [
+        packageFilePath(f),
+        '${packageFilePath(f)}.tmp',
+        _partPath(f),
+        '$dir/${f.file}',
+      ]) {
+        final file = File(path);
+        if (file.existsSync()) file.deleteSync();
+      }
+    }
   }
 
   /// Installs an optional asset (the names pack): download (resumable) → verify. Assets

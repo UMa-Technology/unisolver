@@ -1,6 +1,8 @@
 //! Narrow-field engine: seiza's blind pattern index and star tiles, fed with unisolver's own
 //! centroids and checked with unisolver's own matcher. Desktop builds only (`narrow` feature).
 pub(crate) mod geometry;
+#[allow(dead_code)] // the pool takes it up in the next commit
+pub(crate) mod route;
 #[doc(hidden)]
 pub mod testkit;
 pub(crate) mod verify;
@@ -11,6 +13,8 @@ use seiza::blind::{BlindIndex, BlindParams};
 use seiza::catalog::{StarCatalog, TileCatalog};
 use std::sync::Arc;
 use std::time::Instant;
+
+pub use route::NARROW_MAX_FOV_DEG;
 
 /// Matches a blind solution must keep after our own check (seiza's own blind floor)
 pub const BLIND_MIN_MATCHES: usize = 12;

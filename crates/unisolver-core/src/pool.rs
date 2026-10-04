@@ -367,7 +367,7 @@ fn known_fov(base: &crate::SolveOptions, width: u32) -> Option<f32> {
 
 /// Does the tier range (with tolerance) cover this FOV? Same tolerance as the clamp in
 /// `solve_with_fov_presets` ([0.8×min, 1.25×max]): adjacent tiers meet without a gap.
-fn covers(span: (f32, f32), fov: f32) -> bool {
+pub(crate) fn covers(span: (f32, f32), fov: f32) -> bool {
     fov >= span.0 * 0.8 && fov <= span.1 * 1.25
 }
 

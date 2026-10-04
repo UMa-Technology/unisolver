@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+1. **A narrow-field engine for desktop pools.** Desktop builds (macOS, Windows, Linux) of the
+   C library and the Flutter plugin can register a narrow-field package (a blind pattern index
+   and its star tiles) next to the tetra3 tiers: `SolverPool::register_narrow`,
+   `unisolver_pool_register_narrow`, `UniSolverPool.registerNarrow`, and directory opens find
+   it by its file headers. It takes frames whose known FOV is at most about 3°: first when no
+   tetra3 tier covers that FOV, otherwise after they all failed, for `narrow_fallback_ms` at
+   most (default 2 s). Frames of unknown FOV reach it only with `narrow_blind`, so phone frames
+   and frames without stars fail as fast as before. Tiers and pool attempts report a `kind`
+   (`tetra3` or `narrow`); a narrow-field solve annotates with the narrowest tetra3 tier. iOS
+   and Android builds are unchanged.
+2. **Pointing hints.** `pointing_hint` (`ra_deg`, `dec_deg`, optional `radius_deg`) gives the
+   narrow-field engine the approximate pointing of a mount; without a radius it searches
+   max(1°, 3 × FOV) around it, and solves blind when that fails. FITS and XISF file entries read
+   one from the header when the caller gives none (`RA`/`DEC`, `OBJCTRA`/`OBJCTDEC`, a celestial
+   `CRVAL1`/`CRVAL2`, XISF `Observation:Center:RA`/`Dec`). The tetra3 tiers do not use it.
+   solvecli takes `--hint-ra`, `--hint-dec`, `--hint-radius` and `--narrow-blind`.
+
 ## 2026-10-04 — v0.4.4
 
 1. **The plugin accepts Dart 3.12.2 and Flutter 3.44.4 or later.** It used to require Dart 3.13,

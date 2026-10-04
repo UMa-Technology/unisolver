@@ -429,6 +429,10 @@ Routing (no configuration needed; the same rules as the single-database ladder):
   ladder**, only tiers covering it.
 - Extraction runs once and is reused across tiers (`res.extractCount`): a 26 Mpx frame
   takes seconds to extract, and re-extracting per rung would be an order of magnitude slower.
+- Desktop builds can also register a narrow-field package (`pool.registerNarrow`, found by
+  `openDir` too). It only takes frames whose known FOV is narrower than about 3°, before the
+  tetra3 tiers when none covers the FOV and after them otherwise; frames of unknown FOV never
+  reach it unless `narrowBlind` is set. Its attempts carry `kind == TierKindDto.narrow`.
 
 The plugin bundles one tier, covering 10–80°. For narrower fields, generate databases with
 the upstream tetra3rs tools (the engine loads them as they are) and register them, or let
@@ -524,6 +528,7 @@ For native mobile apps (Flutter apps use the plugin instead):
 | `unisolver_solve_frame_json_opts(solver, px, len, w, h, kind, stride, opts, &err)` | **Direct frame input** from memory, no disk |
 | `unisolver_pool_open(dir, &err)` | Open a pool: register every `*.db` in `dir` |
 | `unisolver_pool_register(pool, db_path, &err)` | Register one more tier (after an install) → tier JSON |
+| `unisolver_pool_register_narrow(pool, index_path, stars_path, &err)` | Register the narrow-field package (desktop builds) → tier JSON with `"kind":"narrow"` |
 | `unisolver_pool_tiers_json(pool, &err)` | Registered tiers plus files skipped at open |
 | `unisolver_pool_solve_image_json(pool, path, &err)` | Solve **without naming a tier**; the JSON adds `db` |
 | `unisolver_pool_solve_image_json_opts(pool, path, opts, &err)` | The same with options (a known FOV tries only tiers covering it) |
@@ -632,6 +637,11 @@ aberration, which makes the solution the camera's physical pointing, up to 20″
 frame the annotation uses: leave it unset when annotating or syncing a mount.
 `attitude_hint_wxyz` without `fov_deg` or `camera` is an **error**: tracking needs the
 scale, and silently falling back to a blind solve would hide that tracking is not working.
+
+Pools with the narrow-field engine (desktop builds) also take `pointing_hint`
+(`{"ra_deg", "dec_deg", "radius_deg"}`, the radius optional), `narrow_blind` and
+`narrow_fallback_ms`; pool file entries fill the pointing in from FITS and XISF headers. Other
+solves ignore them.
 
 ### Direct frame input (camera callbacks, video)
 

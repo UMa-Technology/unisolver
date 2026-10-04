@@ -18,7 +18,7 @@ for a in "$@"; do
 done
 
 PKGS="-p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask"
-FEATURES="imageio satellites"
+FEATURES="imageio satellites narrow"
 
 step() {
   local name=$1; shift
@@ -39,7 +39,8 @@ upstream_check() {
 step "public text" python3 scripts/ci/check_public_text.py
 step "rust licenses" python3 scripts/ci/rust_licenses.py --check
 step "rustfmt" cargo fmt $PKGS -p unisolver_frb -- --check
-step "clippy" cargo clippy $PKGS --all-targets --features "$FEATURES" -- -D warnings
+# --no-deps: lint our packages only, not the vendored workspace members (third_party/)
+step "clippy" cargo clippy --no-deps $PKGS --all-targets --features "$FEATURES" -- -D warnings
 step "tests" cargo test --workspace --release --features "$FEATURES"
 step "windows cross-check" bash scripts/ci/check_windows.sh
 step "upstream patch queue" upstream_check

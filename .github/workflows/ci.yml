@@ -15,7 +15,7 @@ on:
 
 env:
   PKGS: -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask
-  FEATURES: imageio satellites
+  FEATURES: imageio satellites narrow
 
 jobs:
   rust-linux:
@@ -41,7 +41,7 @@ jobs:
         run: cargo fmt $PKGS --check
       - name: clippy
         # unisolver_frb needs the Flutter toolchain (dart-sys); flutter-macos covers it
-        run: cargo clippy $PKGS --all-targets --features "$FEATURES" -- -D warnings
+        run: cargo clippy --no-deps $PKGS --all-targets --features "$FEATURES" -- -D warnings
       - name: test
         # private test material is not in the repository: tests that need it print skipped and pass
         run: cargo test --workspace --exclude unisolver_frb --release --features "$FEATURES"
@@ -71,7 +71,7 @@ jobs:
             third_party/tetra3/data/tess_test_images
           key: tetra3-testdata-${{ hashFiles('third_party/tetra3.lock') }}
       - name: clippy
-        run: cargo clippy $PKGS --all-targets --features "$FEATURES" -- -D warnings
+        run: cargo clippy --no-deps $PKGS --all-targets --features "$FEATURES" -- -D warnings
       - name: test
         run: cargo test --workspace --exclude unisolver_frb --release --features "$FEATURES"
 

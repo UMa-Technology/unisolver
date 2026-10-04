@@ -360,7 +360,7 @@ fn report_sync(ctx: &Ctx, outcome: SyncOutcome, no_test: bool) -> u8 {
                     "--workspace",
                     "--release",
                     "--features",
-                    "imageio satellites",
+                    "imageio satellites narrow",
                 ]);
                 for args in runs {
                     if !cargo(&ctx.root, &args) {

@@ -19,3 +19,6 @@ literals crates/unisolver-cabi/src/lib.rs
 literals packages/unisolver_flutter/example/integration_test/solve_e2e_test.dart
 literals docs/integration.md
 line README.md English | [简体中文](README.zh-CN.md)
+# Upstream's own project name in the vendored seiza crate (third_party/ is generated)
+line third_party/seiza/seiza/README.md # seiza (星座)
+line third_party/seiza/seiza/src/lib.rs //! seiza (星座) — star detection, WCS fitting, and near-field plate solving.

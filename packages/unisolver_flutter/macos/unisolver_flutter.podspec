@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'unisolver_flutter'
-  s.version          = '0.4.3'
+  s.version          = '0.4.4'
   s.summary          = 'Offline plate solving and sky annotation (Rust engine).'
   s.description      = <<-DESC
 Flutter plugin for unisolver, an offline plate solver with a Rust core.

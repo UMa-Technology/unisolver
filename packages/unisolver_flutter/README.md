@@ -36,7 +36,8 @@ live tracking, calibration and database pages.
 
 ## License
 
-The code is MIT OR Apache-2.0 (see `LICENSE`). The bundled star database (Gaia DR3,
+The code is MIT OR Apache-2.0 (see `LICENSE`); desktop builds also compile in
+`unisolver-starmatch`, derived from seiza, under Apache-2.0. The bundled star database (Gaia DR3,
 CC BY-SA 3.0 IGO) and DSO catalog (OpenNGC, CC BY-SA 4.0) require attribution; the opt-in
 names pack in `lib/optional/` is GPL-2.0-or-later. Details in
 [THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md).

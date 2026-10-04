@@ -11,6 +11,9 @@ crate.
 - Algorithm: [tetra3rs](https://github.com/ssmichael1/tetra3rs) (the Rust port of tetra3 /
   cedar-solve): 4-star geometric hashing, Wahba/SVD attitude, statistical verification and
   a 3-DOF WCS refinement, adapted for phone photos and several database tiers.
+- Narrow fields on desktop: a star-centred blind pattern index with star tiles
+  (`unisolver-starmatch`, derived from [seiza](https://github.com/theatrus/seiza)), for
+  fields down to about 0.18°.
 - Speed: p50 17 ms / p90 313 ms end to end over 53 real frames (Apple M2 Max).
 - Platforms: iOS, Android (arm64-v8a, x86_64), macOS, Windows (x64, arm64).
 - License: MIT OR Apache-2.0; third-party code and data in
@@ -42,6 +45,7 @@ license obligations and common pitfalls. Toolchains and release builds:
 unisolver/
 ├── crates/
 │   ├── unisolver-core/         # the engine: all logic lives here
+│   ├── unisolver-starmatch/    # narrow-field pattern matching (desktop builds; from seiza)
 │   ├── unisolver-cabi/         # C ABI (INDI / ASCOM / native desktop and mobile / Python)
 │   └── unisolver-synth/        # synthetic star fields for tests
 ├── packages/unisolver_flutter/ # Flutter plugin (flutter_rust_bridge bindings) and example app
@@ -70,6 +74,7 @@ The **single source** of behaviour; the Flutter and C layers only marshal.
 | `imageio/` | Format dispatch by magic bytes: `fits.rs` (including NAXIS3=3 colour), `xisf.rs` (zlib/lz4/zstd + shuffle), `raster.rs` (PNG/JPEG/TIFF, 16-bit included) |
 | `annotate.rs` | Annotation layers: stars, named stars, deep-sky objects, solar system, **satellites**, with availability and reasons per layer |
 | `pool.rs` | **Multi-tier routing**: `SolverPool` registers several databases, dispatches by FOV and falls back across tiers, extracting once |
+| `narrow/` | **Narrow-field engine** (feature `narrow`, desktop builds): when the pool hands it a frame (`route.rs`), blind and hinted solves through `unisolver-starmatch`, and unisolver's own check of each solution (`verify.rs`) |
 | `names_pack.rs` | Multilingual names pack (`UNAM`): data-driven languages, fallback requested → English |
 | `ephemeris.rs`, `satellites.rs` | Planet and moon ephemeris (Standish + Meeus), satellite passes (TLE + SGP4) |
 | `calibrate.rs`, `camera.rs` | On-device multi-frame calibration (radial / polynomial distortion) and the camera model |
@@ -77,9 +82,10 @@ The **single source** of behaviour; the Flutter and C layers only marshal.
 | `dso.rs`, `coords.rs`, `quat.rs`, `frame.rs`, `aberration.rs` | DSO catalog, coordinate conversions, quaternions, frames (with row stride), observation time |
 
 Tests live in `crates/unisolver-core/tests/`: `solve_test` (ladders, profiles, clamping),
-`pool_test` (routing), `storage_test` (memory-mapped database files and corruption),
-`annotate_test`, `calibrate_test`, plus tests on a private corpus of real captures that
-print `skipped` when it is absent (see [testdata/README.md](testdata/README.md)).
+`pool_test` (routing), `narrow_test` and `pool_narrow_test` (the narrow-field engine),
+`storage_test` (memory-mapped database files and corruption), `annotate_test`,
+`calibrate_test`, plus tests on a private corpus of real captures that print `skipped` when
+it is absent (see [testdata/README.md](testdata/README.md)).
 
 ### Conventions (read before changing code)
 
@@ -122,16 +128,18 @@ pattern table stays on disk and pages in on demand. The tree is generated: chang
 The plugin bundles a **10–80° wide-field database** (phones and wide lenses). For long
 lenses and telescopes, generate narrower databases with the upstream tetra3rs tools: the
 engine loads them as they are, routes across every tier you register (`SolverPool`), and
-`DbManager` installs them from any static host serving a manifest. See
+`DbManager` installs them from any static host serving a manifest. Desktop builds can add
+the **narrow-field package** for 0.18–3.1° (a blind index and its star tiles, about 2.5 GB to
+download), which `DbManager.installPackage` installs from the same manifest. See
 [docs/integration.md](docs/integration.md), section 1.6.
 
 ## Development
 
 ```bash
 git config core.hooksPath .githooks     # once: commit-message and pre-push checks
-cargo test --workspace --release --features "imageio satellites"
-cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask \
-  --all-targets --features "imageio satellites" -- -D warnings
+cargo test --workspace --release --features "imageio satellites narrow"
+cargo clippy -p unisolver-starmatch -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen \
+  -p solvecli -p xtask --all-targets --features "imageio satellites narrow" -- -D warnings
 python3 scripts/ci/check_public_text.py
 bash scripts/ci/check_windows.sh
 cargo xtask upstream check
@@ -148,6 +156,7 @@ Where to change what:
 | Change | Place |
 |---|---|
 | Solve strategy, extraction profiles, FOV ladders | `crates/unisolver-core/src/solver.rs` |
+| The narrow-field engine | `crates/unisolver-core/src/narrow/`, matching in `crates/unisolver-starmatch/` |
 | A new image format | `crates/unisolver-core/src/imageio/` + magic dispatch |
 | A new annotation layer | `crates/unisolver-core/src/annotate.rs` |
 | A new Flutter API | `packages/unisolver_flutter/rust/src/api/`, then regenerate the bindings |
@@ -157,7 +166,8 @@ Where to change what:
 ## License
 
 Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.
-Copyright (c) 2026 Suzhou UMa Technology Co., Ltd.
+Copyright (c) 2026 Suzhou UMa Technology Co., Ltd. `crates/unisolver-starmatch` is derived
+from seiza and stays under Apache-2.0 alone.
 
 The bundled data carries its own terms: the star database derives from ESA Gaia DR3
 (CC BY-SA 3.0 IGO, attribution required), the DSO catalog from OpenNGC (CC BY-SA 4.0) and

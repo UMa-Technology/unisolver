@@ -451,23 +451,58 @@ final tier = manifest.byName('my_narrow_tier')!;
 await mgr.install(tier, onProgress: (p) => print('${p.phase} ${p.fraction}'));
 ```
 
+Desktop builds install the **narrow-field package** the same way. It is two files, a blind
+index and its star tiles (for 0.18–3.1°: about 2.5 GB to download, 3.2 GB installed), listed
+under `packages`, installed together and registered through a `registerPackage` callback:
+
+```dart
+final mgr = DbManager(
+  dir: dir,
+  baseUrl: 'https://<your host>/unisolver/',
+  register: (path) => pool.register(dbPath: path).then((_) {}),
+  registerPackage: (index, stars) =>
+      pool.registerNarrow(indexPath: index, starsPath: stars).then((_) {}),
+);
+final pkg = manifest.packageByName('my_narrow_package')!;
+if (!mgr.isPackageInstalled(pkg)) {
+  await mgr.installPackage(pkg, onProgress: (p) => print('${p.name} ${p.phase}'));
+}
+```
+
+- `installPackage` checks free space first (`pkg.diskBytesNeeded`, about 4.5 GB at the peak,
+  less the files already in place), then downloads, verifies and decompresses one file at a
+  time. A file already in place is kept, so an interrupted install continues where it stopped.
+- Once both files are in place it calls `registerPackage`: the package solves at once, and the
+  next `openDir` finds it by its file headers.
+- After registering, the engine reads both files once in the background to warm the page
+  cache, so the first narrow-field frames do not wait on a cold disk. Set
+  `UNISOLVER_NO_PREFETCH=1` to skip it.
+- On iOS and Android `installPackage` refuses: mobile builds have no narrow-field engine.
+- `removePackage` deletes the files. A pool that registered the package keeps it until the pool
+  is reopened (and on Windows the files cannot be deleted until then).
+
 Manifest fields (`manifest-v3.json`, version 3; hosts keep `manifest.json`, version 2, for
 releases before database format 2):
 
 | Field | Purpose |
 |---|---|
-| `key` | Content-addressed path `db/<last 8 hex of sha256>/<file>`; URL = `base_url + key` |
+| `key` | Content-addressed path `db/<last 8 hex of sha256>/<file>` (`assets/…` and `pkg/…` for assets and package files); URL = `base_url + key` |
 | `sha256` | Digest of the archive; **verified after every download** (`DbManager` refuses a mismatch and removes the leftover) |
 | `bytes` / `raw_bytes` | Download size / decompressed size; `tier.diskBytesNeeded` is the peak disk use during install |
+| `raw_sha256` | Digest of the decompressed file (tiers and package files), **checked while decompressing**: a mismatch throws `DbChecksumException` and nothing is installed |
+| `min_engine` | Oldest engine that reads the file; `DbManager` refuses an entry that needs a newer one and says to upgrade |
 | `mobile` | Whether mobile devices should use it; mobile needs `allowNonMobile: true` otherwise |
 | `bundled` | Ships with the plugin assets, not on the host; installed by `UnisolverAssets.ensureInstalled` |
 | `license` / `attribution` | The tier's data license and the attribution it requires (Gaia DR3 for star databases) |
 | `assets` | Optional files used as downloaded (the names pack): `name`, `kind`, `file`, `key`, `bytes`, `sha256`, `license`, `attribution`; install with `DbManager.installAsset` |
+| `packages` | Multi-file downloads (the desktop narrow-field package): `name`, `kind` (`blind-index`), `min_fov_deg` / `max_fov_deg`, `mobile` (false), `min_engine`, `license`, `attribution`, informational counts, and `files`, each with `role` (`index` or `stars`), `file`, `key`, `bytes`, `sha256`, `raw_bytes`, `raw_sha256`; install with `DbManager.installPackage` |
 
 Behaviour (all covered by tests): an interrupted download keeps its `.part` and resumes
 with `Range`; a server ignoring `Range` gets a clean restart; a digest mismatch deletes
 the bad content (otherwise every resume would continue from bad bytes); a failed
-decompression leaves no partial database and reports the space needed.
+decompression leaves no partial database and reports the space needed; a decompressed file
+that does not match `raw_sha256` is removed with its archive, so the next install downloads
+again.
 
 Databases are tetra3's format 2, memory-mapped: the pattern table stays on the file, so
 **resident memory follows the pages touched, not the file size** (the bundled database plus
@@ -728,15 +763,17 @@ tracing-subscriber layer.
 | `unisolver_dso.bin` | DSO catalog (NGC / IC / Messier) with outlines | 796 KB | bundled with the plugin |
 | `unisolver_constellations.bin` | 88 IAU constellation figures and boundaries | 200 KB | bundled with the plugin |
 | `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 229 KB | opt-in: declared by the app, or downloaded |
+| narrow-field package (blind index + star tiles) | narrow fields 0.18–3.1°, desktop builds | 2.5 GB / 3.2 GB | not bundled; `DbManager.installPackage` from your host |
 
 - Databases are tetra3's format 2, memory-mapped. Files from releases before it (the
   `UNISOLV2` container) no longer load; download them again.
-- Only the wide tier is bundled; narrower tiers are yours to generate and host (see
-  section 1.6).
+- Only the wide tier is bundled; narrower tiers and the narrow-field package are yours to
+  generate and host (section 1.6; `unisolver-starmatch` has the package builders).
 - Mobile devices should stay at ≥ 2.5° tiers: phones have no narrower fields, and deeper
-  tiers are too large to keep resident on mobile.
-- **Attribution is required**: the star database derives from Gaia DR3 (ESA/Gaia/DPAC,
-  CC BY-SA 3.0 IGO). Keep this in your app's About page, for example:
+  tiers are too large to keep resident on mobile. The narrow-field package is for desktop
+  builds only.
+- **Attribution is required**: the star databases and the narrow-field package derive from
+  Gaia DR3 (ESA/Gaia/DPAC, CC BY-SA 3.0 IGO). Keep this in your app's About page, for example:
   *This work has made use of data from the European Space Agency (ESA) mission Gaia,
   processed by the Gaia Data Processing and Analysis Consortium (DPAC).*
   The DSO catalog derives from OpenNGC (CC BY-SA 4.0), the constellation pack from the IAU
@@ -801,7 +838,9 @@ and `stellarium` when you ship the names pack. The example app lists them all un
 
 ## 6. Versions and compatibility
 
-- Database files: the engine detects v2/v1 by magic. New engines read old files; old engines
-  cannot read v2, so record the minimum engine version when distributing databases.
+- Database files: tiers are tetra3's format 2 from 0.5.0, and files from earlier releases no
+  longer load (download them again). Manifests record the oldest engine that reads each
+  database file (`min_engine`); `DbManager` refuses one that needs a newer engine and says
+  to upgrade.
 - API: the Dart and C surfaces follow semantic versioning. Informational fields such as
   `attempts` and `layers.reasons` may gain entries; parse them tolerantly.

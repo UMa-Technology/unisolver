@@ -30,6 +30,27 @@
    use it. solvecli takes `--hint-ra`, `--hint-dec`, `--hint-radius` and `--narrow-blind`.
    Below about 0.4° give one: a blind solve there needs more faint stars than fields away from
    the Milky Way usually hold (integration guide §5).
+4. **Narrow-field packages through `DbManager`.** Manifests list multi-file downloads under
+   `packages`. `DbManager.installPackage` installs the desktop narrow-field package (its blind
+   index and star tiles) after checking free space: file by file, each download resumable and
+   verified, a file already in place kept. It then hands both paths to the new
+   `registerPackage` callback (for `UniSolverPool.registerNarrow`). `isPackageInstalled` checks
+   sizes and file headers, and `removePackage` deletes the files. On iOS and Android it
+   refuses, since mobile builds have no narrow-field engine. The example app's database page
+   installs it.
+5. **Decompressed files are verified.** When the manifest gives `raw_sha256`, `DbManager`
+   checks it while decompressing tiers and package files. A mismatch throws
+   `DbChecksumException`, installs nothing and removes the archive, so the next install
+   downloads again.
+6. **`min_engine` is enforced.** `DbManager` refuses a tier or package whose `min_engine` is
+   newer than the engine and asks to upgrade, instead of installing a file the engine cannot
+   read. `engineVersion()` reports the engine's version.
+7. **The narrow-field package is read ahead.** Registering it starts a background read of both
+   files, so the first narrow-field frames after a start do not wait on a cold disk.
+   `UNISOLVER_NO_PREFETCH=1` turns it off.
+8. **Directory opens skip temporary files.** `openDir` (C: `unisolver_pool_open`) no longer
+   opens files ending in `.tmp` or `.part`, which interrupted downloads and decompressions
+   leave behind, so such a leftover cannot be paired into a narrow-field package.
 
 ## 2026-10-04 — v0.4.4
 

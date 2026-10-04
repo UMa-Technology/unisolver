@@ -9,6 +9,8 @@
 - 算法：[tetra3rs](https://github.com/ssmichael1/tetra3rs)（tetra3 / cedar-solve 的
   Rust 移植）的 4 星几何哈希、Wahba/SVD 定姿、统计验证与 WCS 3-DOF 精化，并针对手机
   照片与多档星库做了适配。
+- 桌面端窄场：以恒星为中心的盲解模式索引加星表分块（`unisolver-starmatch`，派生自
+  [seiza](https://github.com/theatrus/seiza)），视场可窄到约 0.18°。
 - 速度：53 张真实素材端到端 p50 17 ms / p90 313 ms（Apple M2 Max）。
 - 平台：iOS、Android（arm64-v8a、x86_64）、macOS、Windows（x64、arm64）。
 - 许可：MIT OR Apache-2.0；第三方代码与数据见
@@ -39,6 +41,7 @@ cd packages/unisolver_flutter/example && flutter run
 unisolver/
 ├── crates/
 │   ├── unisolver-core/         # 引擎主体：全部逻辑在此
+│   ├── unisolver-starmatch/    # 窄场星图匹配（仅桌面构建；派生自 seiza）
 │   ├── unisolver-cabi/         # C ABI（INDI / ASCOM / 桌面与移动端原生 / Python）
 │   └── unisolver-synth/        # 测试用合成星场
 ├── packages/unisolver_flutter/ # Flutter 插件（flutter_rust_bridge 绑定）与示例 App
@@ -67,6 +70,7 @@ unisolver/
 | `imageio/` | 按魔数分发格式：`fits.rs`（含 NAXIS3=3 彩色）、`xisf.rs`（zlib/lz4/zstd + shuffle）、`raster.rs`（PNG/JPEG/TIFF，含 16-bit） |
 | `annotate.rs` | 标注层：恒星、命名星、深空天体、太阳系、**卫星**，各层带可用性与原因 |
 | `pool.rs` | **多库路由**：`SolverPool` 注册多档星库，按 FOV 分派、跨档降级，提取只做一次 |
+| `narrow/` | **窄场引擎**（`narrow` feature，仅桌面构建）：池子何时把帧交给它（`route.rs`），经 `unisolver-starmatch` 的盲解与带指向解算，以及 unisolver 对每个解的自有核验（`verify.rs`） |
 | `names_pack.rs` | 多语言名称包（`UNAM`）：语言集由数据决定，回退链 请求语言 → 英文 |
 | `ephemeris.rs`、`satellites.rs` | 行星与月亮历表（Standish + Meeus）、卫星过境（TLE + SGP4） |
 | `calibrate.rs`、`camera.rs` | 端上多帧标定（径向 / 多项式畸变）与相机模型 |
@@ -74,9 +78,9 @@ unisolver/
 | `dso.rs`、`coords.rs`、`quat.rs`、`frame.rs`、`aberration.rs` | DSO 表、坐标换算、四元数、帧（含行距）、观测时刻 |
 
 测试在 `crates/unisolver-core/tests/`：`solve_test`（梯子、档位、裁剪）、`pool_test`
-（路由）、`storage_test`（数据库文件 mmap 加载与容错）、`annotate_test`、`calibrate_test`，
-以及依赖私有实拍素材的测试——素材不在时打印 `skipped` 并通过（见
-[testdata/README.md](testdata/README.md)）。
+（路由）、`narrow_test` 与 `pool_narrow_test`（窄场引擎）、`storage_test`（数据库文件
+mmap 加载与容错）、`annotate_test`、`calibrate_test`，以及依赖私有实拍素材的测试——素材
+不在时打印 `skipped` 并通过（见 [testdata/README.md](testdata/README.md)）。
 
 ### 约定（改代码前必读）
 
@@ -115,16 +119,17 @@ mmap 进来，模式表留在磁盘按需分页。这棵树是生成的：只能
 
 插件随包提供 **10–80° 宽场星库**（手机与广角镜头）。长焦与望远镜可用上游 tetra3rs
 工具生成更窄视场的星库：引擎直接加载，对你注册的所有档位做路由（`SolverPool`），
-`DbManager` 能从任何提供清单的静态服务器安装。见
-[docs/integration.md](docs/integration.md) 第 1.6 节。
+`DbManager` 能从任何提供清单的静态服务器安装。桌面构建还可加装 0.18–3.1° 的
+**窄场包**（盲解索引加星表分块，下载约 2.5 GB），同样由 `DbManager.installPackage`
+按清单安装。见 [docs/integration.md](docs/integration.md) 第 1.6 节。
 
 ## 开发
 
 ```bash
 git config core.hooksPath .githooks     # 一次：提交信息与推送前检查
-cargo test --workspace --release --features "imageio satellites"
-cargo clippy -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen -p solvecli -p xtask \
-  --all-targets --features "imageio satellites" -- -D warnings
+cargo test --workspace --release --features "imageio satellites narrow"
+cargo clippy -p unisolver-starmatch -p unisolver-core -p unisolver-synth -p unisolver-cabi -p namesgen \
+  -p solvecli -p xtask --all-targets --features "imageio satellites narrow" -- -D warnings
 python3 scripts/ci/check_public_text.py
 bash scripts/ci/check_windows.sh
 cargo xtask upstream check
@@ -140,6 +145,7 @@ chore revert），不写正文与 trailer，由钩子强制。用户可感知的
 | 要做的事 | 改哪里 |
 |---|---|
 | 解算策略、提取档位、FOV 梯子 | `crates/unisolver-core/src/solver.rs` |
+| 窄场引擎 | `crates/unisolver-core/src/narrow/`，匹配部分在 `crates/unisolver-starmatch/` |
 | 支持新图像格式 | `crates/unisolver-core/src/imageio/` + 魔数分发 |
 | 新标注图层 | `crates/unisolver-core/src/annotate.rs` |
 | Flutter 新 API | `packages/unisolver_flutter/rust/src/api/`，然后重新生成绑定 |
@@ -149,7 +155,8 @@ chore revert），不写正文与 trailer，由钩子强制。用户可感知的
 ## 许可
 
 按你的选择适用 [MIT](LICENSE-MIT) 或 [Apache-2.0](LICENSE-APACHE)。
-Copyright (c) 2026 Suzhou UMa Technology Co., Ltd.
+Copyright (c) 2026 Suzhou UMa Technology Co., Ltd. `crates/unisolver-starmatch` 派生自
+seiza，仍只按 Apache-2.0 授权。
 
 随包数据另有条款：星库派生自 ESA Gaia DR3（CC BY-SA 3.0 IGO，须署名），DSO 表派生自
 OpenNGC（CC BY-SA 4.0），名称包派生自 Stellarium（GPL-2.0-or-later）。详见

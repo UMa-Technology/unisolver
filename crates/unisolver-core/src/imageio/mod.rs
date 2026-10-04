@@ -53,6 +53,11 @@ pub struct ImageMeta {
     /// Where the photo was taken, from EXIF GPS. Never used by the solve; file entries report
     /// it in the outcome for the annotator (the moon's parallax, satellites)
     pub observer: Option<crate::Observer>,
+    /// Where the telescope pointed, ICRS degrees `[RA, Dec]`, from the header: XISF
+    /// `Observation:Center:RA`/`Dec`, then FITS keywords `RA`/`DEC` (degrees, or sexagesimal
+    /// text), `OBJCTRA`/`OBJCTDEC` (sexagesimal), a celestial `CRVAL1`/`CRVAL2`. A hint for the
+    /// narrow-field engine only, see [`Self::apply_pointing`].
+    pub pointing_deg: Option<[f64; 2]>,
 }
 
 impl ImageMeta {
@@ -72,6 +77,7 @@ impl ImageMeta {
             focal_35mm_mm: None,
             observation_unix_ms: None,
             observer: None,
+            pointing_deg: None,
         }
     }
 
@@ -111,6 +117,20 @@ impl ImageMeta {
     /// there, through [`Self::apply_time`]).
     pub fn apply_place(&self, out: &mut crate::SolveOutcome) {
         out.observer = out.observer.or(self.observer);
+    }
+
+    /// The header's pointing fills in when the caller gave none, searched with the default
+    /// radius (pool file entries call this; what the caller passes always wins).
+    pub fn apply_pointing(&self, opts: &mut crate::SolveOptions) {
+        if opts.pointing_hint.is_none() {
+            opts.pointing_hint = self
+                .pointing_deg
+                .map(|[ra_deg, dec_deg]| crate::PointingHint {
+                    ra_deg,
+                    dec_deg,
+                    radius_deg: None,
+                });
+        }
     }
 
     /// Horizontal FOV **hint** from the header (not ground truth). Needs both focal
@@ -179,6 +199,64 @@ pub(crate) fn header_time(
         .or_else(|| time::mid_exposure(date_obs.and_then(time::civil_ms), exposure_s))
 }
 
+/// Pointing from FITS keywords (`get` returns a value with its quotes trimmed): `RA`/`DEC`
+/// first, then `OBJCTRA`/`OBJCTDEC`, then `CRVAL1`/`CRVAL2` when `CTYPE1` is celestial.
+pub(crate) fn header_pointing(get: impl Fn(&str) -> Option<String>) -> Option<[f64; 2]> {
+    let pair = |ra: &str, dec: &str| Some([parse_ra(&get(ra)?)?, parse_dec(&get(dec)?)?]);
+    pair("RA", "DEC")
+        .or_else(|| pair("OBJCTRA", "OBJCTDEC"))
+        .or_else(|| {
+            get("CTYPE1").filter(|t| t.starts_with("RA"))?;
+            let ra = get("CRVAL1")?.trim().parse::<f64>().ok()?;
+            let dec = parse_dec(&get("CRVAL2")?)?;
+            ra.is_finite().then_some([ra.rem_euclid(360.0), dec])
+        })
+}
+
+/// A header angle: a plain number, or two or three sexagesimal fields separated by spaces or
+/// colons ("-05 23 28", "05:35:17.3"). Returns the value and whether it had fields.
+fn header_angle(v: &str) -> Option<(f64, bool)> {
+    let v = v.trim();
+    if let Ok(x) = v.parse::<f64>() {
+        return x.is_finite().then_some((x, false));
+    }
+    let parts: Vec<&str> = v.split([' ', ':']).filter(|p| !p.is_empty()).collect();
+    if !(2..=3).contains(&parts.len()) {
+        return None;
+    }
+    let negative = parts[0].starts_with('-');
+    let d = parts[0]
+        .trim_start_matches(['+', '-'])
+        .parse::<f64>()
+        .ok()?;
+    let m = parts[1].parse::<f64>().ok()?;
+    let s = match parts.get(2) {
+        Some(p) => p.parse::<f64>().ok()?,
+        None => 0.0,
+    };
+    if !(d.is_finite() && (0.0..60.0).contains(&m) && (0.0..60.0).contains(&s)) {
+        return None;
+    }
+    let x = d + m / 60.0 + s / 3600.0;
+    Some((if negative { -x } else { x }, true))
+}
+
+/// Right ascension as written: a number is degrees, sexagesimal fields are hours
+fn parse_ra(v: &str) -> Option<f64> {
+    let (x, fields) = header_angle(v)?;
+    let deg = if fields { x * 15.0 } else { x };
+    (0.0..=360.0)
+        .contains(&deg)
+        .then_some(deg.rem_euclid(360.0))
+}
+
+/// Declination in degrees, as a number or sexagesimal fields
+fn parse_dec(v: &str) -> Option<f64> {
+    header_angle(v)
+        .map(|(x, _)| x)
+        .filter(|d| (-90.0..=90.0).contains(d))
+}
+
 pub fn load_image(path: &str) -> Result<(Frame, ImageMeta)> {
     load_image_bytes(&std::fs::read(path)?)
 }
@@ -229,5 +307,34 @@ pub fn suggested_profile(meta: &ImageMeta) -> crate::ExtractionProfile {
         SourceFormat::Png | SourceFormat::Jpeg | SourceFormat::Tiff => {
             crate::ExtractionProfile::PhoneJpeg
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn header_pointing_fills_in_only_when_the_caller_gave_none() {
+        let mut meta = ImageMeta::bare(10, 10, SourceFormat::Fits, 16);
+        meta.pointing_deg = Some([10.0, 20.0]);
+        let mut o = crate::SolveOptions::new(1.0);
+        meta.apply_pointing(&mut o);
+        assert_eq!(
+            o.pointing_hint,
+            Some(crate::PointingHint {
+                ra_deg: 10.0,
+                dec_deg: 20.0,
+                radius_deg: None
+            })
+        );
+        let mine = crate::PointingHint {
+            ra_deg: 1.0,
+            dec_deg: 2.0,
+            radius_deg: Some(0.5),
+        };
+        o.pointing_hint = Some(mine);
+        meta.apply_pointing(&mut o);
+        assert_eq!(o.pointing_hint, Some(mine));
     }
 }

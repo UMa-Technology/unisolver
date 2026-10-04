@@ -205,6 +205,7 @@ fn build_meta(
         date_obs: get_s("DATE-OBS"),
         instrument: get_s("INSTRUME"),
         bayer_pattern: get_s("BAYERPAT"),
+        pointing_deg: super::header_pointing(get_s),
         ..ImageMeta::bare(
             width,
             height,
@@ -363,6 +364,70 @@ mod tests {
         assert_eq!(time(&["DATE-OBS= '2026-03-18'"]), None);
         assert_eq!(time(&["DATE-OBS= '18/03/26'"]), None);
         assert_eq!(time(&[]), None);
+    }
+
+    #[test]
+    fn pointing_from_header_keywords() {
+        let at = |cards: &[&str]| {
+            read_fits_bytes(&synth_fits(8, 2, 1, cards, vec![1, 2]))
+                .unwrap()
+                .1
+                .pointing_deg
+        };
+        let near = |p: Option<[f64; 2]>, ra: f64, dec: f64| {
+            let p = p.unwrap_or_else(|| panic!("no pointing, want {ra} {dec}"));
+            assert!(
+                (p[0] - ra).abs() < 1e-4 && (p[1] - dec).abs() < 1e-4,
+                "{p:?} vs {ra} {dec}"
+            );
+        };
+        // Degrees, as acquisition software writes the mount position
+        near(
+            at(&[
+                "RA      =     83.8220833333333",
+                "DEC     =    -5.39111111111111",
+            ]),
+            83.82208,
+            -5.39111,
+        );
+        // Sexagesimal target coordinates: RA in hours
+        near(
+            at(&["OBJCTRA = '05 35 17.300'", "OBJCTDEC= '-05 23 28.00'"]),
+            83.82208,
+            -5.39111,
+        );
+        // A negative declination keeps its sign on a zero degree field
+        near(
+            at(&["OBJCTRA = '00:30:00'", "OBJCTDEC= '-00:30:00'"]),
+            7.5,
+            -0.5,
+        );
+        // A plate solution's reference point, only on celestial axes
+        near(
+            at(&[
+                "CTYPE1  = 'RA---TAN'",
+                "CRVAL1  =               -10.0",
+                "CRVAL2  =                45.0",
+            ]),
+            350.0,
+            45.0,
+        );
+        assert!(at(&["CTYPE1  = 'GLON-TAN'", "CRVAL1  = 10.0", "CRVAL2  = 45.0"]).is_none());
+        // RA/DEC come first; nonsense is dropped
+        near(
+            at(&[
+                "RA      = 10.0",
+                "DEC     = 20.0",
+                "OBJCTRA = '05 35 17'",
+                "OBJCTDEC= '-05 23 28'",
+            ]),
+            10.0,
+            20.0,
+        );
+        assert!(at(&["RA      = 10.0", "DEC     = 95.0"]).is_none());
+        assert!(at(&["OBJCTRA = '25 00 00'", "OBJCTDEC= '10 00 00'"]).is_none());
+        assert!(at(&["OBJCTRA = '05 61 00'", "OBJCTDEC= '10 00 00'"]).is_none());
+        assert!(at(&[]).is_none());
     }
 
     #[test]

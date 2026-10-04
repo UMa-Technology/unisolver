@@ -337,8 +337,9 @@ impl SolverPool {
     }
 
     /// Fully automatic file entry: load any of the five formats → header hints + aspect ladder
-    /// → route. The header's observation time fills in when `base` has none; the outcome
-    /// carries it and the header's place (EXIF GPS) for the annotator.
+    /// → route. The header's observation time fills in when `base` has none, and so does its
+    /// pointing (FITS/XISF RA/Dec, a hint for the narrow-field engine); the outcome carries the
+    /// time and the header's place (EXIF GPS) for the annotator.
     #[cfg(feature = "imageio")]
     pub fn solve_image_file_auto(
         &self,
@@ -349,6 +350,7 @@ impl SolverPool {
         let hints = crate::presets_with_hints(&meta, frame.width, frame.height);
         let mut base = base.clone();
         meta.apply_time(&mut base);
+        meta.apply_pointing(&mut base);
         let mut r = self.solve_auto(&frame, &base, &hints)?;
         meta.apply_place(&mut r.outcome);
         Ok(r)

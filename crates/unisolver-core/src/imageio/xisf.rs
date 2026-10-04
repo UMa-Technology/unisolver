@@ -68,6 +68,7 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
     let mut reader = quick_xml::Reader::from_reader(xml);
     let mut attrs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut fits_kw: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut props: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut in_image = false;
     let mut buf = Vec::new();
     loop {
@@ -97,6 +98,21 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
                     }
                     if let (Some(k), Some(v)) = (kname, kval) {
                         fits_kw.insert(k, v);
+                    }
+                } else if in_image && name == b"Property" {
+                    let mut id = None;
+                    let mut value = None;
+                    for a in e.attributes().flatten() {
+                        match a.key.local_name().as_ref() {
+                            b"id" => id = Some(String::from_utf8_lossy(&a.value).into_owned()),
+                            b"value" => {
+                                value = Some(String::from_utf8_lossy(&a.value).into_owned())
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let (Some(k), Some(v)) = (id, value) {
+                        props.insert(k, v);
                     }
                 }
             }
@@ -327,6 +343,12 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
             .filter(|s| !s.is_empty())
     };
     let exposure_s = sane_f64(kwf("EXPTIME").or_else(|| kwf("EXPOSURE")), 1e-6, 86_400.0);
+    // XISF's own observation properties first (degrees), then the FITS keywords
+    let prop = |k: &str| props.get(k).and_then(|v| v.trim().parse::<f64>().ok());
+    let center = prop("Observation:Center:RA")
+        .zip(prop("Observation:Center:Dec"))
+        .filter(|&(ra, dec)| ra.is_finite() && (-90.0..=90.0).contains(&dec))
+        .map(|(ra, dec)| [ra.rem_euclid(360.0), dec]);
     let meta = ImageMeta {
         exposure_s,
         observation_unix_ms: super::header_time(
@@ -342,6 +364,7 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
         date_obs: kws("DATE-OBS"),
         instrument: kws("INSTRUME"),
         bayer_pattern: kws("BAYERPAT"),
+        pointing_deg: center.or_else(|| super::header_pointing(kws)),
         ..ImageMeta::bare(w as u32, h as u32, SourceFormat::Xisf, (item * 8) as u8)
     };
     Ok((
@@ -577,6 +600,20 @@ mod tests {
             meta.exposure_s.is_none(),
             "negative exposure must be dropped"
         );
+    }
+
+    #[test]
+    fn pointing_from_properties_then_keywords() {
+        let payload = vec![0u8; 4];
+        let kw = r#"<FITSKeyword name="OBJCTRA" value="'01 00 00'"/><FITSKeyword name="OBJCTDEC" value="'+10 00 00'"/>"#;
+        let props = format!(
+            r#"<Property id="Observation:Center:RA" type="Float64" value="83.822"/><Property id="Observation:Center:Dec" type="Float64" value="-5.391"/>{kw}"#
+        );
+        let (_, meta) =
+            read_xisf_bytes(&synth_xisf("UInt8", None, 2, 2, 1, &props, &payload)).unwrap();
+        assert_eq!(meta.pointing_deg, Some([83.822, -5.391]));
+        let (_, meta) = read_xisf_bytes(&synth_xisf("UInt8", None, 2, 2, 1, kw, &payload)).unwrap();
+        assert_eq!(meta.pointing_deg, Some([15.0, 10.0]));
     }
 
     #[test]

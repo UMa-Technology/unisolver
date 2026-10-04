@@ -1,4 +1,4 @@
-//! Monolithic XISF 1.0 reader: Gray (1 ch) / RGB (3 ch), planar storage,
+//! Monolithic XISF 1.0 reader: Gray (1 ch) / RGB (3 ch), planar or normal (interleaved) storage,
 //! UInt8/16/32 and Float32/64 (32/64-bit reduced to f32), zlib / lz4 / lz4hc / zstd
 //! (including +sh byte shuffling). Anything else is a clear Err. FITSKeyword
 //! metadata passes through sanitized (bad values dropped).
@@ -57,9 +57,8 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
         return Err(err("not an XISF 1.0 file"));
     }
     let header_len = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
-    if bytes[12..16] != [0; 4] {
-        return Err(err("XISF reserved preamble field is not zero"));
-    }
+    // Bytes 12..16 are reserved and should be zero, but the field is not checked: INDIGO 2.0
+    // leaves it as four spaces, and nothing in it is needed to read the file.
     if header_len == 0 || 16 + header_len > bytes.len() {
         return Err(err("XISF XML header length out of range"));
     }
@@ -137,15 +136,21 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
             "XISF {channels}-channel {color_space} unsupported (Gray/1 or RGB/3)"
         )));
     }
-    let storage = attrs
+    // Planar stores one channel after another; Normal interleaves them per pixel (INDIGO 2.0
+    // writes RGB that way). For one channel the two are the same bytes.
+    let interleaved = match attrs
         .get("pixelStorage")
         .map(String::as_str)
-        .unwrap_or("Planar");
-    if storage != "Planar" {
-        return Err(err(format!(
-            "XISF pixelStorage {storage:?} unsupported (Planar only, matching seiza)"
-        )));
-    }
+        .unwrap_or("Planar")
+    {
+        "Planar" => false,
+        "Normal" => true,
+        other => {
+            return Err(err(format!(
+                "XISF pixelStorage {other:?} unsupported (Planar or Normal)"
+            )))
+        }
+    };
     let big_endian = match attrs.get("byteOrder").map(String::as_str) {
         None | Some("little") => false,
         Some("big") => true,
@@ -299,15 +304,17 @@ pub fn read_xisf_bytes(bytes: &[u8]) -> Result<(Frame, ImageMeta)> {
             _ => PixelData::LumaF32((0..n).map(|i| read_sample(i) as f32).collect()),
         }
     } else {
-        // Planar RGB → luminance
+        // RGB → luminance; channel c of pixel i sits at c·n + i (Planar) or 3·i + c (Normal)
+        let at = |i: usize, c: usize| {
+            if interleaved {
+                read_sample(3 * i + c)
+            } else {
+                read_sample(c * n + i)
+            }
+        };
         PixelData::LumaF32(
             (0..n)
-                .map(|i| {
-                    let r = read_sample(i);
-                    let g = read_sample(n + i);
-                    let b = read_sample(2 * n + i);
-                    (0.2126 * r + 0.7152 * g + 0.0722 * b) as f32
-                })
+                .map(|i| (0.2126 * at(i, 0) + 0.7152 * at(i, 1) + 0.0722 * at(i, 2)) as f32)
                 .collect(),
         )
     };
@@ -361,13 +368,39 @@ mod tests {
         extra: &str,
         payload: &[u8],
     ) -> Vec<u8> {
+        synth_xisf_storage(
+            sample_format,
+            compression,
+            w,
+            h,
+            channels,
+            None,
+            extra,
+            payload,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn synth_xisf_storage(
+        sample_format: &str,
+        compression: Option<&str>,
+        w: usize,
+        h: usize,
+        channels: usize,
+        storage: Option<&str>,
+        extra: &str,
+        payload: &[u8],
+    ) -> Vec<u8> {
         let color = if channels == 3 { "RGB" } else { "Gray" };
         let attachment_at = 4096usize;
         let xml = format!(
-            r#"<?xml version="1.0"?><xisf version="1.0"><Image geometry="{w}:{h}:{channels}" sampleFormat="{sample_format}" colorSpace="{color}" location="attachment:{attachment_at}:{}"{}>{extra}</Image></xisf>"#,
+            r#"<?xml version="1.0"?><xisf version="1.0"><Image geometry="{w}:{h}:{channels}" sampleFormat="{sample_format}" colorSpace="{color}" location="attachment:{attachment_at}:{}"{}{}>{extra}</Image></xisf>"#,
             payload.len(),
             compression
                 .map(|c| format!(r#" compression="{c}""#))
+                .unwrap_or_default(),
+            storage
+                .map(|s| format!(r#" pixelStorage="{s}""#))
                 .unwrap_or_default(),
         );
         let mut out = Vec::new();
@@ -378,6 +411,22 @@ mod tests {
         out.resize(attachment_at, 0);
         out.extend(payload);
         out
+    }
+
+    /// INDIGO 2.0 writes spaces where the reserved preamble field should be zero
+    #[test]
+    fn nonzero_reserved_preamble_is_accepted() {
+        let payload: Vec<u8> = [100u16, 200, 300, 400]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        let mut f = synth_xisf("UInt16", None, 2, 2, 1, "", &payload);
+        f[12..16].copy_from_slice(b"    ");
+        let (frame, _) = read_xisf_bytes(&f).unwrap();
+        assert_eq!(
+            frame.to_luma_f32().unwrap(),
+            vec![100.0, 200.0, 300.0, 400.0]
+        );
     }
 
     #[test]
@@ -482,6 +531,39 @@ mod tests {
         for v in frame.to_luma_f32().unwrap() {
             assert!((v - expect as f32).abs() < 1e-5);
         }
+    }
+
+    /// INDIGO 2.0 writes RGB with pixelStorage="Normal": R, G, B per pixel
+    #[test]
+    fn u16_rgb_normal_storage_is_deinterleaved() {
+        // Two pixels: (100, 200, 400) and (1000, 2000, 4000)
+        let interleaved: Vec<u8> = [100u16, 200, 400, 1000, 2000, 4000]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        let f = synth_xisf_storage("UInt16", None, 2, 1, 3, Some("Normal"), "", &interleaved);
+        let (frame, _) = read_xisf_bytes(&f).unwrap();
+        let luma = |r: f64, g: f64, b: f64| (0.2126 * r + 0.7152 * g + 0.0722 * b) as f32;
+        let got = frame.to_luma_f32().unwrap();
+        assert!((got[0] - luma(100.0, 200.0, 400.0)).abs() < 1e-3, "{got:?}");
+        assert!(
+            (got[1] - luma(1000.0, 2000.0, 4000.0)).abs() < 1e-3,
+            "{got:?}"
+        );
+
+        // A one-channel Normal image is laid out as Planar
+        let gray: Vec<u8> = [7u16, 8].iter().flat_map(|v| v.to_le_bytes()).collect();
+        let f = synth_xisf_storage("UInt16", None, 2, 1, 1, Some("Normal"), "", &gray);
+        assert_eq!(
+            read_xisf_bytes(&f).unwrap().0.to_luma_f32().unwrap(),
+            vec![7.0, 8.0]
+        );
+
+        let f = synth_xisf_storage("UInt16", None, 2, 1, 1, Some("Tiled"), "", &gray);
+        assert!(read_xisf_bytes(&f)
+            .unwrap_err()
+            .to_string()
+            .contains("unsupported"));
     }
 
     #[test]

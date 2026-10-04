@@ -4,6 +4,11 @@
 
 1. **The plugin accepts Dart 3.12.2 and Flutter 3.44.4 or later.** It used to require Dart 3.13,
    so apps on an earlier Flutter release could not add it.
+2. **XISF files written by INDIGO open.** INDIGO 2.0 fills the reserved field of the XISF
+   preamble with spaces instead of zeros, and the reader rejected every such file ("XISF
+   reserved preamble field is not zero"); the field is no longer checked. Its colour frames
+   use `pixelStorage="Normal"` (channels interleaved per pixel), which the reader now
+   accepts alongside `Planar`.
 
 ## 2026-09-29 — v0.4.3
 

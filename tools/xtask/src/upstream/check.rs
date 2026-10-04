@@ -2,7 +2,7 @@
 use super::fetch::{ensure_cache, materialize};
 use super::queue::apply_series;
 use super::tree::{self, Change};
-use super::{read_series, Ctx, VENDORED_KEEP};
+use super::{read_series, Ctx};
 use anyhow::Result;
 
 #[derive(Debug, Default)]
@@ -48,7 +48,7 @@ pub fn check_local(ctx: &Ctx) -> Result<LocalReport> {
     let _ = std::fs::remove_dir_all(&expected);
     std::fs::create_dir_all(&expected)?;
     materialize(&git, "HEAD", &ctx.lock.include, &expected)?;
-    report.changes = tree::compare(&expected, &ctx.vendored(), &[VENDORED_KEEP])?;
+    report.changes = tree::compare(&expected, &ctx.vendored(), ctx.spec.keep)?;
     Ok(report)
 }
 

@@ -36,14 +36,14 @@ impl Lock {
 
     /// The file as `write` stores it: fixed field order and comments, so a sync changes only
     /// the `tag` and `commit` lines.
-    pub fn render(&self) -> String {
+    pub fn render(&self, name: &str) -> String {
         let include: Vec<String> = self.include.iter().map(|p| format!("{p:?}")).collect();
         format!(
-            "# Pinned upstream for third_party/tetra3, managed by `cargo xtask upstream` (docs/upstream.md)\n\
+            "# Pinned upstream for third_party/{name}, managed by `cargo xtask upstream` (docs/upstream.md)\n\
              repo    = {:?}\n\
              tag     = {:?}\n\
              commit  = {:?}\n\
-             # Upstream paths copied into the vendored tree (python/, docs/, examples/ ... are not vendored)\n\
+             # Upstream paths copied into the vendored tree\n\
              include = [{}]\n",
             self.repo,
             self.tag,
@@ -52,8 +52,9 @@ impl Lock {
         )
     }
 
-    pub fn write(&self, path: &Path) -> Result<()> {
-        std::fs::write(path, self.render()).with_context(|| format!("writing {}", path.display()))
+    pub fn write(&self, name: &str, path: &Path) -> Result<()> {
+        std::fs::write(path, self.render(name))
+            .with_context(|| format!("writing {}", path.display()))
     }
 }
 
@@ -73,7 +74,7 @@ include = ["Cargo.toml", "src"]
         let lock = Lock::parse(SAMPLE).unwrap();
         assert_eq!(lock.tag, "v0.13.0");
         assert_eq!(lock.include, ["Cargo.toml", "src"]);
-        assert_eq!(Lock::parse(&lock.render()).unwrap(), lock);
+        assert_eq!(Lock::parse(&lock.render("tetra3")).unwrap(), lock);
     }
 
     #[test]

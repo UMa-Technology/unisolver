@@ -62,7 +62,7 @@ pub struct Fixture {
 impl Fixture {
     /// A fresh context: re-reads the lock, which `sync` rewrites.
     pub fn ctx(&self) -> Ctx {
-        Ctx::load(&self.root, None).unwrap()
+        Ctx::load(&self.root, xtask::upstream::spec("tetra3").unwrap(), None).unwrap()
     }
 
     pub fn vendored(&self) -> PathBuf {
@@ -102,7 +102,7 @@ pub fn fixture() -> Fixture {
         commit: git(&up, &["rev-parse", "v0.1.0^{commit}"]),
         include: INCLUDE.iter().map(|s| s.to_string()).collect(),
     };
-    write(&root, "third_party/tetra3.lock", &lock.render());
+    write(&root, "third_party/tetra3.lock", &lock.render("tetra3"));
     write(&root, "third_party/tetra3-patches/series", "");
     write(&root, "third_party/tetra3/Cargo.toml", CARGO);
     write(&root, "third_party/tetra3/LICENSE", LICENSE);

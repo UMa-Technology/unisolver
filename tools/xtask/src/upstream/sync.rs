@@ -99,7 +99,7 @@ fn finish(ctx: &Ctx, state: &State) -> Result<SyncOutcome> {
     next.lock.tag = state.to_tag.clone();
     next.lock.commit = state.to_commit.clone();
     export(&next)?;
-    next.lock.write(&ctx.lock_path())?;
+    next.lock.write(ctx.spec.name, &ctx.lock_path())?;
     let text = work
         .run(&["show", &format!("{}:CHANGELOG.md", state.to_commit)])
         .unwrap_or_default();

@@ -21,8 +21,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// The vendored tetra3rs copy and its patch queue (docs/upstream.md)
+    /// Vendored upstreams and their patch queues (docs/upstream.md)
     Upstream {
+        /// Upstream to act on (tetra3, seiza); `check` without it checks every upstream
+        #[arg(long)]
+        name: Option<String>,
         #[command(subcommand)]
         cmd: UpstreamCmd,
     },
@@ -52,8 +55,9 @@ enum ReleaseCmd {
 
 #[derive(Subcommand)]
 enum UpstreamCmd {
-    /// Verify third_party/tetra3 = locked tag + patches, then look for newer upstream releases.
-    /// Exit 0 in sync, 1 local drift, 2 behind upstream, 3 could not verify
+    /// Verify third_party/<name> = locked tag + patches, then look for newer upstream releases.
+    /// Exit 0 in sync, 1 local drift, 2 behind upstream, 3 could not verify (the worst of all
+    /// upstreams when `--name` is not given)
     Check,
     /// Rebuild branch `unisolver` in target/upstream/work: the locked tag plus one commit per patch
     Edit {
@@ -61,7 +65,7 @@ enum UpstreamCmd {
         #[arg(long)]
         force: bool,
     },
-    /// Write branch `unisolver` back to third_party/tetra3 and the patch files
+    /// Write branch `unisolver` back to third_party/<name> and the patch files
     Export,
     /// Rebase the queue onto another upstream tag, export it and update the lock
     Sync {
@@ -86,28 +90,58 @@ fn main() -> ExitCode {
         .nth(2)
         .expect("tools/xtask sits two levels below the repository root");
     match Cli::parse().cmd {
-        Cmd::Upstream { cmd } => upstream_main(root, cmd),
+        Cmd::Upstream { name, cmd } => upstream_main(root, name, cmd),
         Cmd::Release { cmd } => release_main(root, cmd),
     }
 }
 
-fn upstream_main(root: &Path, cmd: UpstreamCmd) -> ExitCode {
-    let ctx = match Ctx::load(root, std::env::var(upstream::REPO_ENV).ok()) {
+fn upstream_main(root: &Path, name: Option<String>, cmd: UpstreamCmd) -> ExitCode {
+    let specs: Vec<&'static upstream::Spec> = match &name {
+        Some(n) => match upstream::spec(n) {
+            Ok(s) => vec![s],
+            Err(e) => return fail(e),
+        },
+        None => upstream::UPSTREAMS.iter().collect(),
+    };
+    if !matches!(cmd, UpstreamCmd::Check) && specs.len() != 1 {
+        return fail(anyhow::anyhow!(
+            "name the upstream: `cargo xtask upstream --name <tetra3|seiza> ...`"
+        ));
+    }
+    let load = |s: &'static upstream::Spec| Ctx::load(root, s, std::env::var(s.repo_env).ok());
+    if matches!(cmd, UpstreamCmd::Check) {
+        let mut code = 0;
+        for (i, s) in specs.into_iter().enumerate() {
+            if i > 0 {
+                println!();
+            }
+            match load(s) {
+                Ok(ctx) => code = code.max(check(&ctx)),
+                Err(e) => {
+                    eprintln!("error: {}: {e:#}", s.name);
+                    code = code.max(3);
+                }
+            }
+        }
+        return ExitCode::from(code);
+    }
+    let ctx = match load(specs[0]) {
         Ok(ctx) => ctx,
         Err(e) => return fail(e),
     };
+    let n = ctx.spec.name;
     let result = match cmd {
-        UpstreamCmd::Check => return ExitCode::from(check(&ctx)),
+        UpstreamCmd::Check => unreachable!("handled above"),
         UpstreamCmd::Edit { force } => upstream::edit(&ctx, force).map(|work| {
             println!("branch {} in {}: the locked tag + one commit per patch", upstream::BRANCH, work.display());
             println!("amend or add commits there (a commit's subject becomes its patch file name),");
-            println!("then run `cargo xtask upstream export`");
+            println!("then run `cargo xtask upstream --name {n} export`");
         }),
-        UpstreamCmd::Export => upstream::export(&ctx).map(|n| {
-            println!("exported {n} patch(es) and third_party/tetra3; review with `git status` and `git diff`");
+        UpstreamCmd::Export => upstream::export(&ctx).map(|count| {
+            println!("exported {count} patch(es) and third_party/{n}; review with `git status` and `git diff`");
         }),
         UpstreamCmd::Sync { abort: true, .. } => upstream::sync_abort(&ctx).map(|()| {
-            println!("sync abandoned: the lock, the queue and third_party/tetra3 are unchanged");
+            println!("sync abandoned: the lock, the queue and third_party/{n} are unchanged");
         }),
         UpstreamCmd::Sync { tag, cont, no_test, .. } => {
             let outcome = if cont {
@@ -216,8 +250,9 @@ fn fail(e: anyhow::Error) -> ExitCode {
 
 fn check(ctx: &Ctx) -> u8 {
     let patches = upstream::read_series(ctx).map(|s| s.len()).unwrap_or(0);
+    let n = ctx.spec.name;
     println!(
-        "== local: third_party/tetra3 = {} + {patches} patch(es)",
+        "== {n} local: third_party/{n} = {} + {patches} patch(es)",
         ctx.lock.tag
     );
     let mut code = 0;
@@ -231,7 +266,7 @@ fn check(ctx: &Ctx) -> u8 {
             for c in &r.changes {
                 print_change(ctx, c);
             }
-            println!("third_party/tetra3 is generated: change it with `cargo xtask upstream edit`, then `export` (docs/upstream.md)");
+            println!("third_party/{n} is generated: change it with `cargo xtask upstream --name {n} edit`, then `export` (docs/upstream.md)");
         }
         Err(e) => {
             println!("ERROR: cannot verify: {e:#}");
@@ -239,7 +274,7 @@ fn check(ctx: &Ctx) -> u8 {
         }
     }
     println!();
-    println!("== upstream: {}", ctx.repo_url);
+    println!("== {n} upstream: {}", ctx.repo_url);
     match upstream::check_remote(ctx) {
         Err(e) => println!("SKIP: {e:#} (the local check above still holds)"),
         Ok(r) => {
@@ -311,20 +346,24 @@ fn report_sync(ctx: &Ctx, outcome: SyncOutcome, no_test: bool) -> u8 {
             1
         }
         SyncOutcome::Synced { from, to, entries } => {
-            println!("synced {from} -> {to}: third_party/tetra3, the patches and the lock are updated (not committed)");
+            let n = ctx.spec.name;
+            println!("synced {from} -> {to}: third_party/{n}, the patches and the lock are updated (not committed)");
             if !no_test {
-                let runs: [&[&str]; 2] = [
-                    &["test", "-p", "tetra3", "--release"],
-                    &[
-                        "test",
-                        "--workspace",
-                        "--release",
-                        "--features",
-                        "imageio satellites",
-                    ],
-                ];
+                let mut runs: Vec<Vec<&str>> = ctx
+                    .spec
+                    .test_packages
+                    .iter()
+                    .map(|p| vec!["test", "-p", p, "--release"])
+                    .collect();
+                runs.push(vec![
+                    "test",
+                    "--workspace",
+                    "--release",
+                    "--features",
+                    "imageio satellites",
+                ]);
                 for args in runs {
-                    if !cargo(&ctx.root, args) {
+                    if !cargo(&ctx.root, &args) {
                         println!("FAILED: cargo {}", args.join(" "));
                         return 1;
                     }
@@ -335,10 +374,10 @@ fn report_sync(ctx: &Ctx, outcome: SyncOutcome, no_test: bool) -> u8 {
             print_entries(&entries);
             println!();
             println!("before committing:");
-            println!("  1. review `git diff` of third_party/tetra3, third_party/tetra3-patches and third_party/tetra3.lock");
-            println!("  2. for !! entries: do the PatternEntry layout guards in storage.rs still hold, and must the database tiers be regenerated?");
-            println!("  3. add the sync to \"Sync history\" in third_party/tetra3-patches/README.md, and a CHANGELOG entry");
-            println!("  4. commit as `chore(tetra3): sync to {to}`");
+            println!("  1. review `git diff` of third_party/{n}, third_party/{n}-patches and third_party/{n}.lock");
+            println!("  2. for !! entries: {}", ctx.spec.review_hint);
+            println!("  3. add the sync to \"Sync history\" in third_party/{n}-patches/README.md, and a CHANGELOG entry");
+            println!("  4. commit as `chore({n}): sync to {to}`");
             0
         }
     }

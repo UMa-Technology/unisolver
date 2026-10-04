@@ -40,7 +40,7 @@ fn the_latest_release_is_up_to_date() {
         commit: git(&f.upstream, &["rev-parse", "v0.2.0"]),
         ..f.ctx().lock
     };
-    lock.write(&f.ctx().lock_path()).unwrap();
+    lock.write("tetra3", &f.ctx().lock_path()).unwrap();
     let report = check_remote(&f.ctx()).unwrap();
     assert!(report.newer.is_empty());
     assert!(!report.is_behind(), "{report:?}");

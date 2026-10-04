@@ -1,7 +1,7 @@
-//! The two clones under `target/upstream/`: `cache` is fetched from upstream and reset freely
+//! The two clones under `target/upstream/<name>/`: `cache` is fetched from upstream and reset freely
 //! by `check`; `work` is cloned from `cache` and holds the `unisolver` branch a maintainer edits.
 use super::git::{path_str, Git};
-use super::{Ctx, REPO_ENV};
+use super::Ctx;
 use anyhow::{bail, ensure, Context, Result};
 use std::path::Path;
 use std::time::Duration;
@@ -62,8 +62,8 @@ pub fn fetch_tags(ctx: &Ctx, cache: &Git) -> Result<()> {
 
 fn unreachable(ctx: &Ctx) -> String {
     format!(
-        "cannot fetch upstream from {} (set {REPO_ENV} to a mirror)",
-        ctx.repo_url
+        "cannot fetch upstream from {} (set {} to a mirror)",
+        ctx.repo_url, ctx.spec.repo_env
     )
 }
 

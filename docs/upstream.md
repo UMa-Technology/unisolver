@@ -1,65 +1,75 @@
-# Upstream: the vendored tetra3rs
+# Upstreams: vendored crates as patch queues
 
-`third_party/tetra3` is a generated tree: upstream [tetra3rs](https://github.com/ssmichael1/tetra3rs)
-at the commit pinned in `third_party/tetra3.lock`, filtered to the lock's `include` paths, with
-the patches in `third_party/tetra3-patches/` applied in `series` order. The only other entry is
-`data/`, upstream's test-data cache (its `gaia_merged.bin` is also the star catalog the bundled
-tier is built from). What each patch changes and why:
-[third_party/tetra3-patches/README.md](../third_party/tetra3-patches/README.md).
+Two upstream projects are vendored as generated trees, each managed by `cargo xtask upstream`:
+
+| Name | Upstream | Vendored tree | Patches |
+|---|---|---|---|
+| `tetra3` | [tetra3rs](https://github.com/ssmichael1/tetra3rs) | `third_party/tetra3` | [third_party/tetra3-patches/README.md](../third_party/tetra3-patches/README.md) |
+| `seiza` | [seiza](https://github.com/theatrus/seiza) | `third_party/seiza` | [third_party/seiza-patches/README.md](../third_party/seiza-patches/README.md) |
+
+`third_party/<name>` is upstream at the commit pinned in `third_party/<name>.lock`, filtered to the
+lock's `include` paths, with the patches in `third_party/<name>-patches/` applied in `series` order.
+The only other entry is tetra3's `data/`, upstream's test-data cache (its `gaia_merged.bin` is also
+the star catalog the bundled tier is built from). What each patch changes and why is in the queue's
+README.
 
 ## Files
 
 | Path | Contents |
 |---|---|
-| `third_party/tetra3.lock` | `repo`, `tag`, `commit` (the tag's commit, full SHA), `include` |
-| `third_party/tetra3-patches/series` | patch file names, in order |
-| `third_party/tetra3-patches/*.patch` | `git format-patch` output, one commit each |
-| `target/upstream/cache` | clone of upstream that `check` resets freely (not tracked) |
-| `target/upstream/work` | clone where the queue is edited, branch `unisolver` (not tracked) |
+| `third_party/<name>.lock` | `repo`, `tag`, `commit` (the tag's commit, full SHA; annotated tags peeled), `include` |
+| `third_party/<name>-patches/series` | patch file names, in order |
+| `third_party/<name>-patches/*.patch` | `git format-patch` output, one commit each |
+| `target/upstream/<name>/cache` | clone of upstream that `check` resets freely (not tracked) |
+| `target/upstream/<name>/work` | clone where the queue is edited, branch `unisolver` (not tracked) |
 
-Set `UNISOLVER_TETRA3_REPO` to fetch upstream from a mirror instead of the lock's `repo`. Only
-the first run needs the network; after that `check` works offline from `target/upstream/cache`.
+Set `UNISOLVER_TETRA3_REPO` or `UNISOLVER_SEIZA_REPO` to fetch from a mirror instead of the lock's
+`repo`. Only the first run needs the network; after that `check` works offline from the cache clone.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `cargo xtask upstream check` | Rebuilds the vendored tree from the lock and the queue and compares it byte for byte (`data/` excluded), then lists upstream releases newer than the lock, flagging changelog entries that reach the patch surface (`!!`) or change config (` !`). Exit 0 in sync, 1 local drift, 2 behind upstream, 3 could not verify |
-| `cargo xtask upstream edit [--force]` | Rebuilds branch `unisolver` in `target/upstream/work`: the locked commit plus one commit per patch. Refuses to drop unexported commits or uncommitted changes unless `--force` |
-| `cargo xtask upstream export` | Writes branch `unisolver` back: its tree (filtered) replaces `third_party/tetra3` except `data/`, its commits become the patch files and `series` |
-| `cargo xtask upstream sync <tag>` | Rebuilds the branch, rebases it onto `<tag>`, exports, updates the lock, runs `cargo test -p tetra3` and the workspace tests (`--no-test` skips them), and prints the upstream changelog with flags plus a checklist. Stops on a rebase conflict: resolve it in the work clone, `git rebase --continue`, then `sync --continue` (or `sync --abort`) |
+| `cargo xtask upstream check` | For every upstream (or only `--name <name>`): rebuilds the vendored tree from the lock and the queue and compares it byte for byte (tetra3's `data/` excluded), then lists upstream releases newer than the lock, flagging changelog entries that reach the patch surface (`!!`) or change config (` !`). Exit 0 in sync, 1 local drift, 2 behind upstream, 3 could not verify; without `--name` the worst of all upstreams |
+| `cargo xtask upstream --name <name> edit [--force]` | Rebuilds branch `unisolver` in `target/upstream/<name>/work`: the locked commit plus one commit per patch. Refuses to drop unexported commits or uncommitted changes unless `--force` |
+| `cargo xtask upstream --name <name> export` | Writes branch `unisolver` back: its tree (filtered) replaces `third_party/<name>` (except tetra3's `data/`), its commits become the patch files and `series` |
+| `cargo xtask upstream --name <name> sync <tag>` | Rebuilds the branch, rebases it onto `<tag>`, exports, updates the lock, runs the upstream's own tests and the workspace tests (`--no-test` skips them), and prints the upstream changelog with flags plus a checklist. Stops on a rebase conflict: resolve it in the work clone, `git rebase --continue`, then `sync --continue` (or `sync --abort`) |
 
 ## Changing a patch
 
 ```bash
-cargo xtask upstream edit
-cd target/upstream/work
+cargo xtask upstream --name <name> edit
+cd target/upstream/<name>/work
 git rebase -i <locked tag>     # to change an existing patch: mark it `edit`, amend, continue
 git commit                     # to add a patch: commit on top; the subject becomes its file name
 cd -
-cargo xtask upstream export
+cargo xtask upstream --name <name> export
 cargo xtask upstream check
 ```
 
 Patches may change only paths in `include`; `export` refuses anything else. Exported patches carry
 a fixed author, `unisolver <patches@unisolver.invalid>`, so no maintainer address is published.
-Describe a new patch in `third_party/tetra3-patches/README.md`.
+Describe a new patch in the queue's README.
+
+seiza's work clone is upstream's whole workspace, which no longer loads once patch 0001 drops the
+`downloads` feature its CLI uses: build and test seiza patches from this repository instead
+(commit or `--amend` in the work clone, `export`, then `cargo test -p seiza --release`).
 
 ## Syncing to a new upstream release
 
 ```bash
-cargo xtask upstream sync v0.14.0
+cargo xtask upstream --name tetra3 sync v0.14.0
 ```
 
-A sync is a reviewed change, never automatic: patch 0003 replaces the pattern-table container, so
-an upstream release can change solver behavior or the database format. Before committing, go
-through the checklist the command prints: entries marked `!!` (does `storage.rs`'s compile-time
-`PatternEntry` layout guard still hold, must the database tiers be regenerated?), the
+A sync is a reviewed change, never automatic. tetra3's patch 0003 replaces the pattern-table
+container, so a release can change solver behavior or the database format; a seiza release can
+change the blind index schema or the star tile format, which the narrow-field package is built
+from. Before committing, go through the checklist the command prints: the `!!` entries, the
 "Sync history" line in the queue's README, and a CHANGELOG entry. Commit as
-`chore(tetra3): sync to v0.14.0`.
+`chore(<name>): sync to <tag>`.
 
 ## Rules
 
-- Never edit `third_party/tetra3` by hand. `check` runs in `scripts/ci/ci-local.sh` and CI and
+- Never edit `third_party/<name>` by hand. `check` runs in `scripts/ci/ci-local.sh` and CI and
   fails on any byte the queue does not produce.
 - A newer upstream release is reported (exit 2) but never applied without a `sync`.

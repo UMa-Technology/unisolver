@@ -2,7 +2,7 @@
 //! turns that branch back into the vendored tree and the patch files.
 use super::fetch::{ensure_work, is_repo, materialize};
 use super::git::{path_str, Git, IDENTITY_EMAIL, IDENTITY_NAME};
-use super::{read_series, Ctx, VENDORED_KEEP};
+use super::{read_series, Ctx};
 use anyhow::{bail, ensure, Result};
 use std::path::{Path, PathBuf};
 
@@ -77,7 +77,7 @@ pub fn export(ctx: &Ctx) -> Result<usize> {
     std::fs::create_dir_all(&vendored)?;
     for entry in std::fs::read_dir(&vendored)? {
         let entry = entry?;
-        if entry.file_name() == VENDORED_KEEP {
+        if ctx.spec.keep.iter().any(|k| entry.file_name() == *k) {
             continue;
         }
         if entry.file_type()?.is_dir() {

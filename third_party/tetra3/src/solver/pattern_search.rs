@@ -14,8 +14,8 @@
 
 use super::clock::Instant;
 
+use log::debug;
 use numeris::Matrix3;
-use tracing::debug;
 
 use crate::Centroid;
 
@@ -391,10 +391,9 @@ impl<'a> PatternSearch<'a> {
                 // corrupt/over-full table (which would otherwise loop forever).
                 for c in 0u64..table_len {
                     let tidx = ((hidx.wrapping_add(c.wrapping_mul(c))) % table_len) as usize;
-                    let entry = self.db.pattern_catalog.get(tidx);
-                    if entry.is_empty() {
+                    let Some(entry) = self.db.pattern_catalog.get(tidx) else {
                         break; // end of chain
-                    }
+                    };
                     if entry.key_hash != key_hash16 {
                         continue;
                     }
@@ -415,10 +414,10 @@ impl<'a> PatternSearch<'a> {
 
                     // Full edge-ratio comparison
                     let cat_pat = entry.star_indices;
-                    // Bounds guard against corrupt entries: mmap'd (UNISOLV2)
-                    // databases skip validate()'s whole-table sweep to stay
-                    // demand-paged, so the check lives here. Four u32 compares
-                    // per candidate — noise next to the SVD that follows.
+                    // Bounds guard for memory-mapped tables, which skip
+                    // validate()'s whole-table sweep to stay demand-paged
+                    // (`open_mapped`). Four u32 compares per candidate — noise
+                    // next to the SVD that follows.
                     if cat_pat
                         .iter()
                         .any(|&i| i as usize >= star_vectors.base().len())

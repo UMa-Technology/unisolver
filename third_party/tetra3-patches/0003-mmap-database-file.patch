@@ -1,0 +1,256 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: unisolver <patches@unisolver.invalid>
+Date: Sun, 4 Oct 2026 16:43:23 +0800
+Subject: [PATCH] mmap database file
+
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 6aa6ed16185ec017e3d2707872920968d70355ce..c635bd979474bafc7a270c1f703bd89ddbcf8310 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -28,6 +28,7 @@ log = "0.4"
+ numeris = { version = "0.6", features = ["std", "serde", "optim"] }
+ image = { version = "0.25", optional = true, default-features = false }
+ rayon = { version = "1", optional = true }
++memmap2 = "0.9"
+ 
+ # Browser wasm (wasm32-unknown-unknown) has no monotonic clock in `std`;
+ # web-time provides a drop-in `Instant` backed by `performance.now()`. Only
+diff --git a/src/solver/database.rs b/src/solver/database.rs
+index 9c6f89453eed1580f6b1e6ed4460e71f80f5630e..90d52ffb4211b767cf11c995af69a9126ee4914a 100644
+--- a/src/solver/database.rs
++++ b/src/solver/database.rs
+@@ -504,19 +504,32 @@ struct SolverDatabaseV2<'a> {
+ #[derive(Deserialize)]
+ struct PatternCatalogV2<'a>(u64, &'a [u8], &'a [u8]);
+ 
++/// What a decoded format-2 table may keep as its packed section's storage: the
++/// buffer the input was borrowed from, or the mapped file.
++#[derive(Clone, Copy)]
++enum Owner<'a> {
++    Shared(&'a Arc<Vec<u8>>),
++    Mapped(&'a Arc<memmap2::Mmap>),
++}
++
+ impl SolverDatabaseV2<'_> {
+-    /// `owner`: the buffer the input was borrowed from, to share as the
+-    /// packed section's storage; `None` copies the section.
+-    fn into_db(self, owner: Option<&Arc<Vec<u8>>>) -> crate::Result<SolverDatabase> {
++    /// `owner`: the buffer or mapping the input was borrowed from, to share as
++    /// the packed section's storage; `None` copies the section.
++    fn into_db(self, owner: Option<Owner<'_>>) -> crate::Result<SolverDatabase> {
+         let PatternCatalogV2(n_slots, bitmap, packed) = self.pattern_catalog;
++        // `packed` is a subslice of the owner (both come from the same
++        // decode), so the offsets are in range.
+         let store = || match owner {
+-            Some(buf) => PackedStore::Shared {
++            Some(Owner::Shared(buf)) => PackedStore::Shared {
+                 buf: Arc::clone(buf),
+-                // `packed` is a subslice of `buf` (both come from the same
+-                // decode), so the offset is in range.
+                 start: packed.as_ptr() as usize - buf.as_ptr() as usize,
+                 len: packed.len(),
+             },
++            Some(Owner::Mapped(map)) => PackedStore::Mapped {
++                map: Arc::clone(map),
++                start: packed.as_ptr() as usize - map.as_ptr() as usize,
++                len: packed.len(),
++            },
+             None => PackedStore::Owned(packed.to_vec()),
+         };
+         let pattern_catalog = pattern_wire::unpack(n_slots, bitmap, packed, store)
+@@ -560,10 +573,10 @@ impl SolverDatabase {
+     /// the database.
+     pub fn from_vec(bytes: Vec<u8>) -> crate::Result<Self> {
+         let buf = Arc::new(bytes);
+-        Self::decode(&buf, Some(&buf))
++        Self::decode(&buf, Some(Owner::Shared(&buf)))
+     }
+ 
+-    fn decode(bytes: &[u8], owner: Option<&Arc<Vec<u8>>>) -> crate::Result<Self> {
++    fn decode(bytes: &[u8], owner: Option<Owner<'_>>) -> crate::Result<Self> {
+         let (version, payload) = match bytes.strip_prefix(DB_MAGIC) {
+             Some(rest) => {
+                 let (ver, payload) = rest.split_at_checked(2).ok_or_else(|| {
+@@ -587,7 +600,14 @@ impl SolverDatabase {
+                 )));
+             }
+         };
+-        db.validate()?;
++        // A mapped format-2 table stays on the file: the whole-table sweep would
++        // page all of it in, so it gets the head checks and the solver
++        // bounds-checks star indices as it probes.
++        if version == 2 && matches!(owner, Some(Owner::Mapped(_))) {
++            db.validate_head()?;
++        } else {
++            db.validate()?;
++        }
+         if version == 1 {
+             warn!(
+                 "Loaded a format-1 solver database (written by tetra3 0.13 or earlier). \
+@@ -622,6 +642,29 @@ impl SolverDatabase {
+         Ok(db)
+     }
+ 
++    /// [`Self::load_from_file`] without reading the file: it is
++    /// memory-mapped, and a format-2 pattern table's packed section stays on
++    /// the mapping, paging in as probes touch it, so a large database's
++    /// resident memory follows the pages solves use. Such a table skips the
++    /// star-index sweep of [`Self::validate`] (it would touch every page); the
++    /// solver bounds-checks star indices as it probes instead. Format 1
++    /// decodes into memory as in [`Self::load_from_file`]. The file must not
++    /// be modified while the database is alive.
++    pub fn open_mapped(path: &str) -> crate::Result<Self> {
++        let file = std::fs::File::open(path)?;
++        // SAFETY: a read-only mapping owned by the database; the contract
++        // above forbids changing the file underneath it, as for any
++        // memory-mapped data file.
++        let map = Arc::new(unsafe { memmap2::Mmap::map(&file)? });
++        let db = Self::decode(&map, Some(Owner::Mapped(&map)))?;
++        info!(
++            "Mapped database: {} stars, {} patterns",
++            db.star_catalog.len(),
++            db.props.num_patterns
++        );
++        Ok(db)
++    }
++
+     /// Check the cross-field invariants the solver relies on but postcard
+     /// deserialization cannot: every structure decodes independently, so a
+     /// file that parses cleanly can still carry pattern entries indexing past
+@@ -632,6 +675,28 @@ impl SolverDatabase {
+     /// Called by [`Self::load_from_file`]; call it yourself after decoding
+     /// database bytes from any other untrusted source (e.g. pickle).
+     pub fn validate(&self) -> crate::Result<()> {
++        self.validate_head()?;
++        // Every occupied entry is indexed straight into star_vectors during
++        // hash probing — before any filter can reject it — so the largest
++        // index in the packed section must be in range.
++        let n_stars = self.star_catalog.len();
++        if self
++            .pattern_catalog
++            .max_star_index()
++            .is_some_and(|max| max as usize >= n_stars)
++        {
++            return Err(crate::Error::InvalidInput(format!(
++                "SolverDatabase: pattern entry references star index past the \
++                 {n_stars}-star table"
++            )));
++        }
++        Ok(())
++    }
++
++    /// Every check of [`Self::validate`] but the sweep over the pattern
++    /// table's star indices, which touches the whole table
++    /// ([`Self::open_mapped`] relies on probe-time bounds checks instead).
++    pub fn validate_head(&self) -> crate::Result<()> {
+         use crate::Error::InvalidInput;
+         self.star_catalog.validate()?;
+ 
+@@ -691,20 +756,6 @@ impl SolverDatabase {
+                 self.pattern_catalog.len()
+             )));
+         }
+-
+-        // Every occupied entry is indexed straight into star_vectors during
+-        // hash probing — before any filter can reject it — so the largest
+-        // index in the packed section must be in range.
+-        if self
+-            .pattern_catalog
+-            .max_star_index()
+-            .is_some_and(|max| max as usize >= n_stars)
+-        {
+-            return Err(InvalidInput(format!(
+-                "SolverDatabase: pattern entry references star index past the \
+-                 {n_stars}-star table"
+-            )));
+-        }
+         Ok(())
+     }
+ }
+@@ -775,6 +826,21 @@ mod header_tests {
+         assert_same(&SolverDatabase::from_bytes(&bytes).unwrap(), &db);
+     }
+ 
++    #[test]
++    fn open_mapped_keeps_the_table_on_the_file() {
++        let db = tiny_db();
++        let path = std::env::temp_dir().join(format!("t3_mapped_{}.db", std::process::id()));
++        db.save_to_file(path.to_str().unwrap()).unwrap();
++        let mapped = SolverDatabase::open_mapped(path.to_str().unwrap()).unwrap();
++        assert_eq!(mapped.pattern_catalog, db.pattern_catalog);
++        assert!(
++            format!("{:?}", mapped.pattern_catalog).contains("mapped"),
++            "{:?}",
++            mapped.pattern_catalog
++        );
++        std::fs::remove_file(&path).ok();
++    }
++
+     #[test]
+     fn from_vec_shares_the_buffer() {
+         let db = tiny_db();
+diff --git a/src/solver/pattern_catalog.rs b/src/solver/pattern_catalog.rs
+index 31a894d4c2f6c7e30fd107eae80e1356e066f882..32d8873de8afa8aa9d94a8396a03a9ccab85a6b2 100644
+--- a/src/solver/pattern_catalog.rs
++++ b/src/solver/pattern_catalog.rs
+@@ -38,7 +38,8 @@ struct RankBlock {
+ 
+ /// The packed section: owned, or a range of a shared buffer — the database
+ /// file's bytes, kept as the table's backing store so loading does not copy
+-/// the section ([`super::SolverDatabase::from_vec`]).
++/// the section ([`super::SolverDatabase::from_vec`]) — or a range of the
++/// memory-mapped file ([`super::SolverDatabase::open_mapped`]).
+ #[derive(Clone)]
+ pub(crate) enum PackedStore {
+     Owned(Vec<u8>),
+@@ -47,6 +48,12 @@ pub(crate) enum PackedStore {
+         start: usize,
+         len: usize,
+     },
++    /// Pages in as probes touch it, instead of being read at load.
++    Mapped {
++        map: Arc<memmap2::Mmap>,
++        start: usize,
++        len: usize,
++    },
+ }
+ 
+ impl Deref for PackedStore {
+@@ -56,6 +63,7 @@ impl Deref for PackedStore {
+         match self {
+             Self::Owned(v) => v,
+             Self::Shared { buf, start, len } => &buf[*start..*start + *len],
++            Self::Mapped { map, start, len } => &map[*start..*start + *len],
+         }
+     }
+ }
+@@ -71,6 +79,7 @@ impl std::fmt::Debug for PackedStore {
+         let kind = match self {
+             Self::Owned(_) => "owned",
+             Self::Shared { .. } => "shared",
++            Self::Mapped { .. } => "mapped",
+         };
+         write!(f, "PackedStore({kind}, {} bytes)", self.len())
+     }
+diff --git a/src/solver/pattern_search.rs b/src/solver/pattern_search.rs
+index 9032f280b13dca6e8c2f6dad7363fa3fc73b9d3a..ba7413c96bfa840111b69663eddb4726fa1ccf73 100644
+--- a/src/solver/pattern_search.rs
++++ b/src/solver/pattern_search.rs
+@@ -414,6 +414,16 @@ impl<'a> PatternSearch<'a> {
+ 
+                     // Full edge-ratio comparison
+                     let cat_pat = entry.star_indices;
++                    // Bounds guard for memory-mapped tables, which skip
++                    // validate()'s whole-table sweep to stay demand-paged
++                    // (`open_mapped`). Four u32 compares per candidate — noise
++                    // next to the SVD that follows.
++                    if cat_pat
++                        .iter()
++                        .any(|&i| i as usize >= star_vectors.base().len())
++                    {
++                        continue;
++                    }
+                     let cat_vecs: [[f32; 3]; 4] = [
+                         star_vectors.get(cat_pat[0] as usize),
+                         star_vectors.get(cat_pat[1] as usize),

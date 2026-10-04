@@ -8,7 +8,7 @@ Upstream lists itself and python/ as a workspace. A package with its own
 not vendored.
 
 diff --git a/Cargo.toml b/Cargo.toml
-index 23ce11d59a0817801ad2ab625666cd5ec1f8f14d..460128f6617a73f593688ca147199c20577c033d 100644
+index 3d254e42199da15421b72b6be7ffe123e210cc32..2528c341ea2df147802ed70ad83794c95303fbc9 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -1,6 +1,3 @@

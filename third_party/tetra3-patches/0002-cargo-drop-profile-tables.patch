@@ -7,7 +7,7 @@ Cargo only honors profiles at the workspace root; unisolver's root
 Cargo.toml carries the same settings.
 
 diff --git a/Cargo.toml b/Cargo.toml
-index 460128f6617a73f593688ca147199c20577c033d..2165f0d166780ecca17b5a4b9f724a58d12874f9 100644
+index 2528c341ea2df147802ed70ad83794c95303fbc9..6aa6ed16185ec017e3d2707872920968d70355ce 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -50,14 +50,6 @@ image = ["dep:image", "numeris/imageproc"]

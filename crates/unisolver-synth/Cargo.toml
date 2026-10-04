@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
-numeris = "0.5"
+numeris = "0.6"
 rand = "0.10"
 rand_distr = "0.6"
 

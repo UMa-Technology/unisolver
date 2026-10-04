@@ -29,17 +29,16 @@ pub(crate) mod combinations;
 pub(crate) mod database;
 pub(crate) mod matching;
 pub(crate) mod pattern;
+pub(crate) mod pattern_catalog;
 pub(crate) mod pattern_search;
+pub(crate) mod pattern_wire;
 pub(crate) mod preprocess;
 #[cfg(feature = "profile")]
 pub mod profiling;
 pub(crate) mod solve;
-pub mod storage;
 pub(crate) mod track;
 pub(crate) mod verify;
 pub(crate) mod wcs_refine;
-
-pub use storage::PatternStore;
 
 use serde::{Deserialize, Serialize};
 
@@ -51,8 +50,9 @@ use crate::{Quaternion, StarCatalog};
 
 /// A single slot in the pattern hash table.
 ///
-/// Packing star indices, largest-edge angle, and key hash into one struct
-/// means a single cache-line fetch per quadratic-probe step instead of three.
+/// [`PatternCatalog`] stores occupied entries packed (22 bytes, see
+/// `pattern_catalog`) and hands them out by value; this struct is also the
+/// slot type of a dense table ([`PatternCatalog::from_dense`]).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct PatternEntry {
@@ -67,7 +67,7 @@ pub struct PatternEntry {
 }
 
 impl PatternEntry {
-    /// Sentinel value for an empty hash-table slot.
+    /// Sentinel value for an empty slot of a dense table.
     pub const EMPTY: Self = Self {
         star_indices: [0, 0, 0, 0],
         largest_edge: 0.0,
@@ -93,90 +93,7 @@ impl PatternEntry {
     }
 }
 
-// ── Pattern catalog (flat hash table) ───────────────────────────────────────
-
-/// Pattern hash table backed by a single flat `Vec<PatternEntry>`.
-///
-/// Open addressing with quadratic probing; empty slots have
-/// `star_indices == [0, 0, 0, 0]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PatternCatalog {
-    pub entries: PatternStore,
-}
-
-impl PatternCatalog {
-    /// Allocate a catalog of `capacity` empty entries.
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            entries: PatternStore::Owned(vec![PatternEntry::EMPTY; capacity]),
-        }
-    }
-
-    /// Total number of slots.
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Returns `true` if the catalog has no slots.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Immutable access to slot `idx`. Panics if `idx >= len()`.
-    #[inline]
-    pub fn get(&self, idx: usize) -> &PatternEntry {
-        &self.entries[idx]
-    }
-
-    /// Mutable access to slot `idx`. Panics if `idx >= len()` or if the
-    /// table is memory-mapped (generation always builds an owned table).
-    #[inline]
-    pub fn get_mut(&mut self, idx: usize) -> &mut PatternEntry {
-        &mut self.entries[idx]
-    }
-}
-
-#[cfg(test)]
-mod pattern_catalog_tests {
-    use super::*;
-
-    #[test]
-    fn small_catalog() {
-        let mut cat = PatternCatalog::with_capacity(100);
-        assert_eq!(cat.len(), 100);
-
-        *cat.get_mut(42) = PatternEntry::new([1, 2, 3, 4], 0.5, 0xabcd);
-        let e = cat.get(42);
-        assert_eq!(e.star_indices, [1, 2, 3, 4]);
-        assert!((e.largest_edge - 0.5).abs() < 1e-6);
-        assert_eq!(e.key_hash, 0xabcd);
-        assert!(cat.get(0).is_empty());
-    }
-
-    #[test]
-    fn empty_catalog() {
-        let cat = PatternCatalog::with_capacity(0);
-        assert_eq!(cat.len(), 0);
-        assert!(cat.is_empty());
-    }
-
-    #[test]
-    fn postcard_roundtrip_small() {
-        let mut cat = PatternCatalog::with_capacity(1024);
-        *cat.get_mut(0) = PatternEntry::new([10, 20, 30, 40], 0.1, 0x1111);
-        *cat.get_mut(1023) = PatternEntry::new([1, 2, 3, 4], 0.9, 0xffff);
-
-        let bytes = postcard::to_allocvec(&cat).expect("serialize");
-        let restored: PatternCatalog = postcard::from_bytes(&bytes).expect("deserialize");
-
-        assert_eq!(restored.len(), 1024);
-        assert_eq!(restored.get(0).star_indices, [10, 20, 30, 40]);
-        assert_eq!(restored.get(1023).key_hash, 0xffff);
-        assert!(restored.get(500).is_empty());
-    }
-}
+pub use pattern_catalog::PatternCatalog;
 
 // ── Status codes (matching tetra3) ──────────────────────────────────────────
 
@@ -215,7 +132,7 @@ pub struct SolveFailure {
 // ── Database properties ─────────────────────────────────────────────────────
 
 /// Metadata describing how a solver database was built.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DatabaseProperties {
     /// Number of quantization bins per edge-ratio dimension.
     /// Computed as round(0.25 / pattern_max_error).

@@ -27,7 +27,7 @@ fn data_dir() -> &'static Path {
         std::fs::create_dir_all(&dir).unwrap();
         for (name, db) in [(WIDE, synth::test_db()), (MID, synth::narrow_test_db())] {
             let tmp = dir.join(format!("{name}.db.tmp{}", std::process::id()));
-            db.save_to_file_v2(tmp.to_str().unwrap()).unwrap();
+            db.save_to_file(tmp.to_str().unwrap()).unwrap();
             std::fs::rename(&tmp, dir.join(format!("{name}.db"))).unwrap();
         }
         write_package(patch(), (1.0, 15.0), &dir, PACKAGE);

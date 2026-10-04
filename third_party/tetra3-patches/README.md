@@ -6,7 +6,8 @@ patches listed in [`series`](series) applied in order. Never edit the vendored t
 change the patches with `cargo xtask upstream edit` and `export`, and verify with
 `cargo xtask upstream check` ([docs/upstream.md](../../docs/upstream.md)).
 
-- Sync history: v0.11.0 → v0.13.0 on 2026-09-27
+- Sync history: v0.11.0 → v0.13.0 on 2026-09-27; v0.13.0 → v0.14.0 on 2026-10-04 (database
+  format 2; the old 0003, the `UNISOLV2` container, was replaced by today's 0003)
 - Not vendored: upstream's `python/`, `docs/`, `examples/`, `scripts/`, `CLAUDE.md`,
   `CONTRIBUTING.md` and `.gitignore`
 
@@ -21,30 +22,28 @@ vendored.
 Cargo.toml: removes the `[profile.test]` and `[profile.release]` tables. Cargo only honors profiles
 at the workspace root; they are replicated in the root Cargo.toml.
 
-## 0003-mmap-pattern-store
+## 0003-mmap-database-file
 
-Memory-mapped pattern-table storage (`UNISOLV2` container): a deep database's resident memory drops
-from 1.1 GB to about 120 MB.
+`SolverDatabase::open_mapped(path)`: memory-maps a database file instead of reading it. In format 2
+(tetra3 0.14) the pattern table's packed section is byte-identical to the in-memory table, so a
+mapped table keeps it on the file and pages it in as probes touch it: a large database's resident
+memory follows the pages solves use (the stars, their vectors and the rank directory are decoded
+into memory as upstream does).
 
-- NEW `src/solver/storage.rs`: `PatternStore` (owned `Vec` or memory-mapped view; `Deref`/`DerefMut`
-  to `[PatternEntry]`, serde wire-compatible with `Vec`), `write_v2` / `read_v2` / `is_v2_file`.
-  Little-endian only (all targets are).
-- `src/solver/mod.rs`: `PatternCatalog.entries: Vec<PatternEntry>` → `PatternStore`; module
-  registration. Call sites unchanged (`Deref`).
-- `src/solver/database.rs`: NEW `save_to_file_v2` writes the container (upstream's
-  `save_to_file`/`to_bytes` keep their `"T3DB"` format untouched, so upstream's own tests still
-  pass; unisolver's callers use `_v2`); `load_from_file` sniffs the `UNISOLV2` magic (→ mmap) and
-  otherwise defers to upstream `from_bytes`, which owns the `"T3DB"` header and the pre-header
-  legacy path; `validate` split into `validate_head` (no table sweep, used by the mmap path) + full
-  `validate`.
-- `src/solver/pattern_search.rs`: probe-time bounds check on `entry.star_indices` (replaces the
-  whole-table validate sweep for mmap'd files; 4 u32 compares per candidate). Lived in `solve.rs`
-  before 0.13 split the lost-in-space search into `preprocess` / `pattern_search` / `verify`.
 - Cargo.toml: + `memmap2 = "0.9"`.
+- `src/solver/pattern_catalog.rs`: `PackedStore::Mapped { map, start, len }`, a range of the
+  mapping.
+- `src/solver/database.rs`: `Owner` (shared buffer or mapping) replaces `decode`'s owner argument;
+  NEW `open_mapped`; `validate` split into `validate_head` (every check but the star-index sweep)
+  and `validate` (head + sweep). A mapped format-2 table gets `validate_head`: the sweep would page
+  in the whole table. Format 1 files decode into memory and get the full `validate`. Upstream's
+  `load_from_file` / `from_vec` / `from_bytes` are untouched. Test `open_mapped_keeps_the_table_on_the_file`.
+- `src/solver/pattern_search.rs`: probe-time bounds check on `entry.star_indices` (four `u32`
+  compares per candidate), standing in for the sweep on mapped tables.
 
-Rebase note: upstream changes to `PatternEntry` layout (size/align/fields) must update the
-compile-time guards in `storage.rs` and bump the container magic. (Unchanged in 0.13, so v2 files
-written by earlier unisolver builds still load.)
+Rebase note: a change to the packed entry layout (`PACKED_ENTRY_BYTES`) or a new database format
+version means re-encoding the tiers. unisolver ships format-2 files only and refuses the old
+`UNISOLV2` container (in `unisolver-core`, not here).
 
 ## Downstream config divergence (not a patch — unisolver's own defaults)
 

@@ -1,3 +1,3 @@
 0001-cargo-drop-workspace-table.patch
 0002-cargo-drop-profile-tables.patch
-0003-mmap-pattern-store.patch
+0003-mmap-database-file.patch

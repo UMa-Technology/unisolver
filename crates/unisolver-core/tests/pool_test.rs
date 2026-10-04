@@ -17,7 +17,7 @@ fn tier_dir() -> &'static std::path::Path {
         for (name, db) in [(WIDE, synth::test_db()), (NARROW, synth::narrow_test_db())] {
             let dst = dir.join(format!("{name}.db"));
             let tmp = dir.join(format!("{name}.db.tmp{}", std::process::id()));
-            db.save_to_file_v2(tmp.to_str().unwrap()).unwrap();
+            db.save_to_file(tmp.to_str().unwrap()).unwrap();
             std::fs::rename(&tmp, &dst).unwrap();
         }
         dir

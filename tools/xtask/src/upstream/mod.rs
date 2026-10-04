@@ -42,7 +42,7 @@ pub static UPSTREAMS: [Spec; 2] = [
         repo_env: "UNISOLVER_TETRA3_REPO",
         keep: &["data"],
         test_packages: &["tetra3"],
-        review_hint: "do the PatternEntry layout guards in storage.rs still hold, and must the database tiers be regenerated?",
+        review_hint: "does the packed entry layout (PACKED_ENTRY_BYTES) or the database format version change, and must the tiers be re-encoded?",
     },
     Spec {
         name: "seiza",

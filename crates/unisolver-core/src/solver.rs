@@ -252,6 +252,15 @@ pub struct Solver {
     pool: Arc<rayon::ThreadPool>,
 }
 
+/// Databases written by engines before tetra3 0.14 start with this magic
+fn is_old_format(path: &str) -> bool {
+    use std::io::Read;
+    let mut magic = [0u8; 8];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut magic))
+        .is_ok_and(|_| &magic == b"UNISOLV2")
+}
+
 pub(crate) fn build_pool() -> Result<Arc<rayon::ThreadPool>> {
     let threads = std::thread::available_parallelism()
         .map(|n| n.get())
@@ -337,8 +346,17 @@ impl Solver {
         Self::from_file_with_pool(path, build_pool()?)
     }
 
+    /// Opens a tetra3 database (format 2) memory-mapped: its pattern table stays on the file and
+    /// pages in as solves touch it. Files from engines before tetra3 0.14 (`UNISOLV2`) are
+    /// refused with a clear message.
     pub(crate) fn from_file_with_pool(path: &str, pool: Arc<rayon::ThreadPool>) -> Result<Self> {
-        let db = SolverDatabase::load_from_file(path)?;
+        if is_old_format(path) {
+            return Err(CoreError::InvalidInput(format!(
+                "{path}: an old-format (UNISOLV2) database, which this engine no longer reads; \
+                 download it again"
+            )));
+        }
+        let db = SolverDatabase::open_mapped(path)?;
         Ok(Self {
             db: Arc::new(db),
             pool,

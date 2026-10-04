@@ -7,7 +7,7 @@ use unisolver_core::*;
 
 #[derive(Parser)]
 struct Cli {
-    /// Solver database (UNISOLV2 or upstream tetra3 format); required unless --pool is given
+    /// Solver database (tetra3 database format 2); required unless --pool is given
     #[arg(long)]
     db: Option<PathBuf>,
     #[arg(long)]

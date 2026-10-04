@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
-numeris = "0.5"
+numeris = "0.6"
 thiserror = "2"
 rayon = "1"
 tracing = "0.1"
@@ -37,7 +37,7 @@ narrow = ["dep:seiza"]
 # be declared again here even though they are regular dependencies
 unisolver-synth = { path = "../unisolver-synth" }
 tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
-numeris = "0.5"
+numeris = "0.6"
 # Decodes JPEG frames in the golden regression (tests only)
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # Decompresses the bundled database for the golden regression (tests only; pure Rust)

@@ -215,19 +215,21 @@ pub fn test_db() -> &'static SolverDatabase {
     })
 }
 
-/// `test_db()` saved as a UNISOLV2 file named `name` in the temp dir; returns its path. Tests run
-/// in parallel, so the file is written under a lock and moved into place by rename: no caller
-/// ever opens a half-written file.
+/// `test_db()` saved (tetra3 database format 2) as a file named `name` in the temp dir; returns
+/// its path. Tests run in parallel, so the file is written under a lock and moved into place by
+/// rename: no caller ever opens a half-written file. A file left by an older engine in another
+/// format is replaced.
 pub fn test_db_file(name: &str) -> String {
     static WRITE: Mutex<()> = Mutex::new(());
     let path = std::env::temp_dir().join(name);
     let _guard = WRITE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if !path.exists() {
+    let current = std::fs::read(&path).is_ok_and(|b| b.starts_with(b"T3DB\x02\x00"));
+    if !current {
         let tmp = path.with_extension(format!("tmp{}", std::process::id()));
         test_db()
-            .save_to_file_v2(tmp.to_str().expect("UTF-8 temp dir"))
+            .save_to_file(tmp.to_str().expect("UTF-8 temp dir"))
             .expect("write the test database");
         std::fs::rename(&tmp, &path).expect("move the test database into place");
     }

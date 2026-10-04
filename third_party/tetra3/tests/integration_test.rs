@@ -17,8 +17,10 @@ fn gaia_catalog_path() -> String {
 /// Build a small test database (wide FOV for speed) and solve a synthetic image.
 #[test]
 fn test_generate_and_solve() {
-    // Initialize tracing for debug output
-    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
+    // Initialize logging for debug output
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
 
     // ── Step 1: Generate a small database ──
     let config = GenerateDatabaseConfig {
@@ -207,7 +209,9 @@ fn test_generate_and_solve() {
 /// `calibrate_camera` distortion fit).
 #[test]
 fn test_matched_indices_survive_dropped_centroid() {
-    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
 
     let config = GenerateDatabaseConfig {
         max_fov_deg: 20.0,
@@ -516,7 +520,9 @@ fn test_nan_mass_treated_as_unknown() {
 /// refinement → quaternion / residuals / pixel_to_world.
 #[test]
 fn test_parity_flipped_solve() {
-    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
 
     let config = GenerateDatabaseConfig {
         max_fov_deg: 20.0,
@@ -745,7 +751,9 @@ fn generate_centroids(
 /// Solve 1000 random orientations with a 10° FOV camera and report statistics.
 #[test]
 fn test_statistical_1000_random_orientations() {
-    let _ = tracing_subscriber::fmt().with_env_filter("warn").try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .is_test(true)
+        .try_init();
 
     // ── Build database for 10° FOV ──
     let config = GenerateDatabaseConfig {
@@ -1013,7 +1021,9 @@ fn test_statistical_1000_random_orientations() {
 
 #[test]
 fn test_save_and_load_database() {
-    let _ = tracing_subscriber::fmt().with_env_filter("warn").try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .is_test(true)
+        .try_init();
 
     let config = GenerateDatabaseConfig {
         max_fov_deg: 12.0,
@@ -1043,19 +1053,23 @@ fn test_save_and_load_database() {
     assert_eq!(db.props.num_patterns, loaded_db.props.num_patterns);
     assert_eq!(db.pattern_catalog.len(), loaded_db.pattern_catalog.len());
 
-    // The file carries the format header, and a legacy (pre-header) bare
-    // postcard payload still loads through the same entry point.
+    // The file carries the format header (version 2). A bare payload with no
+    // header is read as a legacy version-1 file (the unit tests in
+    // `solver::database` cover real v1 payloads); a headerless *current*
+    // payload is not one, and must fail cleanly rather than mis-decode.
     let bytes = std::fs::read(tmp_path).expect("read saved database");
     assert_eq!(
         &bytes[..4],
         b"T3DB",
         "saved database must start with the magic"
     );
-    let legacy = postcard::to_allocvec(&db).expect("bare postcard payload");
-    let from_legacy = SolverDatabase::from_bytes(&legacy).expect("legacy payload must load");
-    assert_eq!(from_legacy.props.num_patterns, db.props.num_patterns);
     let from_header = SolverDatabase::from_bytes(&bytes).expect("header payload must load");
     assert_eq!(from_header.pattern_catalog.len(), db.pattern_catalog.len());
+    let bare = postcard::to_allocvec(&db).expect("bare postcard payload");
+    assert!(
+        SolverDatabase::from_bytes(&bare).is_err(),
+        "a headerless current-format payload is not a legacy file"
+    );
 
     // Clean up temporary file
     std::fs::remove_file(tmp_path).expect("Failed to delete temporary file");
@@ -1081,13 +1095,13 @@ fn test_save_and_load_database() {
     );
 
     let mut tampered = db.clone();
-    let slot = tampered
-        .pattern_catalog
-        .entries
+    let mut dense = tampered.pattern_catalog.to_dense();
+    let slot = dense
         .iter()
         .position(|e| !e.is_empty())
         .expect("generated database has at least one pattern");
-    tampered.pattern_catalog.entries[slot].star_indices = [n_stars, 0, 0, 0];
+    dense[slot].star_indices = [n_stars, 0, 0, 0];
+    tampered.pattern_catalog = tetra3::solver::PatternCatalog::from_dense(&dense);
     assert!(
         tampered.validate().is_err(),
         "pattern entry indexing past the star table must fail validation"
@@ -1137,7 +1151,9 @@ fn test_save_and_load_database() {
 /// Solve 1000 random orientations with a 10° FOV camera and 4"/axis centroid noise.
 #[test]
 fn test_statistical_1000_noisy_centroids() {
-    let _ = tracing_subscriber::fmt().with_env_filter("warn").try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .is_test(true)
+        .try_init();
 
     let noise_sigma_arcsec = 4.0;
 
@@ -1456,8 +1472,8 @@ fn test_statistical_1000_noisy_centroids() {
 /// (and ideally faster).
 #[test]
 fn test_tracking_with_attitude_hint() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".into()))
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .is_test(true)
         .try_init();
 
     // Small DB matching test_generate_and_solve so it builds quickly.
@@ -1643,7 +1659,9 @@ fn test_tracking_with_attitude_hint() {
 #[test]
 #[ignore = "slow: generates a multi-GB pattern catalog; run with --ignored"]
 fn test_multiscale_database() {
-    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
 
     let config = GenerateDatabaseConfig {
         max_fov_deg: 5.0,

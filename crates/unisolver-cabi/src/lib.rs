@@ -721,7 +721,9 @@ pub unsafe extern "C" fn unisolver_pool_register(
 }
 
 /// Registers the narrow-field package (desktop builds): its blind index and star-tile files.
-/// Only their headers are read, so this is as quick as [`unisolver_pool_register`]. Returns the
+/// Only their headers are read, so this is as quick as [`unisolver_pool_register`]; a background
+/// thread then reads both files once, so the first solve does not wait on the disk (set
+/// `UNISOLVER_NO_PREFETCH=1` to skip it). Returns the
 /// tier as OWNED JSON (`"kind":"narrow"`). Registering the same index again returns it; a
 /// second package is an error, and so is every call on iOS and Android builds, which have no
 /// narrow-field engine.

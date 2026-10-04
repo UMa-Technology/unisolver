@@ -243,8 +243,10 @@ impl SolverPool {
     }
 
     /// Registers the narrow-field engine: a blind index (`UNIBLIX1`) and its star tiles
-    /// (`UNISTAR1`). Both are memory mapped and only their headers are read, so it
-    /// is as quick as registering a tetra3 tier. One package per pool: registering the same
+    /// (`UNISTAR1`). Both are memory mapped and only their headers are read, so it is as quick as
+    /// registering a tetra3 tier; a background thread then reads both files once, so the first
+    /// solve does not wait on the disk (set `UNISOLVER_NO_PREFETCH=1` to skip it). One package
+    /// per pool: registering the same
     /// index again returns it, another one is an error (open a new pool to replace it). Builds
     /// without the narrow-field engine (mobile) return an error.
     pub fn register_narrow(&mut self, index_path: &str, stars_path: &str) -> Result<TierInfo> {
@@ -281,6 +283,18 @@ impl SolverPool {
                 info: info.clone(),
                 engine,
             });
+            if std::env::var_os("UNISOLVER_NO_PREFETCH").is_none() {
+                let files = vec![
+                    std::path::PathBuf::from(index_path),
+                    std::path::PathBuf::from(stars_path),
+                ];
+                // Registration stays as quick as before; a failed read only means a slower first solve
+                let _ = std::thread::Builder::new()
+                    .name("unisolver-prefetch".into())
+                    .spawn(move || {
+                        let _ = crate::narrow::prefetch(&files);
+                    });
+            }
             Ok(info)
         }
         #[cfg(not(feature = "narrow"))]

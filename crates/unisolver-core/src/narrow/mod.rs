@@ -310,6 +310,26 @@ impl NarrowEngine {
     }
 }
 
+/// Reads `paths` once from start to end so the page cache holds them: the engine's files are
+/// memory mapped, and a first solve on cold files would wait on the disk mid-search (seconds past
+/// its deadline inside a pattern loop). Returns the bytes read.
+pub(crate) fn prefetch(paths: &[std::path::PathBuf]) -> std::io::Result<u64> {
+    use std::io::Read;
+    let mut buf = vec![0u8; 8 << 20];
+    let mut total = 0u64;
+    for p in paths {
+        let mut f = std::fs::File::open(p)?;
+        loop {
+            let n = f.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            total += n as u64;
+        }
+    }
+    Ok(total)
+}
+
 /// Most time the hinted search gets before the blind search takes over
 const HINTED_PHASE_MAX: Duration = Duration::from_secs(1);
 
@@ -325,6 +345,18 @@ fn hinted_phase_end(now: Instant, deadline: Option<Instant>) -> Instant {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefetching_reads_every_byte_of_every_file() {
+        let dir = std::env::temp_dir().join(format!("unisolver_prefetch_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("a.idx"), dir.join("b.stars"));
+        std::fs::write(&a, vec![1u8; 3 << 20]).unwrap();
+        std::fs::write(&b, vec![2u8; 9 << 20]).unwrap();
+        assert_eq!(prefetch(&[a.clone(), b]).unwrap(), 12 << 20);
+        assert!(prefetch(&[a, dir.join("missing")]).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn the_hint_gets_half_the_time_left_and_at_most_a_second() {

@@ -433,6 +433,7 @@ Routing (no configuration needed; the same rules as the single-database ladder):
   `openDir` too). It only takes frames whose known FOV is narrower than about 3°, before the
   tetra3 tiers when none covers the FOV and after them otherwise; frames of unknown FOV never
   reach it unless `narrowBlind` is set. Its attempts carry `kind == TierKindDto.narrow`.
+  Below about 0.4° give it a pointing (`base.pointingHint`; see §5, item 10).
 
 The plugin bundles one tier, covering 10–80°. For narrower fields, generate databases with
 the upstream tetra3rs tools (the engine loads them as they are) and register them, or let
@@ -642,7 +643,7 @@ scale, and silently falling back to a blind solve would hide that tracking is no
 Pools with the narrow-field engine (desktop builds) also take `pointing_hint`
 (`{"ra_deg", "dec_deg", "radius_deg"}`, the radius optional), `narrow_blind` and
 `narrow_fallback_ms`; pool file entries fill the pointing in from FITS and XISF headers. Other
-solves ignore them.
+solves ignore them. Below about 0.4° pass a pointing whenever you have one (§5, item 10).
 
 ### Direct frame input (camera callbacks, video)
 
@@ -790,6 +791,13 @@ and `stellarium` when you ship the names pack. The example app lists them all un
    frame routed through a multi-tier pool took 3 s (measured). Give a hint whenever you can
    (EXIF/FITS headers, `focalLength35Mm` for decoded photos, or a calibrated camera): one
    attempt instead of a dozen. Photos forwarded through chat apps usually lose their EXIF.
+10. **Very narrow fields want a pointing** (desktop narrow-field package): below about 0.4° a
+    blind solve needs more faint stars than fields away from the Milky Way usually hold. On
+    simulated frames it solved about half the poses at 0.18°, three in four at 0.25° and nine
+    in ten at 0.3°, the failures far from the Milky Way; with a pointing within a third of the
+    field, 95% solved at 0.18° and all of them at 0.25–0.6°. Pass `pointingHint` (C:
+    `pointing_hint`) with the mount's RA/Dec, or keep RA/Dec in the FITS/XISF header, which
+    pool file entries read.
 
 ## 6. Versions and compatibility
 

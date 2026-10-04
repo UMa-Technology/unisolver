@@ -28,6 +28,8 @@
    entries read one from the header when the caller gives none (`RA`/`DEC`, `OBJCTRA`/`OBJCTDEC`,
    a celestial `CRVAL1`/`CRVAL2`, XISF `Observation:Center:RA`/`Dec`). The tetra3 tiers do not
    use it. solvecli takes `--hint-ra`, `--hint-dec`, `--hint-radius` and `--narrow-blind`.
+   Below about 0.4° give one: a blind solve there needs more faint stars than fields away from
+   the Milky Way usually hold (integration guide §5).
 
 ## 2026-10-04 — v0.4.4
 

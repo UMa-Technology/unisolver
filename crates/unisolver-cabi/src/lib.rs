@@ -194,9 +194,8 @@ struct SolveOptsJson {
     /// never with `camera` or an attitude hint. Default true
     refine_scale: bool,
     /// Pools with the narrow-field engine (desktop builds) only: approximate pointing,
-    /// `{"ra_deg", "dec_deg", "radius_deg"}` in degrees (the radius is optional: max(1°, 3 ×
-    /// FOV)). Pool file entries fill it from the header's RA/Dec when absent. The tetra3 tiers
-    /// never use it
+    /// `{"ra_deg", "dec_deg", "radius_deg"}` in degrees (the radius is optional: one FOV). Pool
+    /// file entries fill it from the header's RA/Dec when absent. The tetra3 tiers never use it
     pointing_hint: Option<core::PointingHint>,
     /// Pools with the narrow-field engine only: with an unknown FOV, blind-solve once over its
     /// range after every tetra3 tier failed. Default false, so frames of unknown FOV fail as

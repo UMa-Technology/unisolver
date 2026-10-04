@@ -975,7 +975,7 @@ class PointingHintDto {
   /// ICRS declination, degrees
   final double decDeg;
 
-  /// Search radius, degrees; null searches max(1°, 3 × the FOV)
+  /// Search radius, degrees; null searches one FOV around it
   final double? radiusDeg;
 
   const PointingHintDto({

@@ -118,14 +118,18 @@ pub(crate) fn route(
     })
 }
 
-/// Hinted around the pointing hint when there is one, blind over the FOV's tolerance otherwise
+/// Hinted around the pointing hint when there is one, blind over the FOV's tolerance otherwise.
+/// The default search radius is one FOV: the hinted search finds a field within about 0.75 FOV
+/// of the hint in tens of milliseconds, and scans its radius for one further away (about 0.5 s
+/// for a radius of one FOV, 3 s for three, on real sub-degree and 3° frames), so a wider default
+/// would only delay the blind search that takes over.
 fn mode_for(base: &SolveOptions, k: KnownFov) -> NarrowMode {
     let fov = k.fov_deg as f64;
     match base.pointing_hint {
         Some(p) => NarrowMode::Hinted {
             ra_deg: p.ra_deg,
             dec_deg: p.dec_deg,
-            radius_deg: p.radius_deg.unwrap_or((3.0 * fov).max(1.0)),
+            radius_deg: p.radius_deg.unwrap_or(fov),
             fov_deg: fov,
             fov_tolerance: k.tolerance,
         },
@@ -300,14 +304,14 @@ mod tests {
             panic!("{:?}", s.mode)
         };
         assert_eq!(ra_deg, 83.8);
-        assert!((radius_deg - 4.5).abs() < 1e-6, "3 × FOV");
+        assert!((radius_deg - 1.5).abs() < 1e-6, "one FOV");
         assert!((fov_deg - 1.5).abs() < 1e-6 && (fov_tolerance - 0.15).abs() < 1e-6);
         let NarrowMode::Hinted { radius_deg, .. } =
             route(&o, &header(0.2), W, H, &SPANS, &info()).unwrap().mode
         else {
             panic!()
         };
-        assert!((radius_deg - 1.0).abs() < 1e-9, "at least 1°");
+        assert!((radius_deg - 0.2).abs() < 1e-6, "one FOV");
         o.pointing_hint.as_mut().unwrap().radius_deg = Some(0.7);
         let NarrowMode::Hinted { radius_deg, .. } =
             route(&o, &header(1.5), W, H, &SPANS, &info()).unwrap().mode

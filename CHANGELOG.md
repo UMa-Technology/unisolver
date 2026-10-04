@@ -13,11 +13,11 @@
    (`tetra3` or `narrow`); a narrow-field solve annotates with the narrowest tetra3 tier. iOS
    and Android builds are unchanged.
 2. **Pointing hints.** `pointing_hint` (`ra_deg`, `dec_deg`, optional `radius_deg`) gives the
-   narrow-field engine the approximate pointing of a mount; without a radius it searches
-   max(1°, 3 × FOV) around it, and solves blind when that fails. FITS and XISF file entries read
-   one from the header when the caller gives none (`RA`/`DEC`, `OBJCTRA`/`OBJCTDEC`, a celestial
-   `CRVAL1`/`CRVAL2`, XISF `Observation:Center:RA`/`Dec`). The tetra3 tiers do not use it.
-   solvecli takes `--hint-ra`, `--hint-dec`, `--hint-radius` and `--narrow-blind`.
+   narrow-field engine the approximate pointing of a mount; without a radius it searches one FOV
+   around it, for at most half its time, and solves blind when that fails. FITS and XISF file
+   entries read one from the header when the caller gives none (`RA`/`DEC`, `OBJCTRA`/`OBJCTDEC`,
+   a celestial `CRVAL1`/`CRVAL2`, XISF `Observation:Center:RA`/`Dec`). The tetra3 tiers do not
+   use it. solvecli takes `--hint-ra`, `--hint-dec`, `--hint-radius` and `--narrow-blind`.
 
 ## 2026-10-04 — v0.4.4
 

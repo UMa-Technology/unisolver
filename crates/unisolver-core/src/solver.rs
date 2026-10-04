@@ -99,7 +99,7 @@ pub struct PointingHint {
     pub ra_deg: f64,
     /// ICRS declination, degrees
     pub dec_deg: f64,
-    /// Search radius, degrees; None searches max(1°, 3 × the FOV)
+    /// Search radius, degrees; None searches one FOV around it
     #[serde(default)]
     pub radius_deg: Option<f64>,
 }

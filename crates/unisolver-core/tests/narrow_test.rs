@@ -95,6 +95,36 @@ fn hinted_solves_and_falls_back_to_blind() {
     assert!(off_arcmin(sol.ra_deg, sol.dec_deg) < 0.6);
 }
 
+/// The hinted search scans its whole radius when the field is not near the hint: a hint 40° off
+/// with a 60° radius gets part of the time, then the blind search solves within the deadline
+#[test]
+fn a_far_hint_with_a_wide_radius_leaves_time_for_the_blind_search() {
+    let e = engine();
+    let req = NarrowRequest {
+        mode: NarrowMode::Hinted {
+            ra_deg: CENTER.0 - 40.0,
+            dec_deg: CENTER.1 + 20.0,
+            radius_deg: 60.0,
+            fov_deg: FOV,
+            fov_tolerance: 0.1,
+        },
+        deadline: Some(Instant::now() + Duration::from_secs(6)),
+    };
+    let out = e.solve(&scene(), W, H, &req);
+    assert!(
+        matches!(out.status, SolveStatus::Ok),
+        "{:?} after {} ms",
+        out.status,
+        out.solve_ms
+    );
+    let sol = out.solution.unwrap();
+    assert!(off_arcmin(sol.ra_deg, sol.dec_deg) < 0.6);
+    assert!(
+        sol.num_matches as usize >= unisolver_core::narrow::BLIND_MIN_MATCHES,
+        "a blind solution keeps the blind floor"
+    );
+}
+
 #[test]
 fn noise_does_not_solve_and_a_deadline_stops_the_search() {
     let e = engine();

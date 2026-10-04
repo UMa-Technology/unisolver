@@ -83,7 +83,7 @@ struct Cli {
     /// Pointing hint: declination, degrees
     #[arg(long, requires = "hint_ra", allow_negative_numbers = true)]
     hint_dec: Option<f64>,
-    /// Pointing hint search radius, degrees (default max(1°, 3 × FOV))
+    /// Pointing hint search radius, degrees (default: one FOV)
     #[arg(long, requires = "hint_ra")]
     hint_radius: Option<f64>,
     /// --pool with an unknown FOV: after every tetra3 tier failed, blind-solve once with the

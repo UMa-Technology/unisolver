@@ -266,7 +266,7 @@ pub struct PointingHintDto {
     pub ra_deg: f64,
     /// ICRS declination, degrees
     pub dec_deg: f64,
-    /// Search radius, degrees; null searches max(1°, 3 × the FOV)
+    /// Search radius, degrees; null searches one FOV around it
     pub radius_deg: Option<f64>,
 }
 

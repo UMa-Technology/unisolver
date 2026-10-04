@@ -11,7 +11,7 @@ use crate::outcome::{CentroidOut, SolveStatus, SolvedGeometry};
 use seiza::blind::{BlindIndex, BlindParams};
 use seiza::catalog::{StarCatalog, TileCatalog};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub use route::NARROW_MAX_FOV_DEG;
 
@@ -191,6 +191,11 @@ impl NarrowEngine {
         stars.sort_by(|a, b| b.flux.total_cmp(&a.flux));
         let dims = (width, height);
         let catalog: &(dyn StarCatalog + Sync) = &*self.catalog;
+        // seiza's solution, kept when our own check finds `floor` matches or more
+        let accept = |sol: seiza::solve::Solution, floor: usize| {
+            self.geometry(&sol, centroids, width, height, floor)
+                .ok_or(SolveStatus::NoMatch)
+        };
 
         let blind = |lo_fov: f64, hi_fov: f64| {
             let (a, b) = (scale_of(lo_fov, width), scale_of(hi_fov, width));
@@ -201,14 +206,18 @@ impl NarrowEngine {
                 max_pattern_deg: self.index.max_pattern_deg(),
                 ..Default::default()
             };
-            seiza::blind::solve_blind_until(
+            match seiza::blind::solve_blind_until(
                 &stars,
                 catalog,
                 &self.index,
                 &params,
                 dims,
                 req.deadline,
-            )
+            ) {
+                Ok(sol) => accept(sol, BLIND_MIN_MATCHES),
+                Err(seiza::Error::Timeout) => Err(SolveStatus::Timeout),
+                Err(_) => Err(SolveStatus::NoMatch),
+            }
         };
 
         let solved = self.pool.install(|| match req.mode {
@@ -230,31 +239,52 @@ impl NarrowEngine {
                     scale_tolerance: fov_tolerance,
                     sip_order: 0,
                 };
-                match seiza::solve::solve_until(&stars, catalog, &hint, dims, req.deadline) {
-                    Err(seiza::Error::Solve(_)) => blind(
+                // A field near the hint is found in tens of milliseconds; one further away
+                // makes the search scan its whole radius, and one outside it can yield a wrong
+                // fit. So the hint gets part of the time, its result is checked, and anything
+                // short of a checked solution leaves the rest to the blind search.
+                let phase = hinted_phase_end(Instant::now(), req.deadline);
+                let hinted = seiza::solve::solve_until(&stars, catalog, &hint, dims, Some(phase))
+                    .map_err(|_| SolveStatus::NoMatch)
+                    .and_then(|sol| accept(sol, HINTED_MIN_MATCHES));
+                match hinted {
+                    Ok(g) => Ok(g),
+                    Err(_) if req.deadline.is_some_and(|d| Instant::now() >= d) => {
+                        Err(SolveStatus::Timeout)
+                    }
+                    Err(_) => blind(
                         fov_deg * (1.0 - fov_tolerance),
                         fov_deg * (1.0 + fov_tolerance),
                     ),
-                    other => other,
                 }
             }
         });
+        match solved {
+            Ok(g) => done(SolveStatus::Ok, Some(g)),
+            Err(status) => done(status, None),
+        }
+    }
 
-        let sol = match solved {
-            Ok(s) => s,
-            Err(seiza::Error::Timeout) => return done(SolveStatus::Timeout, None),
-            Err(_) => return done(SolveStatus::NoMatch, None),
-        };
+    /// The geometry of a seiza solution after our own check: None unless it keeps `floor`
+    /// matches at a low enough chance probability
+    fn geometry(
+        &self,
+        sol: &seiza::solve::Solution,
+        centroids: &[CentroidOut],
+        width: u32,
+        height: u32,
+        floor: usize,
+    ) -> Option<SolvedGeometry> {
         let wcs = geometry::wcs_from_seiza(&sol.wcs, width, height);
-        let checked = verify::verify(&wcs, centroids, catalog);
+        let checked = verify::verify(&wcs, centroids, &*self.catalog);
         if checked.matched.len() < floor || checked.prob > MAX_MISMATCH_PROB {
-            return done(SolveStatus::NoMatch, None);
+            return None;
         }
         let (ra_deg, dec_deg) =
             wcs.pixel_to_world((width as f64 - 1.0) / 2.0, (height as f64 - 1.0) / 2.0);
         let fov_deg =
             (2.0 * (width as f64 / (2.0 * wcs.camera.focal_length_px)).atan()).to_degrees() as f32;
-        let geometry = SolvedGeometry {
+        Some(SolvedGeometry {
             quat_icrs2cam_wxyz: geometry::attitude_wxyz(&wcs),
             ra_deg,
             dec_deg,
@@ -269,7 +299,37 @@ impl NarrowEngine {
             matched: checked.matched,
             lens_fitted: false,
             scale_refined: false,
+        })
+    }
+}
+
+/// Most time the hinted search gets before the blind search takes over
+const HINTED_PHASE_MAX: Duration = Duration::from_secs(1);
+
+/// End of the hinted search: half of what is left before `deadline`, at most
+/// [`HINTED_PHASE_MAX`], so a hint far off still leaves the blind search its time
+fn hinted_phase_end(now: Instant, deadline: Option<Instant>) -> Instant {
+    let share = deadline.map_or(HINTED_PHASE_MAX, |d| {
+        (d.saturating_duration_since(now) / 2).min(HINTED_PHASE_MAX)
+    });
+    now + share
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_hint_gets_half_the_time_left_and_at_most_a_second() {
+        let now = Instant::now();
+        let ms = |d: Option<u64>| {
+            hinted_phase_end(now, d.map(|ms| now + Duration::from_millis(ms)))
+                .duration_since(now)
+                .as_millis()
         };
-        done(SolveStatus::Ok, Some(geometry))
+        assert_eq!(ms(None), 1000);
+        assert_eq!(ms(Some(6000)), 1000);
+        assert_eq!(ms(Some(1200)), 600);
+        assert_eq!(ms(Some(0)), 0);
     }
 }

@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "role": "index",
+      "file": "narrow_mini.idx.zst",
+      "bytes": 291434,
+      "sha256": "48584e77484768c600d25c03ac4a037ce778294fd05fdf8ffd6c9af51e68ba44",
+      "raw_bytes": 372368,
+      "raw_sha256": "c0b970d4283214f65caf607ecfb1234b0ff46fa5b5158aef44b593ece516b8b0"
+    },
+    {
+      "role": "stars",
+      "file": "narrow_mini.stars.zst",
+      "bytes": 26404,
+      "sha256": "477a8800c577b971924d8f2ea68a62b9b73125f3df31e44b3f82e8ee90266bf8",
+      "raw_bytes": 32340,
+      "raw_sha256": "1b49aafaad38f1ca207dd19654a04f592eb9b53881fa9621ccb594d625dfc136"
+    }
+  ]
+}

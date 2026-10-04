@@ -72,6 +72,8 @@ flutter:
     - packages/unisolver_flutter/optional/unisolver_names.bin
     # Opt in to the painted constellation illustrations (CC BY-SA 4.0)
     - packages/unisolver_flutter/optional/unisolver_art_western_new.bin
+    # A tiny synthetic narrow-field package for the install integration test (~320 KB)
+    - integration_test/fixtures/
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

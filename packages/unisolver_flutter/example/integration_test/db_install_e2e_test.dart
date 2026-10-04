@@ -309,4 +309,89 @@ void main() {
     skip: externalBase.isEmpty,
     timeout: const Timeout(Duration(minutes: 10)),
   );
+
+  // The fixtures come from `cargo run -p unisolver-starmatch --example mini_package` (a synthetic sky)
+  testWidgets(
+    'narrow package: manifest → two downloads → both digests → registered, and found by openDir',
+    (t) async {
+      Future<List<int>> load(String f) async => (await rootBundle.load(
+        'integration_test/fixtures/$f',
+      )).buffer.asUint8List();
+      final spec =
+          json.decode(utf8.decode(await load('narrow_mini.json')))
+              as Map<String, dynamic>;
+      final files = (spec['files'] as List).cast<Map<String, dynamic>>();
+      String keyOf(Map<String, dynamic> f) =>
+          'pkg/${(f['sha256'] as String).substring(56)}/${f['file']}';
+      Map<String, dynamic> manifest({String? starsRawSha}) => {
+        'version': 3,
+        'tiers': [],
+        'packages': [
+          {
+            'name': 'narrow_mini',
+            'kind': 'blind-index',
+            'min_fov_deg': 0.2,
+            'max_fov_deg': 3.1,
+            'mobile': false,
+            'min_engine': engineVersion(),
+            'files': [
+              for (final f in files)
+                {
+                  ...f,
+                  'key': keyOf(f),
+                  if (f['role'] == 'stars' && starsRawSha != null)
+                    'raw_sha256': starsRawSha,
+                },
+            ],
+          },
+        ],
+      };
+      final cdn = LocalCdn({
+        'manifest-v3.json': utf8.encode(json.encode(manifest())),
+        'bad/manifest-v3.json': utf8.encode(
+          json.encode(manifest(starsRawSha: '0' * 64)),
+        ),
+        for (final f in files) keyOf(f): await load(f['file'] as String),
+        for (final f in files)
+          'bad/${keyOf(f)}': await load(f['file'] as String),
+      });
+      await cdn.start();
+      final dir = Directory.systemTemp.createTempSync('narrow_e2e').path;
+      try {
+        // A wrong decompressed digest: refused, nothing left behind
+        final bad = DbManager(dir: dir, baseUrl: '${cdn.baseUrl}bad/');
+        final pb = (await bad.fetchManifest()).packageByName('narrow_mini')!;
+        await expectLater(
+          bad.installPackage(pb),
+          throwsA(isA<DbChecksumException>()),
+        );
+        expect(File('$dir/narrow_mini.stars').existsSync(), isFalse);
+
+        final pool = await UniSolverPool.empty();
+        final m = DbManager(
+          dir: dir,
+          baseUrl: cdn.baseUrl,
+          registerPackage: (i, s) async {
+            await pool.registerNarrow(indexPath: i, starsPath: s);
+          },
+        );
+        final p = (await m.fetchManifest()).packageByName('narrow_mini')!;
+        await m.installPackage(p);
+        expect(m.isPackageInstalled(p), isTrue);
+        final narrow = (await pool.tiers())
+            .where((x) => x.kind == TierKindDto.narrow)
+            .toList();
+        expect(narrow.single.name, 'narrow_mini');
+        // A directory open finds it by its headers (the leftover manifest cache is not a database)
+        final opened = await UniSolverPool.openDir(dir: dir);
+        expect(
+          (await opened.tiers()).any((x) => x.kind == TierKindDto.narrow),
+          isTrue,
+        );
+      } finally {
+        await cdn.stop();
+        Directory(dir).deleteSync(recursive: true);
+      }
+    },
+  );
 }

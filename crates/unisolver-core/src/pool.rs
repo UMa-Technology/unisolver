@@ -19,6 +19,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
+#[cfg(feature = "narrow")]
+use crate::narrow::route::{NarrowStep, When};
+
 /// What answers for a registered tier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -72,13 +75,40 @@ pub struct PoolOutcome {
     pub extract_count: usize,
 }
 
+/// What a solve has tried so far
+#[derive(Default)]
+struct Tally {
+    attempts: Vec<PoolAttempt>,
+    last: Option<SolveOutcome>,
+    /// The tier that solved it
+    db: Option<String>,
+}
+
+impl Tally {
+    /// Records one attempt; true when it solved
+    fn record(&mut self, info: &TierInfo, fov_deg: f32, out: SolveOutcome) -> bool {
+        self.attempts.push(PoolAttempt {
+            db: info.name.clone(),
+            kind: info.kind,
+            fov_deg,
+            status: out.status,
+            solve_ms: out.timing.solve_ms,
+        });
+        let ok = matches!(out.status, SolveStatus::Ok);
+        if ok {
+            self.db = Some(info.name.clone());
+        }
+        self.last = Some(out);
+        ok
+    }
+}
+
 struct Tier {
     info: TierInfo,
     solver: Solver,
 }
 
 #[cfg(feature = "narrow")]
-#[allow(dead_code)] // the engine runs from the next commit
 struct NarrowTier {
     info: TierInfo,
     engine: crate::narrow::NarrowEngine,
@@ -307,6 +337,10 @@ impl SolverPool {
     ///
     /// A calibrated camera or tracking (with attitude_hint) **does not sweep**: the FOV is
     /// known, so only tiers covering it are tried.
+    ///
+    /// With the narrow-field engine registered, it is one step before or after the tetra3
+    /// plan, never inside it: see `narrow::route` for when it runs. Without it, or for frames it
+    /// does not take, the tetra3 plan runs exactly as before.
     pub fn solve_auto(
         &self,
         frame: &Frame,
@@ -369,70 +403,128 @@ impl SolverPool {
         };
 
         let mut cache = ExtractCache::default();
-        let mut attempts: Vec<PoolAttempt> = Vec::with_capacity(passes.len());
-        let mut last: Option<SolveOutcome> = None;
-        let mut solved_by: Option<String> = None;
-
-        search::run(&passes, |pass, first| {
-            let (ti, preset) = steps[pass.rung];
-            let tier = &self.tiers[ti];
-            let mut o = base.clone();
-            if let Some(p) = preset {
-                o.fov_estimate_deg = p.fov_deg;
-                o.fov_max_error_deg = Some(p.max_error_deg);
+        let mut tally = Tally::default();
+        #[cfg(feature = "narrow")]
+        let narrow = self.narrow.as_ref().and_then(|n| {
+            crate::narrow::route::route(base, &ladder, w, h, &spans, n.engine.info())
+                .map(|step| (n, step))
+        });
+        #[cfg(feature = "narrow")]
+        if let Some((n, step)) = narrow
+            .as_ref()
+            .filter(|(_, s)| s.when == When::BeforeTetra3)
+        {
+            if let Some(out) = self.solve_narrow(n, step, frame, base, &mut cache, t_total)? {
+                tally.record(&n.info, step.fov_deg, out);
             }
-            o.timeout_ms = pass.timeout_ms;
-            let cfg = pass_config(&o, w, h, pass)?;
-            let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
-            let refine = crate::solver::Refine::from_opts(&o);
-            let (mut out, _) = tier
-                .solver
-                .solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
+        }
 
-            // Profile retry, as in the single-database ladder: once per step, only on TooFew
-            // (NoMatch more likely means a wrong FOV); tracking and Custom never retry.
-            if first
-                && matches!(out.status, SolveStatus::TooFew)
-                && o.retry_alternate_profile
-                && o.attitude_hint.is_none()
-            {
-                if let Some(alt) = o.extraction.alternate() {
-                    let ext2 = cache.get(frame, &alt.resolve(), &self.rayon)?;
-                    let (out2, _) = tier
-                        .solver
-                        .solve_extracted(&ext2, &cfg, w, h, t_total, refine)?;
-                    if matches!(out2.status, SolveStatus::Ok) {
-                        out = out2;
+        if tally.db.is_none() {
+            search::run(&passes, |pass, first| {
+                let (ti, preset) = steps[pass.rung];
+                let tier = &self.tiers[ti];
+                let mut o = base.clone();
+                if let Some(p) = preset {
+                    o.fov_estimate_deg = p.fov_deg;
+                    o.fov_max_error_deg = Some(p.max_error_deg);
+                }
+                o.timeout_ms = pass.timeout_ms;
+                let cfg = pass_config(&o, w, h, pass)?;
+                let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
+                let refine = crate::solver::Refine::from_opts(&o);
+                let (mut out, _) = tier
+                    .solver
+                    .solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
+
+                // Profile retry, as in the single-database ladder: once per step, only on
+                // TooFew (NoMatch more likely means a wrong FOV); tracking and Custom never retry.
+                if first
+                    && matches!(out.status, SolveStatus::TooFew)
+                    && o.retry_alternate_profile
+                    && o.attitude_hint.is_none()
+                {
+                    if let Some(alt) = o.extraction.alternate() {
+                        let ext2 = cache.get(frame, &alt.resolve(), &self.rayon)?;
+                        let (out2, _) = tier
+                            .solver
+                            .solve_extracted(&ext2, &cfg, w, h, t_total, refine)?;
+                        if matches!(out2.status, SolveStatus::Ok) {
+                            out = out2;
+                        }
+                        out.extraction_retried = true;
+                        out.timing.total_ms = t_total.elapsed().as_secs_f32() * 1000.0;
                     }
-                    out.extraction_retried = true;
-                    out.timing.total_ms = t_total.elapsed().as_secs_f32() * 1000.0;
+                }
+                Ok(tally.record(&tier.info, o.fov_estimate_deg, out))
+            })?;
+        }
+
+        #[cfg(feature = "narrow")]
+        if tally.db.is_none() {
+            if let Some((n, step)) = narrow.as_ref().filter(|(_, s)| s.when == When::AfterTetra3) {
+                if let Some(out) = self.solve_narrow(n, step, frame, base, &mut cache, t_total)? {
+                    tally.record(&n.info, step.fov_deg, out);
                 }
             }
+        }
 
-            attempts.push(PoolAttempt {
-                db: tier.info.name.clone(),
-                kind: tier.info.kind,
-                fov_deg: o.fov_estimate_deg,
-                status: out.status,
-                solve_ms: out.timing.solve_ms,
-            });
-            let ok = matches!(out.status, SolveStatus::Ok);
-            if ok {
-                solved_by = Some(tier.info.name.clone());
-            }
-            last = Some(out);
-            Ok(ok)
-        })?;
-        let mut outcome = last.ok_or_else(|| {
+        let mut outcome = tally.last.ok_or_else(|| {
             CoreError::InvalidInput("no tier covers this frame (empty routing plan)".into())
         })?;
         outcome.observation_unix_ms = base.observation_unix_ms;
         Ok(PoolOutcome {
             outcome,
-            attempts,
-            db: solved_by,
+            attempts: tally.attempts,
+            db: tally.db,
             extract_count: cache.len(),
         })
+    }
+
+    /// One run of the narrow-field engine on the frame's richest extraction so far (extracting
+    /// once when there is none); None when that has too few centroids for the engine, which
+    /// then never runs.
+    #[cfg(feature = "narrow")]
+    fn solve_narrow(
+        &self,
+        n: &NarrowTier,
+        step: &NarrowStep,
+        frame: &Frame,
+        base: &crate::SolveOptions,
+        cache: &mut ExtractCache,
+        t_total: Instant,
+    ) -> Result<Option<SolveOutcome>> {
+        use crate::narrow::{NarrowMode, NarrowRequest, BLIND_MIN_MATCHES, HINTED_MIN_MATCHES};
+        let (ext, retried) = cache.richest(frame, &base.extraction.resolve(), &self.rayon)?;
+        let floor = match step.mode {
+            NarrowMode::Blind { .. } => BLIND_MIN_MATCHES,
+            NarrowMode::Hinted { .. } => HINTED_MIN_MATCHES,
+        };
+        if ext.topleft.len() < floor {
+            return Ok(None);
+        }
+        let req = NarrowRequest {
+            mode: step.mode.clone(),
+            deadline: step
+                .budget_ms
+                .map(|ms| Instant::now() + std::time::Duration::from_millis(ms)),
+        };
+        let r = n
+            .engine
+            .solve(&ext.topleft, frame.width, frame.height, &req);
+        Ok(Some(SolveOutcome {
+            status: r.status,
+            solution: r.solution,
+            centroids: ext.topleft.clone(),
+            timing: crate::outcome::Timing {
+                extract_ms: ext.extract_ms,
+                solve_ms: r.solve_ms,
+                total_ms: t_total.elapsed().as_secs_f32() * 1000.0,
+            },
+            extraction_retried: retried,
+            median_elongation: ext.median_elongation,
+            observation_unix_ms: None,
+            observer: None,
+        }))
     }
 
     /// Fully automatic file entry: load any of the five formats → header hints + aspect ladder

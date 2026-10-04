@@ -548,6 +548,21 @@ impl ExtractCache {
         Ok(e)
     }
 
+    /// The extraction with the most centroids so far (extracting with `primary` when there is
+    /// none yet), and whether it came from other options than `primary`
+    #[cfg(feature = "narrow")]
+    pub(crate) fn richest(
+        &mut self,
+        frame: &Frame,
+        primary: &ExtractionOptions,
+        rayon_pool: &rayon::ThreadPool,
+    ) -> Result<(Arc<Extracted>, bool)> {
+        match self.entries.iter().max_by_key(|(_, e)| e.topleft.len()) {
+            Some((opts, e)) => Ok((e.clone(), opts != primary)),
+            None => Ok((self.get(frame, primary, rayon_pool)?, false)),
+        }
+    }
+
     /// Extractions performed so far
     pub(crate) fn len(&self) -> usize {
         self.entries.len()

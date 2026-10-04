@@ -1,7 +1,6 @@
 //! Narrow-field engine: seiza's blind pattern index and star tiles, fed with unisolver's own
 //! centroids and checked with unisolver's own matcher. Desktop builds only (`narrow` feature).
 pub(crate) mod geometry;
-#[allow(dead_code)] // the pool takes it up in the next commit
 pub(crate) mod route;
 #[doc(hidden)]
 pub mod testkit;

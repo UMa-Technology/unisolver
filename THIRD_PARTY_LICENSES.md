@@ -10,6 +10,11 @@ MIT AND Apache-2.0. Copyright the tetra3rs authors (Steven Michael) and the upst
 tetra3 / cedar-solve authors (Gustav Pettersson / ESA, Steven Rosenthal).
 Full text: `third_party/tetra3/LICENSE`. Local changes: `third_party/tetra3-patches/` (see `docs/upstream.md`).
 
+### seiza v0.19.2 — vendored at `third_party/seiza`
+Apache-2.0. Copyright Yann Ramin. The `seiza`, `seiza-calibration`, `seiza-imgproc` and
+`seiza-stats` crates. Full text: `third_party/seiza/LICENSE`. Local changes:
+`third_party/seiza-patches/` (see `docs/upstream.md`).
+
 ### Cargokit — vendored at `packages/unisolver_flutter/cargokit`
 MIT or Apache-2.0. Copyright 2022 Matej Knopp. Full text:
 `packages/unisolver_flutter/cargokit/LICENSE`.

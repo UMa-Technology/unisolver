@@ -1,0 +1,161 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: unisolver <patches@unisolver.invalid>
+Date: Sun, 4 Oct 2026 10:12:38 +0800
+Subject: [PATCH] cargo flatten workspace inheritance
+
+
+diff --git a/seiza-calibration/Cargo.toml b/seiza-calibration/Cargo.toml
+index 89c8708b7c7e4b410e0a67eef4a906e7a363a63b..09487e2a1833c03aa524d9ae547672e2a4697353 100644
+--- a/seiza-calibration/Cargo.toml
++++ b/seiza-calibration/Cargo.toml
+@@ -2,20 +2,20 @@
+ name = "seiza-calibration"
+ description = "Host-neutral calibration for linear images: response kernels, frame-set matching, and pedestal fitting"
+ version = "0.4.2"
+-edition.workspace = true
+-rust-version.workspace = true
+-license.workspace = true
+-repository.workspace = true
+-authors.workspace = true
++edition = "2024"
++rust-version = "1.89"
++license = "Apache-2.0"
++repository = "https://github.com/theatrus/seiza"
++authors = ["Yann Ramin <github@theatr.us>"]
+ readme = "README.md"
+ keywords = ["astronomy", "astrophotography", "calibration", "flat-field"]
+ categories = ["science", "multimedia::images"]
+ 
+ [dependencies]
+-serde.workspace = true
+-seiza-imgproc.workspace = true
+-seiza-stats.workspace = true
+-thiserror.workspace = true
++serde = { version = "1", features = ["derive"] }
++seiza-imgproc = { path = "../seiza-imgproc", version = "0.3.2" }
++seiza-stats = { path = "../seiza-stats", version = "0.1.0" }
++thiserror = "2"
+ 
+ [dev-dependencies]
+-serde_json.workspace = true
++serde_json = "1"
+diff --git a/seiza-imgproc/Cargo.toml b/seiza-imgproc/Cargo.toml
+index ddaf2ecada42d9fd945f8dc21b05430000a1f524..b25132710b641e0e55b8065a222c8c3ae5abe49e 100644
+--- a/seiza-imgproc/Cargo.toml
++++ b/seiza-imgproc/Cargo.toml
+@@ -2,11 +2,11 @@
+ name = "seiza-imgproc"
+ description = "Pure-Rust image processing primitives with OpenCV-compatible semantics: blur, Canny, thresholding, morphology, components, contours, filtering, and wavelets"
+ version = "0.3.2"
+-edition.workspace = true
+-rust-version.workspace = true
+-license.workspace = true
+-repository.workspace = true
+-authors.workspace = true
++edition = "2024"
++rust-version = "1.89"
++license = "Apache-2.0"
++repository = "https://github.com/theatrus/seiza"
++authors = ["Yann Ramin <github@theatr.us>"]
+ readme = "README.md"
+ keywords = ["image-processing", "canny", "contours", "morphology"]
+ categories = ["computer-vision", "science"]
+diff --git a/seiza-stats/Cargo.toml b/seiza-stats/Cargo.toml
+index b794601522325ee80b09ea93ad619b3ea99a5d56..6ccfe2e7cdc86b920f289bd01d967b158ce461f7 100644
+--- a/seiza-stats/Cargo.toml
++++ b/seiza-stats/Cargo.toml
+@@ -2,11 +2,11 @@
+ name = "seiza-stats"
+ description = "Shared robust statistics for astrophotography pipelines"
+ version = "0.1.0"
+-edition.workspace = true
+-rust-version.workspace = true
+-license.workspace = true
+-repository.workspace = true
+-authors.workspace = true
++edition = "2024"
++rust-version = "1.89"
++license = "Apache-2.0"
++repository = "https://github.com/theatrus/seiza"
++authors = ["Yann Ramin <github@theatr.us>"]
+ readme = "README.md"
+ keywords = ["astronomy", "astrophotography", "statistics", "median"]
+ categories = ["science", "mathematics"]
+diff --git a/seiza/Cargo.toml b/seiza/Cargo.toml
+index 2f777d65bbc5882ec8920f98b12ed7f2950abd51..c8dd23aeebf69e860ab8616b83ef0c01e8000a18 100644
+--- a/seiza/Cargo.toml
++++ b/seiza/Cargo.toml
+@@ -1,35 +1,31 @@
+ [package]
+ name = "seiza"
+ description = "Star detection, WCS fitting, and near-field plate solving for astrophotography"
+-version.workspace = true
+-edition.workspace = true
+-rust-version.workspace = true
+-license.workspace = true
+-repository.workspace = true
+-authors.workspace = true
++version = "0.19.2"
++edition = "2024"
++rust-version = "1.89"
++license = "Apache-2.0"
++repository = "https://github.com/theatrus/seiza"
++authors = ["Yann Ramin <github@theatr.us>"]
+ readme = "README.md"
+ keywords = ["astronomy", "astrophotography", "plate-solving", "wcs", "astrometry"]
+ categories = ["science", "multimedia::images"]
+ 
+-[features]
+-downloads = ["dep:seiza-download"]
+-
+ [dependencies]
+-directories.workspace = true
+-image.workspace = true
+-thiserror.workspace = true
+-seiza-download = { workspace = true, optional = true }
+-seiza-calibration.workspace = true
+-memmap2.workspace = true
+-rayon.workspace = true
+-seiza-stats.workspace = true
+-rustc-hash.workspace = true
+-wide.workspace = true
+-multiversion.workspace = true
+-serde.workspace = true
+-serde_json.workspace = true
+-postcard.workspace = true
+-sha2.workspace = true
++directories = "6"
++image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
++thiserror = "2"
++seiza-calibration = { path = "../seiza-calibration", version = "0.4.2" }
++memmap2 = "0.9"
++rayon = "1"
++seiza-stats = { path = "../seiza-stats", version = "0.1.0" }
++rustc-hash = { version = "2" }
++wide = "1.6"
++multiversion = "0.8"
++serde = { version = "1", features = ["derive"] }
++serde_json = "1"
++postcard = { version = "1", features = ["use-std"] }
++sha2 = "0.11"
+ 
+ [dev-dependencies]
+ tempfile = "3"
+diff --git a/seiza/src/lib.rs b/seiza/src/lib.rs
+index edc6a6cbf4e9ae2d161ff1c3443ea7421c38e55f..af7db0dc9a466780fc5eaca4c7a25a0b643ac26c 100644
+--- a/seiza/src/lib.rs
++++ b/seiza/src/lib.rs
+@@ -26,13 +26,6 @@ pub use wcs::{FitsCardValue, Sip, Wcs};
+ /// Host-neutral calibration response kernels.
+ pub use seiza_calibration as calibration;
+ 
+-/// Async installation and caching of published catalog bundles.
+-///
+-/// Available with the non-default `downloads` feature. Catalog opening itself
+-/// remains synchronous, local, and network-free.
+-#[cfg(feature = "downloads")]
+-pub use seiza_download as downloads;
+-
+ #[derive(Debug, thiserror::Error)]
+ pub enum Error {
+     #[error("image error: {0}")]

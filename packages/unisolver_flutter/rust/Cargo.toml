@@ -25,6 +25,13 @@ sha2 = "0.10"
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 unisolver-core = { path = "../../../crates/unisolver-core", features = ["narrow"] }
 
+# Free disk space before a large install (available_disk_bytes)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 unisolver-synth = { path = "../../../crates/unisolver-synth" }
 # Only for building compressed test samples; runtime decoding uses pure-Rust ruzstd (the

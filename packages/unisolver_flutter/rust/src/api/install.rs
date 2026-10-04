@@ -50,6 +50,124 @@ pub fn sha256_file(path: String) -> Result<String> {
     Ok(format!("{:x}", h.finalize()))
 }
 
+/// Decompresses `zst_path` to `out_path` through `{out_path}.tmp`, hashing the output as it
+/// streams; with `raw_sha256` given, a different digest deletes the temporary file and fails, so
+/// nothing unverified is ever installed. An existing `out_path` is replaced. Returns the size.
+pub fn install_compressed_file(
+    zst_path: String,
+    out_path: String,
+    raw_sha256: Option<String>,
+) -> Result<u64> {
+    use sha2::Digest;
+    let src = std::fs::File::open(&zst_path).with_context(|| format!("read {zst_path}"))?;
+    let mut decoder =
+        ruzstd::decoding::StreamingDecoder::new(std::io::BufReader::with_capacity(1 << 20, src))
+            .context("zstd stream")?;
+    if let Some(dir) = std::path::Path::new(&out_path).parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = format!("{out_path}.tmp");
+    let written = (|| -> Result<(u64, String)> {
+        let file = std::fs::File::create(&tmp).with_context(|| format!("create {tmp}"))?;
+        let mut sink = Hashing {
+            inner: std::io::BufWriter::with_capacity(1 << 20, file),
+            hasher: sha2::Sha256::new(),
+        };
+        let n = std::io::copy(&mut decoder, &mut sink).context("zstd decode")?;
+        std::io::Write::flush(&mut sink)?;
+        let digest = format!("{:x}", sink.hasher.finalize());
+        // Sync before the rename, so a power loss never leaves a renamed but half-written file
+        sink.inner
+            .into_inner()
+            .map_err(|e| e.into_error())?
+            .sync_all()?;
+        Ok((n, digest))
+    })();
+    let (n, digest) = match written {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+    };
+    if let Some(want) = raw_sha256 {
+        if !digest.eq_ignore_ascii_case(&want) {
+            let _ = std::fs::remove_file(&tmp);
+            anyhow::bail!(
+                "raw sha256 mismatch: expected {}, got {digest}",
+                want.to_lowercase()
+            );
+        }
+    }
+    std::fs::rename(&tmp, &out_path)?; // atomic: a partial file is never taken as installed
+    Ok(n)
+}
+
+/// A writer that hashes what passes through it
+struct Hashing<W> {
+    inner: W,
+    hasher: sha2::Sha256,
+}
+
+impl<W: std::io::Write> std::io::Write for Hashing<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use sha2::Digest;
+        let n = self.inner.write(buf)?;
+        self.hasher.update(&buf[..n]);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Free bytes for this user on the volume holding `path` (checked before a large install)
+#[allow(clippy::unnecessary_cast)] // statvfs field widths differ between platforms
+pub fn available_disk_bytes(path: String) -> Result<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let c = std::ffi::CString::new(std::path::Path::new(&path).as_os_str().as_bytes())?;
+        // SAFETY: statvfs fills the zeroed struct for a NUL-terminated path
+        let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
+            return Err(std::io::Error::last_os_error()).with_context(|| format!("statvfs {path}"));
+        }
+        Ok(s.f_bavail as u64 * s.f_frsize as u64)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let wide: Vec<u16> = std::path::Path::new(&path)
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        let mut free = 0u64;
+        // SAFETY: a NUL-terminated wide path and a valid out pointer; the totals are not wanted
+        let ok = unsafe {
+            windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
+                wide.as_ptr(),
+                &mut free,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        if ok == 0 {
+            return Err(std::io::Error::last_os_error())
+                .with_context(|| format!("free space of {path}"));
+        }
+        Ok(free)
+    }
+}
+
+/// This engine's version, compared with the manifest's `min_engine`
+#[flutter_rust_bridge::frb(sync)]
+pub fn engine_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,6 +312,44 @@ mod tests {
         }
         assert!(ran > 0, "no manifest tier found under {}", dir.display());
         eprintln!("sha256_agrees_with_the_manifest_for_real_tiers: checked {ran} tier(s)");
+    }
+
+    #[test]
+    fn installing_checks_the_decompressed_digest() {
+        use sha2::Digest;
+        let dir = std::env::temp_dir().join(format!("frb_install_digest_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let raw: Vec<u8> = (0..40_000u32).flat_map(|v| v.to_le_bytes()).collect();
+        let zst = dir.join("x.zst");
+        std::fs::write(&zst, zstd::encode_all(&raw[..], 3).unwrap()).unwrap();
+        let out = dir.join("x.bin");
+        let good = format!("{:x}", sha2::Sha256::digest(&raw));
+        let s = |p: &std::path::Path| p.to_str().unwrap().to_string();
+
+        // Wrong digest: nothing is left behind
+        let err = install_compressed_file(s(&zst), s(&out), Some("0".repeat(64))).unwrap_err();
+        assert!(err.to_string().contains("raw sha256 mismatch"), "{err}");
+        assert!(!out.exists() && !dir.join("x.bin.tmp").exists());
+
+        // Right digest (any case), and none at all
+        let n = install_compressed_file(s(&zst), s(&out), Some(good.to_uppercase())).unwrap();
+        assert_eq!(n as usize, raw.len());
+        assert_eq!(std::fs::read(&out).unwrap(), raw);
+        std::fs::write(&out, b"older").unwrap();
+        install_compressed_file(s(&zst), s(&out), None).unwrap();
+        assert_eq!(
+            std::fs::read(&out).unwrap(),
+            raw,
+            "an existing file is replaced"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn free_space_and_the_engine_version_are_reported() {
+        assert!(available_disk_bytes(std::env::temp_dir().to_string_lossy().into()).unwrap() > 0);
+        assert!(available_disk_bytes("/no/such/dir".into()).is_err());
+        assert_eq!(engine_version(), env!("CARGO_PKG_VERSION"));
     }
 
     #[test]

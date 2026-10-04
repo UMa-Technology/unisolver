@@ -72,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 172705559;
+  int get rustContentHash => -404761215;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -201,6 +201,8 @@ abstract class RustLibApi extends BaseApi {
 
   AnnotateOptionsDto crateApiTypesAnnotateOptionsDtoDefaults();
 
+  Future<BigInt> crateApiInstallAvailableDiskBytes({required String path});
+
   Future<CameraParamsDto> crateApiSolverCameraParamsFromJson({
     required String j,
   });
@@ -211,6 +213,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiSolverDebugTriggerPanic();
 
+  String crateApiInstallEngineVersion();
+
   Future<ImagePreviewDto> crateApiPreviewImagePreview({
     required String path,
     required int maxSide,
@@ -219,6 +223,12 @@ abstract class RustLibApi extends BaseApi {
   Future<BigInt> crateApiInstallInstallCompressedDb({
     required String zstPath,
     required String outPath,
+  });
+
+  Future<BigInt> crateApiInstallInstallCompressedFile({
+    required String zstPath,
+    required String outPath,
+    String? rawSha256,
   });
 
   Future<List<SatellitePosDto>> crateApiSatellitesSatellitePositions({
@@ -1159,6 +1169,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiInstallAvailableDiskBytes({required String path}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiInstallAvailableDiskBytesConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiInstallAvailableDiskBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "available_disk_bytes",
+        argNames: ["path"],
+      );
+
+  @override
   Future<CameraParamsDto> crateApiSolverCameraParamsFromJson({
     required String j,
   }) {
@@ -1170,7 +1211,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1203,7 +1244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1227,7 +1268,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_data_attribution_dto,
@@ -1252,7 +1293,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1271,6 +1312,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "debug_trigger_panic", argNames: []);
 
   @override
+  String crateApiInstallEngineVersion() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiInstallEngineVersionConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiInstallEngineVersionConstMeta =>
+      const TaskConstMeta(debugName: "engine_version", argNames: []);
+
+  @override
   Future<ImagePreviewDto> crateApiPreviewImagePreview({
     required String path,
     required int maxSide,
@@ -1284,7 +1347,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1319,7 +1382,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1341,6 +1404,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiInstallInstallCompressedFile({
+    required String zstPath,
+    required String outPath,
+    String? rawSha256,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(zstPath, serializer);
+          sse_encode_String(outPath, serializer);
+          sse_encode_opt_String(rawSha256, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 33,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiInstallInstallCompressedFileConstMeta,
+        argValues: [zstPath, outPath, rawSha256],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiInstallInstallCompressedFileConstMeta =>
+      const TaskConstMeta(
+        debugName: "install_compressed_file",
+        argNames: ["zstPath", "outPath", "rawSha256"],
+      );
+
+  @override
   Future<List<SatellitePosDto>> crateApiSatellitesSatellitePositions({
     required String tleText,
     required PlatformInt64 unixMs,
@@ -1356,7 +1456,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1389,7 +1489,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 32,
+              funcId: 35,
               port: port_,
             );
           },
@@ -1419,7 +1519,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1446,7 +1546,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_f_32(fovEstimateDeg, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_solve_options_dto,
@@ -1476,7 +1576,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_wcs_dto(wcs, serializer);
           sse_encode_list_prim_f_64_loose(pixels, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_f_64_strict,
@@ -1505,7 +1605,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_wcs_dto(wcs, serializer);
           sse_encode_list_prim_f_64_loose(radec, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_f_64_strict,
@@ -6372,7 +6472,9 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
       .crateApiSolverUniSolverPoolRegister(that: this, dbPath: dbPath);
 
   /// Registers the narrow-field package (desktop builds): its blind index and star-tile
-  /// files. Only their headers are read. Registering the same index again returns it; a
+  /// files. Only their headers are read; a background thread then reads both files once, so the
+  /// first solve does not wait on the disk (set `UNISOLVER_NO_PREFETCH=1` to skip it).
+  /// Registering the same index again returns it; a
   /// second package is an error, and so is every call on iOS and Android, which have no
   /// narrow-field engine.
   Future<TierInfoDto> registerNarrow({

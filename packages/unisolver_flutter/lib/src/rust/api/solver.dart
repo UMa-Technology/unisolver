@@ -125,7 +125,9 @@ abstract class UniSolverPool implements RustOpaqueInterface {
   Future<TierInfoDto> register({required String dbPath});
 
   /// Registers the narrow-field package (desktop builds): its blind index and star-tile
-  /// files. Only their headers are read. Registering the same index again returns it; a
+  /// files. Only their headers are read; a background thread then reads both files once, so the
+  /// first solve does not wait on the disk (set `UNISOLVER_NO_PREFETCH=1` to skip it).
+  /// Registering the same index again returns it; a
   /// second package is an error, and so is every call on iOS and Android, which have no
   /// narrow-field engine.
   Future<TierInfoDto> registerNarrow({

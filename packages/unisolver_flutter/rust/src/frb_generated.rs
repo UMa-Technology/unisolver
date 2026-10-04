@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 172705559;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -404761215;
 
 // Section: executor
 
@@ -1273,6 +1273,41 @@ fn wire__crate__api__types__annotate_options_dto_defaults_impl(
         },
     )
 }
+fn wire__crate__api__install__available_disk_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "available_disk_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::install::available_disk_bytes(api_path)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__solver__camera_params_from_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1406,6 +1441,35 @@ fn wire__crate__api__solver__debug_trigger_panic_impl(
         },
     )
 }
+fn wire__crate__api__install__engine_version_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "engine_version",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::install::engine_version())?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__preview__image_preview_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1472,6 +1536,47 @@ fn wire__crate__api__install__install_compressed_db_impl(
                     (move || {
                         let output_ok =
                             crate::api::install::install_compressed_db(api_zst_path, api_out_path)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__install__install_compressed_file_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "install_compressed_file",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_zst_path = <String>::sse_decode(&mut deserializer);
+            let api_out_path = <String>::sse_decode(&mut deserializer);
+            let api_raw_sha256 = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::install::install_compressed_file(
+                            api_zst_path,
+                            api_out_path,
+                            api_raw_sha256,
+                        )?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -3453,28 +3558,37 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__solver__camera_params_from_json_impl(
+        25 => {
+            wire__crate__api__install__available_disk_bytes_impl(port, ptr, rust_vec_len, data_len)
+        }
+        26 => wire__crate__api__solver__camera_params_from_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => {
+        27 => {
             wire__crate__api__solver__camera_params_to_json_impl(port, ptr, rust_vec_len, data_len)
         }
-        28 => wire__crate__api__solver__debug_trigger_panic_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__preview__image_preview_impl(port, ptr, rust_vec_len, data_len),
-        30 => {
+        29 => wire__crate__api__solver__debug_trigger_panic_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__preview__image_preview_impl(port, ptr, rust_vec_len, data_len),
+        32 => {
             wire__crate__api__install__install_compressed_db_impl(port, ptr, rust_vec_len, data_len)
         }
-        31 => wire__crate__api__satellites__satellite_positions_impl(
+        33 => wire__crate__api__install__install_compressed_file_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__logging__set_log_stream_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__install__sha256_file_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__satellites__satellite_positions_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        35 => wire__crate__api__logging__set_log_stream_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__install__sha256_file_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3499,10 +3613,11 @@ fn pde_ffi_dispatcher_sync_impl(
         24 => {
             wire__crate__api__types__annotate_options_dto_defaults_impl(ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__api__attribution__data_attributions_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__types__solve_options_dto_defaults_impl(ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__attribution__data_attributions_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__install__engine_version_impl(ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__types__solve_options_dto_defaults_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

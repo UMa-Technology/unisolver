@@ -1862,6 +1862,7 @@ dependencies = [
  "anyhow",
  "flutter_rust_bridge",
  "image",
+ "libc",
  "ruzstd",
  "serde_json",
  "sha2",
@@ -1869,6 +1870,7 @@ dependencies = [
  "tracing-subscriber",
  "unisolver-core",
  "unisolver-synth",
+ "windows-sys 0.61.2",
  "zstd",
 ]
 

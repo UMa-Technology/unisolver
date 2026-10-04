@@ -6,6 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Hashing`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `flush`, `write`
+
 /// Decompresses a zstd database to `out_path`; skips when the target exists and is non-empty.
 /// Returns the decompressed size in bytes.
 Future<BigInt> installCompressedDb({
@@ -20,3 +23,23 @@ Future<BigInt> installCompressedDb({
 /// hundred MB should not be read into memory on the Dart side to hash it.
 Future<String> sha256File({required String path}) =>
     RustLib.instance.api.crateApiInstallSha256File(path: path);
+
+/// Decompresses `zst_path` to `out_path` through `{out_path}.tmp`, hashing the output as it
+/// streams; with `raw_sha256` given, a different digest deletes the temporary file and fails, so
+/// nothing unverified is ever installed. An existing `out_path` is replaced. Returns the size.
+Future<BigInt> installCompressedFile({
+  required String zstPath,
+  required String outPath,
+  String? rawSha256,
+}) => RustLib.instance.api.crateApiInstallInstallCompressedFile(
+  zstPath: zstPath,
+  outPath: outPath,
+  rawSha256: rawSha256,
+);
+
+/// Free bytes for this user on the volume holding `path` (checked before a large install)
+Future<BigInt> availableDiskBytes({required String path}) =>
+    RustLib.instance.api.crateApiInstallAvailableDiskBytes(path: path);
+
+/// This engine's version, compared with the manifest's `min_engine`
+String engineVersion() => RustLib.instance.api.crateApiInstallEngineVersion();

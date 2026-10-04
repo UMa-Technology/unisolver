@@ -8,8 +8,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `forward`
 
-/// Registers the Dart log stream; the first call installs the global subscriber, later calls
-/// replace the sink.
+/// Registers the Dart log stream; the first call installs the global subscriber (which also
+/// takes `log` records through tracing-subscriber's `tracing-log` bridge), later calls replace
+/// the sink.
 Stream<LogEventDto> setLogStream() =>
     RustLib.instance.api.crateApiLoggingSetLogStream();
 

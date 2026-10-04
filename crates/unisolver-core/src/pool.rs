@@ -172,9 +172,9 @@ impl SolverPool {
                 }
                 continue;
             }
-            match magic(&f).as_ref().map(|m| &m[..]) {
-                Some(b"SEIZABI1") => indexes.push(f),
-                Some(b"SEIZAST1" | b"SEIZAST2") => tiles.push(f),
+            match magic(&f) {
+                Some(m) if &m == NARROW_INDEX_MAGIC => indexes.push(f),
+                Some(m) if &m == NARROW_TILE_MAGIC => tiles.push(f),
                 _ => {}
             }
         }
@@ -234,8 +234,8 @@ impl SolverPool {
         Ok(info)
     }
 
-    /// Registers the narrow-field engine: a blind index (`SEIZABI1`) and its star tiles
-    /// (`SEIZAST1`/`SEIZAST2`). Both are memory mapped and only their headers are read, so it
+    /// Registers the narrow-field engine: a blind index (`UNIBLIX1`) and its star tiles
+    /// (`UNISTAR1`). Both are memory mapped and only their headers are read, so it
     /// is as quick as registering a tetra3 tier. One package per pool: registering the same
     /// index again returns it, another one is an error (open a new pool to replace it). Builds
     /// without the narrow-field engine (mobile) return an error.
@@ -555,6 +555,11 @@ fn canonical(path: &str) -> String {
         .unwrap_or_else(|_| path.to_string())
 }
 
+/// Headers of the narrow-field package's files (the engine's `blind::INDEX_MAGIC` and
+/// `catalog::TILE_MAGIC`), spelled out so builds without the engine still recognize them
+const NARROW_INDEX_MAGIC: &[u8; 8] = b"UNIBLIX1";
+const NARROW_TILE_MAGIC: &[u8; 8] = b"UNISTAR1";
+
 /// The first 8 bytes of a file (narrow-field files are recognized by their headers)
 fn magic(path: &std::path::Path) -> Option<[u8; 8]> {
     use std::io::Read;
@@ -666,6 +671,19 @@ fn plan(spans: &[(f32, f32)], hints: &[FovPreset]) -> Vec<(usize, FovPreset)> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "narrow")]
+    #[test]
+    fn narrow_headers_match_the_engine() {
+        assert_eq!(
+            super::NARROW_INDEX_MAGIC,
+            unisolver_starmatch::blind::INDEX_MAGIC
+        );
+        assert_eq!(
+            super::NARROW_TILE_MAGIC,
+            unisolver_starmatch::catalog::TILE_MAGIC
+        );
+    }
+
     use super::*;
 
     /// Three tiers (10–80°, 5–10°, 2.5–5°) with a portrait phone ladder: the wide tier takes the ladder, narrow tiers fill in their own range.

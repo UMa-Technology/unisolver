@@ -158,7 +158,7 @@ fn registration_reads_only_the_headers() {
     let idx = dir.join("big.idx");
     let patterns: u64 = 97_000_000; // 44 bytes each
     let mut header = [0u8; 64];
-    header[..8].copy_from_slice(b"SEIZABI1");
+    header[..8].copy_from_slice(unisolver_starmatch::blind::INDEX_MAGIC);
     header[24..32].copy_from_slice(&patterns.to_le_bytes());
     header[32..36].copy_from_slice(&16.0f32.to_le_bytes());
     header[36..40].copy_from_slice(&6.0f32.to_le_bytes());

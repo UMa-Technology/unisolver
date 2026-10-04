@@ -99,7 +99,7 @@ fn scale_of(fov_deg: f64, width: u32) -> f64 {
 }
 
 impl NarrowEngine {
-    /// Opens a blind index (`SEIZABI1`) and its star tiles (`SEIZAST1/2`). Both are memory
+    /// Opens a blind index (`UNIBLIX1`) and its star tiles (`UNISTAR1`). Both are memory
     /// mapped; nothing is read beyond their headers.
     pub fn open(index_path: &str, stars_path: &str) -> Result<NarrowEngine> {
         Self::open_with_pool(index_path, stars_path, crate::solver::build_pool()?)

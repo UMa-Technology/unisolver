@@ -7,7 +7,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-unisolver-core = { path = "../../crates/unisolver-core", features = ["imageio", "satellites"] }
+unisolver-core = { path = "../../crates/unisolver-core", features = ["imageio", "satellites", "narrow"] }
 tetra3 = { path = "../../third_party/tetra3", features = ["image", "parallel"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

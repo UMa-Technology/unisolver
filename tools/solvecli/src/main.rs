@@ -76,6 +76,20 @@ struct Cli {
     /// --db). Ladder rungs are dispatched by tier range; the solving tier goes into the JSON `db` field.
     #[arg(long)]
     pool: Option<PathBuf>,
+    /// Pointing hint for the narrow-field engine (--pool): right ascension, degrees. Needs
+    /// --hint-dec. FITS/XISF files give one from the header when this is absent
+    #[arg(long, requires = "hint_dec", allow_negative_numbers = true)]
+    hint_ra: Option<f64>,
+    /// Pointing hint: declination, degrees
+    #[arg(long, requires = "hint_ra", allow_negative_numbers = true)]
+    hint_dec: Option<f64>,
+    /// Pointing hint search radius, degrees (default max(1°, 3 × FOV))
+    #[arg(long, requires = "hint_ra")]
+    hint_radius: Option<f64>,
+    /// --pool with an unknown FOV: after every tetra3 tier failed, blind-solve once with the
+    /// narrow-field engine
+    #[arg(long)]
+    narrow_blind: bool,
 }
 
 #[derive(Serialize)]
@@ -104,6 +118,9 @@ struct AttemptOut {
     /// Tier used for this attempt (--pool only)
     #[serde(skip_serializing_if = "Option::is_none")]
     db: Option<String>,
+    /// Engine of this attempt (--pool only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<TierKind>,
 }
 
 #[derive(Serialize)]
@@ -245,10 +262,20 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
             for t in p.tiers() {
                 eprintln!(
-                    "pool: {} [{:.2}–{:.2}°] {} stars / {} patterns",
-                    t.name, t.min_fov_deg, t.max_fov_deg, t.num_stars, t.num_patterns
+                    "pool: {} [{:.2}–{:.2}°] {} stars / {} patterns{}",
+                    t.name,
+                    t.min_fov_deg,
+                    t.max_fov_deg,
+                    t.num_stars,
+                    t.num_patterns,
+                    if t.kind == TierKind::Narrow {
+                        " (narrow-field engine)"
+                    } else {
+                        ""
+                    }
                 );
             }
+
             Some(p)
         }
         None => None,
@@ -261,11 +288,12 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             Some(Solver::from_file(db.to_str().unwrap())?)
         }
     };
-    let solver_of = |name: Option<&str>| -> &Solver {
-        match (&pool, name) {
-            (Some(p), Some(n)) => p.solver(n).expect("attempt named a registered tier"),
-            (Some(p), None) => p.solver(&p.tiers()[0].name).expect("pool non-empty"),
-            (None, _) => solver.as_ref().expect("single-db mode"),
+    let solver_of = |name: Option<&str>| -> std::result::Result<&Solver, String> {
+        match &pool {
+            Some(p) => p
+                .annotation_solver(name)
+                .ok_or_else(|| "the pool has no tetra3 tier to annotate with".to_string()),
+            None => Ok(solver.as_ref().expect("single-db mode")),
         }
     };
 
@@ -308,7 +336,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     // ── Calibration: a separate flow ──
     if let Some(calib_out) = &cli.calibrate_out {
-        let mut session = solver_of(None).new_calibration_session()?;
+        let mut session = solver_of(None)?.new_calibration_session()?;
         for path in &cli.images {
             let dyn_img = image::open(path)?;
             let gray = dyn_img.to_luma32f();
@@ -399,6 +427,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 base.camera = Some(cam.clone());
                 base.fov_max_error_deg = None;
             }
+            base.pointing_hint =
+                cli.hint_ra
+                    .zip(cli.hint_dec)
+                    .map(|(ra_deg, dec_deg)| PointingHint {
+                        ra_deg,
+                        dec_deg,
+                        radius_deg: cli.hint_radius,
+                    });
+            base.narrow_blind = cli.narrow_blind;
+            meta.apply_pointing(&mut base);
             let r = p.solve_auto(&frame, &base, &hints)?;
             db_used = r.db;
             let a = r
@@ -409,6 +447,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     status: status_str(x.status),
                     solve_ms: x.solve_ms,
                     db: Some(x.db.clone()),
+                    kind: Some(x.kind),
                 })
                 .collect();
             (r.outcome, a)
@@ -476,6 +515,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     status: status_str(x.status),
                     solve_ms: x.solve_ms,
                     db: None,
+                    kind: None,
                 })
                 .collect();
             (out, a)
@@ -485,7 +525,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         if !annotators.contains_key(&ann_key) {
             annotators.insert(
                 ann_key.clone(),
-                solver_of(db_used.as_deref())
+                solver_of(db_used.as_deref())?
                     .annotator(dso_arg, names_arg)?
                     .with_constellations(cli.constellations.as_ref().and_then(|p| p.to_str())),
             );

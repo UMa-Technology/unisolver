@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Lays out tier archives by manifest key, the way a host serves them, behind a static
-server **with Range support**, for rehearsing DbManager's download path locally.
+"""Lays out what a manifest lists by key, the way a host serves it, behind a static server
+**with Range support**, for rehearsing DbManager's download path locally.
 
-    python3 scripts/ci/serve_tiers.py --manifest M --data DIR          # port 8099, every tier
-    python3 scripts/ci/serve_tiers.py ... --only <tier name>           # a single tier
+    python3 scripts/ci/serve_tiers.py --manifest M --data DIR          # port 8099, everything listed
+    python3 scripts/ci/serve_tiers.py ... --only <name>                # one tier, asset or package
     python3 scripts/ci/serve_tiers.py ... --truncate-first 4000000     # drop the first archive at 4 MB
+
+M is a version 3 manifest; DIR holds the files it names (`file`): tier archives, assets and the
+archives of each package. `--only` takes tier, asset and package names (repeatable); a package
+brings all of its files.
 
 Why not `python3 -m http.server`: stdlib's SimpleHTTPRequestHandler ignores Range and
 answers 200 with the full body, so the resume path would silently degrade to a restart
@@ -12,8 +16,10 @@ and never be exercised. This server answers 206 with Content-Range, like object 
 and CDNs do.
 
 The layout uses symlinks rather than copies (a tier can exceed 1 GB). The manifest is
-served unchanged: clients only point their base URL here, and keys and sha256 come from
-the manifest, so the rehearsed manifest is the one that gets published.
+served unchanged as `manifest-v3.json`, the name clients fetch, and as `manifest.json`, the
+name older clients fetch (a real host keeps version 2 there): clients only point their base
+URL here, and keys and sha256 come from the manifest, so the rehearsed manifest is the one
+that gets published.
 """
 from __future__ import annotations
 
@@ -77,24 +83,39 @@ class RangeHandler(http.server.SimpleHTTPRequestHandler):
         shutil.copyfileobj(source, outputfile)
 
 
+MANIFEST_NAMES = ("manifest-v3.json", "manifest.json")
+
+
+def hosted(m: dict) -> list[tuple[str, str, str, int]]:
+    """(name, file, key, bytes) of every hosted file; a package's files carry the package name."""
+    out = [(t["name"], t["file"], t["key"], t["bytes"]) for t in m["tiers"] if not t.get("bundled")]
+    out += [(a["name"], a["file"], a["key"], a["bytes"]) for a in m.get("assets", [])]
+    for p in m.get("packages", []):
+        out += [(p["name"], f["file"], f["key"], f["bytes"]) for f in p["files"]]
+    return out
+
+
 def build_layout(manifest: Path, data: Path, only: list[str]) -> Path:
     m = json.loads(manifest.read_text())
+    files = hosted(m)
+    unknown = sorted(set(only) - {name for name, *_ in files})
+    if unknown:
+        raise SystemExit(f"not hosted by this manifest: {', '.join(unknown)}")
     root = Path(tempfile.mkdtemp(prefix="unisolver_cdn_"))
-    (root / "manifest.json").symlink_to(manifest.resolve())
+    for name in MANIFEST_NAMES:
+        (root / name).symlink_to(manifest.resolve())
     served = []
-    for t in m["tiers"]:
-        if only and t["name"] not in only:
+    for name, file, key, size in files:
+        if only and name not in only:
             continue
-        if t.get("bundled"):
-            continue  # the bundled tier is not hosted
-        src = (data / t["file"]).resolve()
+        src = (data / file).resolve()
         if not src.is_file():
-            print(f"  skipping {t['name']}: {src} does not exist")
+            print(f"  skipping {name}: {src} does not exist")
             continue
-        dst = root / t["key"]
+        dst = root / key
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.symlink_to(src)
-        served.append((t["name"], t["key"], t["bytes"]))
+        served.append((name, key, size))
     if not served:
         raise SystemExit("nothing to serve: check --data and --only")
     print(f"layout: {root}")
@@ -108,7 +129,12 @@ def main() -> None:
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--data", required=True)
     ap.add_argument("--port", type=int, default=8099)
-    ap.add_argument("--only", action="append", default=[], help="serve only these tiers (repeatable)")
+    ap.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        help="serve only these tiers, assets or packages (repeatable)",
+    )
     ap.add_argument(
         "--truncate-first",
         type=int,

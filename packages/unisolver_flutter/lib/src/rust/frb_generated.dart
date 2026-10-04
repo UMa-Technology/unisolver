@@ -11,15 +11,12 @@ import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
 import 'api/wcs.dart';
-
 import 'dart:async';
 import 'dart:convert';
-
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'lib.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// Main entrypoint of the Rust API
@@ -75,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 932050728;
+  int get rustContentHash => 172705559;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -134,6 +131,12 @@ abstract class RustLibApi extends BaseApi {
   Future<TierInfoDto> crateApiSolverUniSolverPoolRegister({
     required UniSolverPool that,
     required String dbPath,
+  });
+
+  Future<TierInfoDto> crateApiSolverUniSolverPoolRegisterNarrow({
+    required UniSolverPool that,
+    required String indexPath,
+    required String starsPath,
   });
 
   List<String> crateApiSolverUniSolverPoolSkipped({
@@ -646,6 +649,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<TierInfoDto> crateApiSolverUniSolverPoolRegisterNarrow({
+    required UniSolverPool that,
+    required String indexPath,
+    required String starsPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerUniSolverPool(
+            that,
+            serializer,
+          );
+          sse_encode_String(indexPath, serializer);
+          sse_encode_String(starsPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tier_info_dto,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiSolverUniSolverPoolRegisterNarrowConstMeta,
+        argValues: [that, indexPath, starsPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSolverUniSolverPoolRegisterNarrowConstMeta =>
+      const TaskConstMeta(
+        debugName: "UniSolverPool_register_narrow",
+        argNames: ["that", "indexPath", "starsPath"],
+      );
+
+  @override
   List<String> crateApiSolverUniSolverPoolSkipped({
     required UniSolverPool that,
   }) {
@@ -657,7 +700,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -695,7 +738,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -735,7 +778,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -771,7 +814,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -810,7 +853,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -842,7 +885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -876,7 +919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -908,7 +951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_db_properties_dto,
@@ -946,7 +989,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -986,7 +1029,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1026,7 +1069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1068,7 +1111,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1096,7 +1139,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_annotate_options_dto,
@@ -1127,7 +1170,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1160,7 +1203,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1184,7 +1227,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_data_attribution_dto,
@@ -1209,7 +1252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1241,7 +1284,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1276,7 +1319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1313,7 +1356,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1346,7 +1389,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 31,
+              funcId: 32,
               port: port_,
             );
           },
@@ -1376,7 +1419,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1403,7 +1446,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_f_32(fovEstimateDeg, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_solve_options_dto,
@@ -1433,7 +1476,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_wcs_dto(wcs, serializer);
           sse_encode_list_prim_f_64_loose(pixels, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_f_64_strict,
@@ -1462,7 +1505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_wcs_dto(wcs, serializer);
           sse_encode_list_prim_f_64_loose(radec, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_f_64_strict,
@@ -1774,6 +1817,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ObserverDto dco_decode_box_autoadd_observer_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_observer_dto(raw);
+  }
+
+  @protected
+  PointingHintDto dco_decode_box_autoadd_pointing_hint_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_pointing_hint_dto(raw);
   }
 
   @protected
@@ -2491,6 +2540,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PointingHintDto? dco_decode_opt_box_autoadd_pointing_hint_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_pointing_hint_dto(raw);
+  }
+
+  @protected
   SolvedGeometryDto? dco_decode_opt_box_autoadd_solved_geometry_dto(
     dynamic raw,
   ) {
@@ -2541,16 +2596,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PointingHintDto dco_decode_pointing_hint_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return PointingHintDto(
+      raDeg: dco_decode_f_64(arr[0]),
+      decDeg: dco_decode_f_64(arr[1]),
+      radiusDeg: dco_decode_opt_box_autoadd_f_64(arr[2]),
+    );
+  }
+
+  @protected
   PoolAttemptDto dco_decode_pool_attempt_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return PoolAttemptDto(
       db: dco_decode_String(arr[0]),
-      fovDeg: dco_decode_f_32(arr[1]),
-      status: dco_decode_solve_status_dto(arr[2]),
-      solveMs: dco_decode_f_32(arr[3]),
+      kind: dco_decode_tier_kind_dto(arr[1]),
+      fovDeg: dco_decode_f_32(arr[2]),
+      status: dco_decode_solve_status_dto(arr[3]),
+      solveMs: dco_decode_f_32(arr[4]),
     );
   }
 
@@ -2625,8 +2694,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SolveOptionsDto dco_decode_solve_options_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return SolveOptionsDto(
       fovEstimateDeg: dco_decode_f_32(arr[0]),
       fovMaxErrorDeg: dco_decode_opt_box_autoadd_f_32(arr[1]),
@@ -2643,6 +2712,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       focalLength35Mm: dco_decode_opt_box_autoadd_f_32(arr[12]),
       fitLens: dco_decode_bool(arr[13]),
       refineScale: dco_decode_bool(arr[14]),
+      pointingHint: dco_decode_opt_box_autoadd_pointing_hint_dto(arr[15]),
+      narrowBlind: dco_decode_bool(arr[16]),
+      narrowFallbackMs: dco_decode_opt_box_autoadd_u_32(arr[17]),
     );
   }
 
@@ -2712,8 +2784,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TierInfoDto dco_decode_tier_info_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return TierInfoDto(
       name: dco_decode_String(arr[0]),
       path: dco_decode_String(arr[1]),
@@ -2722,7 +2794,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       numStars: dco_decode_u_64(arr[4]),
       numPatterns: dco_decode_u_32(arr[5]),
       starMaxMagnitude: dco_decode_f_32(arr[6]),
+      kind: dco_decode_tier_kind_dto(arr[7]),
     );
+  }
+
+  @protected
+  TierKindDto dco_decode_tier_kind_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TierKindDto.values[raw as int];
   }
 
   @protected
@@ -3136,6 +3215,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_observer_dto(deserializer));
+  }
+
+  @protected
+  PointingHintDto sse_decode_box_autoadd_pointing_hint_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_pointing_hint_dto(deserializer));
   }
 
   @protected
@@ -4116,6 +4203,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PointingHintDto? sse_decode_opt_box_autoadd_pointing_hint_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_pointing_hint_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   SolvedGeometryDto? sse_decode_opt_box_autoadd_solved_geometry_dto(
     SseDeserializer deserializer,
   ) {
@@ -4192,14 +4292,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PointingHintDto sse_decode_pointing_hint_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_raDeg = sse_decode_f_64(deserializer);
+    var var_decDeg = sse_decode_f_64(deserializer);
+    var var_radiusDeg = sse_decode_opt_box_autoadd_f_64(deserializer);
+    return PointingHintDto(
+      raDeg: var_raDeg,
+      decDeg: var_decDeg,
+      radiusDeg: var_radiusDeg,
+    );
+  }
+
+  @protected
   PoolAttemptDto sse_decode_pool_attempt_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_db = sse_decode_String(deserializer);
+    var var_kind = sse_decode_tier_kind_dto(deserializer);
     var var_fovDeg = sse_decode_f_32(deserializer);
     var var_status = sse_decode_solve_status_dto(deserializer);
     var var_solveMs = sse_decode_f_32(deserializer);
     return PoolAttemptDto(
       db: var_db,
+      kind: var_kind,
       fovDeg: var_fovDeg,
       status: var_status,
       solveMs: var_solveMs,
@@ -4300,6 +4415,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_focalLength35Mm = sse_decode_opt_box_autoadd_f_32(deserializer);
     var var_fitLens = sse_decode_bool(deserializer);
     var var_refineScale = sse_decode_bool(deserializer);
+    var var_pointingHint = sse_decode_opt_box_autoadd_pointing_hint_dto(
+      deserializer,
+    );
+    var var_narrowBlind = sse_decode_bool(deserializer);
+    var var_narrowFallbackMs = sse_decode_opt_box_autoadd_u_32(deserializer);
     return SolveOptionsDto(
       fovEstimateDeg: var_fovEstimateDeg,
       fovMaxErrorDeg: var_fovMaxErrorDeg,
@@ -4316,6 +4436,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       focalLength35Mm: var_focalLength35Mm,
       fitLens: var_fitLens,
       refineScale: var_refineScale,
+      pointingHint: var_pointingHint,
+      narrowBlind: var_narrowBlind,
+      narrowFallbackMs: var_narrowFallbackMs,
     );
   }
 
@@ -4415,6 +4538,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_numStars = sse_decode_u_64(deserializer);
     var var_numPatterns = sse_decode_u_32(deserializer);
     var var_starMaxMagnitude = sse_decode_f_32(deserializer);
+    var var_kind = sse_decode_tier_kind_dto(deserializer);
     return TierInfoDto(
       name: var_name,
       path: var_path,
@@ -4423,7 +4547,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       numStars: var_numStars,
       numPatterns: var_numPatterns,
       starMaxMagnitude: var_starMaxMagnitude,
+      kind: var_kind,
     );
+  }
+
+  @protected
+  TierKindDto sse_decode_tier_kind_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TierKindDto.values[inner];
   }
 
   @protected
@@ -4848,6 +4980,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_observer_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_pointing_hint_dto(
+    PointingHintDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_pointing_hint_dto(self, serializer);
   }
 
   @protected
@@ -5692,6 +5833,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_pointing_hint_dto(
+    PointingHintDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_pointing_hint_dto(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_solved_geometry_dto(
     SolvedGeometryDto? self,
     SseSerializer serializer,
@@ -5764,12 +5918,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_pointing_hint_dto(
+    PointingHintDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.raDeg, serializer);
+    sse_encode_f_64(self.decDeg, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.radiusDeg, serializer);
+  }
+
+  @protected
   void sse_encode_pool_attempt_dto(
     PoolAttemptDto self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.db, serializer);
+    sse_encode_tier_kind_dto(self.kind, serializer);
     sse_encode_f_32(self.fovDeg, serializer);
     sse_encode_solve_status_dto(self.status, serializer);
     sse_encode_f_32(self.solveMs, serializer);
@@ -5855,6 +6021,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_32(self.focalLength35Mm, serializer);
     sse_encode_bool(self.fitLens, serializer);
     sse_encode_bool(self.refineScale, serializer);
+    sse_encode_opt_box_autoadd_pointing_hint_dto(self.pointingHint, serializer);
+    sse_encode_bool(self.narrowBlind, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.narrowFallbackMs, serializer);
   }
 
   @protected
@@ -5926,6 +6095,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.numStars, serializer);
     sse_encode_u_32(self.numPatterns, serializer);
     sse_encode_f_32(self.starMaxMagnitude, serializer);
+    sse_encode_tier_kind_dto(self.kind, serializer);
+  }
+
+  @protected
+  void sse_encode_tier_kind_dto(TierKindDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -6176,8 +6352,8 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
   );
 
   /// Annotator. Pass the tier that solved the frame (`PoolOutcomeDto.db`), since narrow tiers
-  /// are denser; without it the widest tier is used. The files are as in
-  /// [`UniSolver::annotator`].
+  /// are denser; without it the widest tier is used. A narrow-field solve annotates with the
+  /// narrowest tetra3 tier. The files are as in [`UniSolver::annotator`].
   Future<UniAnnotator> annotator({
     String? db,
     String? dsoPath,
@@ -6194,6 +6370,19 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
   /// Registers one more tier (after an install). Registering the same file again is idempotent.
   Future<TierInfoDto> register({required String dbPath}) => RustLib.instance.api
       .crateApiSolverUniSolverPoolRegister(that: this, dbPath: dbPath);
+
+  /// Registers the narrow-field package (desktop builds): its blind index and star-tile
+  /// files. Only their headers are read. Registering the same index again returns it; a
+  /// second package is an error, and so is every call on iOS and Android, which have no
+  /// narrow-field engine.
+  Future<TierInfoDto> registerNarrow({
+    required String indexPath,
+    required String starsPath,
+  }) => RustLib.instance.api.crateApiSolverUniSolverPoolRegisterNarrow(
+    that: this,
+    indexPath: indexPath,
+    starsPath: starsPath,
+  );
 
   /// Files skipped when the directory was opened, as `"<path>: <reason>"`.
   List<String> skipped() =>
@@ -6224,7 +6413,7 @@ class UniSolverPoolImpl extends RustOpaque implements UniSolverPool {
     base: base,
   );
 
-  /// Registered tiers, wide to narrow.
+  /// Registered tiers: the tetra3 tiers wide to narrow, then the narrow-field engine.
   Future<List<TierInfoDto>> tiers() =>
       RustLib.instance.api.crateApiSolverUniSolverPoolTiers(that: this);
 }

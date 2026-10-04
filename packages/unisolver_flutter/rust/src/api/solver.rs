@@ -152,7 +152,20 @@ impl UniSolverPool {
             .into())
     }
 
-    /// Registered tiers, wide to narrow.
+    /// Registers the narrow-field package (desktop builds): its blind index and star-tile
+    /// files. Only their headers are read. Registering the same index again returns it; a
+    /// second package is an error, and so is every call on iOS and Android, which have no
+    /// narrow-field engine.
+    pub fn register_narrow(&self, index_path: String, stars_path: String) -> Result<TierInfoDto> {
+        Ok(self
+            .inner
+            .write()
+            .map_err(|e| anyhow::anyhow!("pool lock poisoned: {e}"))?
+            .register_narrow(&index_path, &stars_path)?
+            .into())
+    }
+
+    /// Registered tiers: the tetra3 tiers wide to narrow, then the narrow-field engine.
     pub fn tiers(&self) -> Result<Vec<TierInfoDto>> {
         Ok(self
             .inner
@@ -211,8 +224,8 @@ impl UniSolverPool {
     }
 
     /// Annotator. Pass the tier that solved the frame (`PoolOutcomeDto.db`), since narrow tiers
-    /// are denser; without it the widest tier is used. The files are as in
-    /// [`UniSolver::annotator`].
+    /// are denser; without it the widest tier is used. A narrow-field solve annotates with the
+    /// narrowest tetra3 tier. The files are as in [`UniSolver::annotator`].
     pub fn annotator(
         &self,
         db: Option<String>,
@@ -224,17 +237,12 @@ impl UniSolverPool {
             .inner
             .read()
             .map_err(|e| anyhow::anyhow!("pool lock poisoned: {e}"))?;
-        let name = match db {
-            Some(n) => n,
-            None => g
-                .tiers()
-                .first()
-                .map(|t| t.name.clone())
-                .ok_or_else(|| anyhow::anyhow!("pool is empty: register a database first"))?,
-        };
         let solver = g
-            .solver(&name)
-            .ok_or_else(|| anyhow::anyhow!("no such tier in pool: {name}"))?;
+            .annotation_solver(db.as_deref())
+            .ok_or_else(|| match &db {
+                Some(n) => anyhow::anyhow!("no tetra3 tier in the pool to annotate {n} with"),
+                None => anyhow::anyhow!("pool is empty: register a database first"),
+            })?;
         Ok(UniAnnotator {
             inner: solver
                 .annotator(dso_path.as_deref(), names_path.as_deref())?

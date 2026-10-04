@@ -5,12 +5,11 @@
 
 import '../frb_generated.dart';
 import '../lib.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`, `try_from`
 
 class AnnotateOptionsDto {
   final double? starMaxMag;
@@ -967,15 +966,50 @@ class OutlineContourDto {
 
 enum PixelKindDto { luma8, luma16, lumaF32, rgba8 }
 
+/// Approximate pointing for the narrow-field engine (desktop builds): a mount's position or a
+/// header's RA/Dec. A hint: when the search around it fails, the engine solves blind.
+class PointingHintDto {
+  /// ICRS right ascension, degrees
+  final double raDeg;
+
+  /// ICRS declination, degrees
+  final double decDeg;
+
+  /// Search radius, degrees; null searches max(1°, 3 × the FOV)
+  final double? radiusDeg;
+
+  const PointingHintDto({
+    required this.raDeg,
+    required this.decDeg,
+    this.radiusDeg,
+  });
+
+  @override
+  int get hashCode => raDeg.hashCode ^ decDeg.hashCode ^ radiusDeg.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PointingHintDto &&
+          runtimeType == other.runtimeType &&
+          raDeg == other.raDeg &&
+          decDeg == other.decDeg &&
+          radiusDeg == other.radiusDeg;
+}
+
 /// One cross-tier attempt (a `FovAttemptDto` plus the tier it used).
 class PoolAttemptDto {
   final String db;
+
+  /// Engine of the tier used
+  final TierKindDto kind;
   final double fovDeg;
   final SolveStatusDto status;
   final double solveMs;
 
   const PoolAttemptDto({
     required this.db,
+    required this.kind,
     required this.fovDeg,
     required this.status,
     required this.solveMs,
@@ -983,7 +1017,11 @@ class PoolAttemptDto {
 
   @override
   int get hashCode =>
-      db.hashCode ^ fovDeg.hashCode ^ status.hashCode ^ solveMs.hashCode;
+      db.hashCode ^
+      kind.hashCode ^
+      fovDeg.hashCode ^
+      status.hashCode ^
+      solveMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -991,6 +1029,7 @@ class PoolAttemptDto {
       other is PoolAttemptDto &&
           runtimeType == other.runtimeType &&
           db == other.db &&
+          kind == other.kind &&
           fovDeg == other.fovDeg &&
           status == other.status &&
           solveMs == other.solveMs;
@@ -1163,6 +1202,19 @@ class SolveOptionsDto {
   /// pattern measured, 1–3% off. Never with `camera` or a tracking hint.
   final bool refineScale;
 
+  /// Pools with the narrow-field engine (desktop builds) only: approximate pointing. File
+  /// entries fill it from the header's RA/Dec when null. The tetra3 tiers never use it.
+  final PointingHintDto? pointingHint;
+
+  /// Pools with the narrow-field engine only: with an unknown FOV, blind-solve once over its
+  /// range after every tetra3 tier failed. Off by default, so phone frames and frames without
+  /// stars fail as fast as without it.
+  final bool narrowBlind;
+
+  /// Pools with the narrow-field engine only: the most time it gets after the tetra3 tiers
+  /// failed, ms (also capped by `timeoutMs`); 0 never runs it after them; null keeps 2000.
+  final int? narrowFallbackMs;
+
   const SolveOptionsDto({
     required this.fovEstimateDeg,
     this.fovMaxErrorDeg,
@@ -1179,6 +1231,9 @@ class SolveOptionsDto {
     this.focalLength35Mm,
     this.fitLens = true,
     this.refineScale = true,
+    this.pointingHint,
+    this.narrowBlind = false,
+    this.narrowFallbackMs,
   });
 
   /// Defaults shared with core::SolveOptions::new (PhoneJpeg, built-in σ, 5 s timeout)
@@ -1203,7 +1258,10 @@ class SolveOptionsDto {
       observationUnixMs.hashCode ^
       focalLength35Mm.hashCode ^
       fitLens.hashCode ^
-      refineScale.hashCode;
+      refineScale.hashCode ^
+      pointingHint.hashCode ^
+      narrowBlind.hashCode ^
+      narrowFallbackMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1224,7 +1282,10 @@ class SolveOptionsDto {
           observationUnixMs == other.observationUnixMs &&
           focalLength35Mm == other.focalLength35Mm &&
           fitLens == other.fitLens &&
-          refineScale == other.refineScale;
+          refineScale == other.refineScale &&
+          pointingHint == other.pointingHint &&
+          narrowBlind == other.narrowBlind &&
+          narrowFallbackMs == other.narrowFallbackMs;
 }
 
 class SolveOutcomeDto {
@@ -1395,8 +1456,6 @@ class StarAnnotationDto {
           catalogId == other.catalogId;
 }
 
-/// A registered tier (pool routing). Named as in the manifest, so a tier manager can match
-/// installed and available tiers.
 class TierInfoDto {
   final String name;
   final String path;
@@ -1406,6 +1465,9 @@ class TierInfoDto {
   final int numPatterns;
   final double starMaxMagnitude;
 
+  /// tetra3 database or narrow-field engine
+  final TierKindDto kind;
+
   const TierInfoDto({
     required this.name,
     required this.path,
@@ -1414,6 +1476,7 @@ class TierInfoDto {
     required this.numStars,
     required this.numPatterns,
     required this.starMaxMagnitude,
+    required this.kind,
   });
 
   @override
@@ -1424,7 +1487,8 @@ class TierInfoDto {
       maxFovDeg.hashCode ^
       numStars.hashCode ^
       numPatterns.hashCode ^
-      starMaxMagnitude.hashCode;
+      starMaxMagnitude.hashCode ^
+      kind.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1437,7 +1501,19 @@ class TierInfoDto {
           maxFovDeg == other.maxFovDeg &&
           numStars == other.numStars &&
           numPatterns == other.numPatterns &&
-          starMaxMagnitude == other.starMaxMagnitude;
+          starMaxMagnitude == other.starMaxMagnitude &&
+          kind == other.kind;
+}
+
+/// A registered tier (pool routing). Named as in the manifest, so a tier manager can match
+/// installed and available tiers.
+/// What answers for a registered tier
+enum TierKindDto {
+  /// A tetra3 pattern database (`*.db`)
+  tetra3,
+
+  /// The narrow-field engine (desktop builds)
+  narrow,
 }
 
 class TimingDto {

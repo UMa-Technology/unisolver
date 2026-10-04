@@ -20,6 +20,10 @@ serde_json = "1"
 # Download verification: streaming sha256 (Dart need not read hundreds of MB into memory)
 sha2 = "0.10"
 
+# The narrow-field engine on desktop targets only; iOS and Android builds stay as they are
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+unisolver-core = { path = "../../../crates/unisolver-core", features = ["narrow"] }
+
 [dev-dependencies]
 unisolver-synth = { path = "../../../crates/unisolver-synth" }
 # Only for building compressed test samples; runtime decoding uses pure-Rust ruzstd (the

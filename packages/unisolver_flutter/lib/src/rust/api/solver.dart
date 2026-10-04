@@ -5,9 +5,7 @@
 
 import '../frb_generated.dart';
 import '../lib.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-
 import 'types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `load_image_luma`, `load_with_header_time`
@@ -105,8 +103,8 @@ abstract class UniSolver implements RustOpaqueInterface {
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UniSolverPool>>
 abstract class UniSolverPool implements RustOpaqueInterface {
   /// Annotator. Pass the tier that solved the frame (`PoolOutcomeDto.db`), since narrow tiers
-  /// are denser; without it the widest tier is used. The files are as in
-  /// [`UniSolver::annotator`].
+  /// are denser; without it the widest tier is used. A narrow-field solve annotates with the
+  /// narrowest tetra3 tier. The files are as in [`UniSolver::annotator`].
   Future<UniAnnotator> annotator({
     String? db,
     String? dsoPath,
@@ -125,6 +123,15 @@ abstract class UniSolverPool implements RustOpaqueInterface {
 
   /// Registers one more tier (after an install). Registering the same file again is idempotent.
   Future<TierInfoDto> register({required String dbPath});
+
+  /// Registers the narrow-field package (desktop builds): its blind index and star-tile
+  /// files. Only their headers are read. Registering the same index again returns it; a
+  /// second package is an error, and so is every call on iOS and Android, which have no
+  /// narrow-field engine.
+  Future<TierInfoDto> registerNarrow({
+    required String indexPath,
+    required String starsPath,
+  });
 
   /// Files skipped when the directory was opened, as `"<path>: <reason>"`.
   List<String> skipped();
@@ -146,6 +153,6 @@ abstract class UniSolverPool implements RustOpaqueInterface {
     required SolveOptionsDto base,
   });
 
-  /// Registered tiers, wide to narrow.
+  /// Registered tiers: the tetra3 tiers wide to narrow, then the narrow-field engine.
   Future<List<TierInfoDto>> tiers();
 }

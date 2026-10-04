@@ -259,6 +259,27 @@ impl From<ExtractionProfileDto> for core::ExtractionProfile {
     }
 }
 
+/// Approximate pointing for the narrow-field engine (desktop builds): a mount's position or a
+/// header's RA/Dec. A hint: when the search around it fails, the engine solves blind.
+pub struct PointingHintDto {
+    /// ICRS right ascension, degrees
+    pub ra_deg: f64,
+    /// ICRS declination, degrees
+    pub dec_deg: f64,
+    /// Search radius, degrees; null searches max(1°, 3 × the FOV)
+    pub radius_deg: Option<f64>,
+}
+
+impl From<PointingHintDto> for core::PointingHint {
+    fn from(h: PointingHintDto) -> Self {
+        Self {
+            ra_deg: h.ra_deg,
+            dec_deg: h.dec_deg,
+            radius_deg: h.radius_deg,
+        }
+    }
+}
+
 #[frb]
 pub struct SolveOptionsDto {
     pub fov_estimate_deg: f32,
@@ -293,6 +314,17 @@ pub struct SolveOptionsDto {
     /// pattern measured, 1–3% off. Never with `camera` or a tracking hint.
     #[frb(default = true)]
     pub refine_scale: bool,
+    /// Pools with the narrow-field engine (desktop builds) only: approximate pointing. File
+    /// entries fill it from the header's RA/Dec when null. The tetra3 tiers never use it.
+    pub pointing_hint: Option<PointingHintDto>,
+    /// Pools with the narrow-field engine only: with an unknown FOV, blind-solve once over its
+    /// range after every tetra3 tier failed. Off by default, so phone frames and frames without
+    /// stars fail as fast as without it.
+    #[frb(default = false)]
+    pub narrow_blind: bool,
+    /// Pools with the narrow-field engine only: the most time it gets after the tetra3 tiers
+    /// failed, ms (also capped by `timeoutMs`); 0 never runs it after them; null keeps 2000.
+    pub narrow_fallback_ms: Option<u32>,
 }
 
 impl SolveOptionsDto {
@@ -315,6 +347,9 @@ impl SolveOptionsDto {
             focal_length_35mm: None,
             fit_lens: true,
             refine_scale: true,
+            pointing_hint: None,
+            narrow_blind: false,
+            narrow_fallback_ms: None,
         }
     }
 }
@@ -337,6 +372,11 @@ impl TryFrom<SolveOptionsDto> for core::SolveOptions {
         o.focal_length_35mm = d.focal_length_35mm;
         o.fit_lens = d.fit_lens;
         o.refine_scale = d.refine_scale;
+        o.pointing_hint = d.pointing_hint.map(Into::into);
+        o.narrow_blind = d.narrow_blind;
+        if let Some(ms) = d.narrow_fallback_ms {
+            o.narrow_fallback_ms = ms as u64;
+        }
         Ok(o)
     }
 }
@@ -1093,6 +1133,24 @@ pub struct LadderOutcomeDto {
 
 /// A registered tier (pool routing). Named as in the manifest, so a tier manager can match
 /// installed and available tiers.
+/// What answers for a registered tier
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum TierKindDto {
+    /// A tetra3 pattern database (`*.db`)
+    Tetra3,
+    /// The narrow-field engine (desktop builds)
+    Narrow,
+}
+
+impl From<core::TierKind> for TierKindDto {
+    fn from(k: core::TierKind) -> Self {
+        match k {
+            core::TierKind::Tetra3 => Self::Tetra3,
+            core::TierKind::Narrow => Self::Narrow,
+        }
+    }
+}
+
 pub struct TierInfoDto {
     pub name: String,
     pub path: String,
@@ -1101,6 +1159,8 @@ pub struct TierInfoDto {
     pub num_stars: u64,
     pub num_patterns: u32,
     pub star_max_magnitude: f32,
+    /// tetra3 database or narrow-field engine
+    pub kind: TierKindDto,
 }
 
 impl From<core::TierInfo> for TierInfoDto {
@@ -1113,6 +1173,7 @@ impl From<core::TierInfo> for TierInfoDto {
             num_stars: t.num_stars,
             num_patterns: t.num_patterns,
             star_max_magnitude: t.star_max_magnitude,
+            kind: t.kind.into(),
         }
     }
 }
@@ -1120,6 +1181,8 @@ impl From<core::TierInfo> for TierInfoDto {
 /// One cross-tier attempt (a `FovAttemptDto` plus the tier it used).
 pub struct PoolAttemptDto {
     pub db: String,
+    /// Engine of the tier used
+    pub kind: TierKindDto,
     pub fov_deg: f32,
     pub status: SolveStatusDto,
     pub solve_ms: f32,
@@ -1129,6 +1192,7 @@ impl From<core::PoolAttempt> for PoolAttemptDto {
     fn from(a: core::PoolAttempt) -> Self {
         Self {
             db: a.db,
+            kind: a.kind.into(),
             fov_deg: a.fov_deg,
             status: a.status.into(),
             solve_ms: a.solve_ms,

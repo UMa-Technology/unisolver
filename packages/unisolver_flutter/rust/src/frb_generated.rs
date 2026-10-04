@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 932050728;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 172705559;
 
 // Section: executor
 
@@ -543,6 +543,63 @@ fn wire__crate__api__solver__UniSolverPool_register_impl(
                         let output_ok = crate::api::solver::UniSolverPool::register(
                             &*api_that_guard,
                             api_db_path,
+                        )?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__solver__UniSolverPool_register_narrow_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "UniSolverPool_register_narrow",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UniSolverPool>,
+            >>::sse_decode(&mut deserializer);
+            let api_index_path = <String>::sse_decode(&mut deserializer);
+            let api_stars_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = crate::api::solver::UniSolverPool::register_narrow(
+                            &*api_that_guard,
+                            api_index_path,
+                            api_stars_path,
                         )?;
                         std::result::Result::Ok(output_ok)
                     })(),
@@ -2854,6 +2911,19 @@ impl SseDecode for Option<crate::api::types::ObserverDto> {
     }
 }
 
+impl SseDecode for Option<crate::api::types::PointingHintDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::PointingHintDto>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::types::SolvedGeometryDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2937,15 +3007,31 @@ impl SseDecode for crate::api::types::PixelKindDto {
     }
 }
 
+impl SseDecode for crate::api::types::PointingHintDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_raDeg = <f64>::sse_decode(deserializer);
+        let mut var_decDeg = <f64>::sse_decode(deserializer);
+        let mut var_radiusDeg = <Option<f64>>::sse_decode(deserializer);
+        return crate::api::types::PointingHintDto {
+            ra_deg: var_raDeg,
+            dec_deg: var_decDeg,
+            radius_deg: var_radiusDeg,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::PoolAttemptDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_db = <String>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::types::TierKindDto>::sse_decode(deserializer);
         let mut var_fovDeg = <f32>::sse_decode(deserializer);
         let mut var_status = <crate::api::types::SolveStatusDto>::sse_decode(deserializer);
         let mut var_solveMs = <f32>::sse_decode(deserializer);
         return crate::api::types::PoolAttemptDto {
             db: var_db,
+            kind: var_kind,
             fov_deg: var_fovDeg,
             status: var_status,
             solve_ms: var_solveMs,
@@ -3046,6 +3132,10 @@ impl SseDecode for crate::api::types::SolveOptionsDto {
         let mut var_focalLength35Mm = <Option<f32>>::sse_decode(deserializer);
         let mut var_fitLens = <bool>::sse_decode(deserializer);
         let mut var_refineScale = <bool>::sse_decode(deserializer);
+        let mut var_pointingHint =
+            <Option<crate::api::types::PointingHintDto>>::sse_decode(deserializer);
+        let mut var_narrowBlind = <bool>::sse_decode(deserializer);
+        let mut var_narrowFallbackMs = <Option<u32>>::sse_decode(deserializer);
         return crate::api::types::SolveOptionsDto {
             fov_estimate_deg: var_fovEstimateDeg,
             fov_max_error_deg: var_fovMaxErrorDeg,
@@ -3062,6 +3152,9 @@ impl SseDecode for crate::api::types::SolveOptionsDto {
             focal_length_35mm: var_focalLength35Mm,
             fit_lens: var_fitLens,
             refine_scale: var_refineScale,
+            pointing_hint: var_pointingHint,
+            narrow_blind: var_narrowBlind,
+            narrow_fallback_ms: var_narrowFallbackMs,
         };
     }
 }
@@ -3167,6 +3260,7 @@ impl SseDecode for crate::api::types::TierInfoDto {
         let mut var_numStars = <u64>::sse_decode(deserializer);
         let mut var_numPatterns = <u32>::sse_decode(deserializer);
         let mut var_starMaxMagnitude = <f32>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::types::TierKindDto>::sse_decode(deserializer);
         return crate::api::types::TierInfoDto {
             name: var_name,
             path: var_path,
@@ -3175,6 +3269,19 @@ impl SseDecode for crate::api::types::TierInfoDto {
             num_stars: var_numStars,
             num_patterns: var_numPatterns,
             star_max_magnitude: var_starMaxMagnitude,
+            kind: var_kind,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::TierKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::TierKindDto::Tetra3,
+            1 => crate::api::types::TierKindDto::Narrow,
+            _ => unreachable!("Invalid variant for TierKindDto: {}", inner),
         };
     }
 }
@@ -3298,70 +3405,76 @@ fn pde_ffi_dispatcher_primary_impl(
         10 => {
             wire__crate__api__solver__UniSolverPool_register_impl(port, ptr, rust_vec_len, data_len)
         }
-        12 => wire__crate__api__solver__UniSolverPool_solve_frame_auto_impl(
+        11 => wire__crate__api__solver__UniSolverPool_register_narrow_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__solver__UniSolverPool_solve_image_file_auto_impl(
+        13 => wire__crate__api__solver__UniSolverPool_solve_frame_auto_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__solver__UniSolverPool_tiers_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__solver__UniSolver_annotator_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__solver__UniSolver_new_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__solver__UniSolver_new_calibration_impl(
+        14 => wire__crate__api__solver__UniSolverPool_solve_image_file_auto_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => {
+        15 => wire__crate__api__solver__UniSolverPool_tiers_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__solver__UniSolver_annotator_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__solver__UniSolver_new_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__solver__UniSolver_new_calibration_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        20 => {
             wire__crate__api__solver__UniSolver_solve_frame_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__solver__UniSolver_solve_image_file_impl(
+        21 => wire__crate__api__solver__UniSolver_solve_image_file_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__solver__UniSolver_solve_image_file_auto_impl(
+        22 => wire__crate__api__solver__UniSolver_solve_image_file_auto_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__solver__UniSolver_solve_image_file_with_presets_impl(
+        23 => wire__crate__api__solver__UniSolver_solve_image_file_with_presets_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__solver__camera_params_from_json_impl(
+        25 => wire__crate__api__solver__camera_params_from_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => {
+        26 => {
             wire__crate__api__solver__camera_params_to_json_impl(port, ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__api__solver__debug_trigger_panic_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__preview__image_preview_impl(port, ptr, rust_vec_len, data_len),
-        29 => {
+        28 => wire__crate__api__solver__debug_trigger_panic_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__preview__image_preview_impl(port, ptr, rust_vec_len, data_len),
+        30 => {
             wire__crate__api__install__install_compressed_db_impl(port, ptr, rust_vec_len, data_len)
         }
-        30 => wire__crate__api__satellites__satellite_positions_impl(
+        31 => wire__crate__api__satellites__satellite_positions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__logging__set_log_stream_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__install__sha256_file_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__logging__set_log_stream_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__install__sha256_file_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3381,15 +3494,15 @@ fn pde_ffi_dispatcher_sync_impl(
         ),
         3 => wire__crate__api__solver__UniAnnotator_languages_impl(ptr, rust_vec_len, data_len),
         5 => wire__crate__api__solver__UniCalibration_count_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__solver__UniSolverPool_skipped_impl(ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__solver__UniSolver_properties_impl(ptr, rust_vec_len, data_len),
-        23 => {
+        12 => wire__crate__api__solver__UniSolverPool_skipped_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__solver__UniSolver_properties_impl(ptr, rust_vec_len, data_len),
+        24 => {
             wire__crate__api__types__annotate_options_dto_defaults_impl(ptr, rust_vec_len, data_len)
         }
-        26 => wire__crate__api__attribution__data_attributions_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__types__solve_options_dto_defaults_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__attribution__data_attributions_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__types__solve_options_dto_defaults_impl(ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4317,10 +4430,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PixelKindDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::PointingHintDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.ra_deg.into_into_dart().into_dart(),
+            self.dec_deg.into_into_dart().into_dart(),
+            self.radius_deg.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::PointingHintDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PointingHintDto>
+    for crate::api::types::PointingHintDto
+{
+    fn into_into_dart(self) -> crate::api::types::PointingHintDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::PoolAttemptDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.db.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
             self.fov_deg.into_into_dart().into_dart(),
             self.status.into_into_dart().into_dart(),
             self.solve_ms.into_into_dart().into_dart(),
@@ -4451,6 +4587,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::SolveOptionsDto {
             self.focal_length_35mm.into_into_dart().into_dart(),
             self.fit_lens.into_into_dart().into_dart(),
             self.refine_scale.into_into_dart().into_dart(),
+            self.pointing_hint.into_into_dart().into_dart(),
+            self.narrow_blind.into_into_dart().into_dart(),
+            self.narrow_fallback_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4583,6 +4722,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::TierInfoDto {
             self.num_stars.into_into_dart().into_dart(),
             self.num_patterns.into_into_dart().into_dart(),
             self.star_max_magnitude.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4595,6 +4735,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TierInfoDto>
     for crate::api::types::TierInfoDto
 {
     fn into_into_dart(self) -> crate::api::types::TierInfoDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TierKindDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Tetra3 => 0.into_dart(),
+            Self::Narrow => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TierKindDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TierKindDto>
+    for crate::api::types::TierKindDto
+{
+    fn into_into_dart(self) -> crate::api::types::TierKindDto {
         self
     }
 }
@@ -5609,6 +5770,16 @@ impl SseEncode for Option<crate::api::types::ObserverDto> {
     }
 }
 
+impl SseEncode for Option<crate::api::types::PointingHintDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::PointingHintDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::types::SolvedGeometryDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5685,10 +5856,20 @@ impl SseEncode for crate::api::types::PixelKindDto {
     }
 }
 
+impl SseEncode for crate::api::types::PointingHintDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.ra_deg, serializer);
+        <f64>::sse_encode(self.dec_deg, serializer);
+        <Option<f64>>::sse_encode(self.radius_deg, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::PoolAttemptDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.db, serializer);
+        <crate::api::types::TierKindDto>::sse_encode(self.kind, serializer);
         <f32>::sse_encode(self.fov_deg, serializer);
         <crate::api::types::SolveStatusDto>::sse_encode(self.status, serializer);
         <f32>::sse_encode(self.solve_ms, serializer);
@@ -5762,6 +5943,9 @@ impl SseEncode for crate::api::types::SolveOptionsDto {
         <Option<f32>>::sse_encode(self.focal_length_35mm, serializer);
         <bool>::sse_encode(self.fit_lens, serializer);
         <bool>::sse_encode(self.refine_scale, serializer);
+        <Option<crate::api::types::PointingHintDto>>::sse_encode(self.pointing_hint, serializer);
+        <bool>::sse_encode(self.narrow_blind, serializer);
+        <Option<u32>>::sse_encode(self.narrow_fallback_ms, serializer);
     }
 }
 
@@ -5837,6 +6021,23 @@ impl SseEncode for crate::api::types::TierInfoDto {
         <u64>::sse_encode(self.num_stars, serializer);
         <u32>::sse_encode(self.num_patterns, serializer);
         <f32>::sse_encode(self.star_max_magnitude, serializer);
+        <crate::api::types::TierKindDto>::sse_encode(self.kind, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TierKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::TierKindDto::Tetra3 => 0,
+                crate::api::types::TierKindDto::Narrow => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

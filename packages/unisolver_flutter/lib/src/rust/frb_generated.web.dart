@@ -14,13 +14,10 @@ import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
 import 'api/wcs.dart';
-
 import 'dart:async';
 import 'dart:convert';
-
 import 'frb_generated.dart';
 import 'lib.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
@@ -176,6 +173,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ObserverDto dco_decode_box_autoadd_observer_dto(dynamic raw);
+
+  @protected
+  PointingHintDto dco_decode_box_autoadd_pointing_hint_dto(dynamic raw);
 
   @protected
   SolveOptionsDto dco_decode_box_autoadd_solve_options_dto(dynamic raw);
@@ -417,6 +417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ObserverDto? dco_decode_opt_box_autoadd_observer_dto(dynamic raw);
 
   @protected
+  PointingHintDto? dco_decode_opt_box_autoadd_pointing_hint_dto(dynamic raw);
+
+  @protected
   SolvedGeometryDto? dco_decode_opt_box_autoadd_solved_geometry_dto(
     dynamic raw,
   );
@@ -438,6 +441,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PixelKindDto dco_decode_pixel_kind_dto(dynamic raw);
+
+  @protected
+  PointingHintDto dco_decode_pointing_hint_dto(dynamic raw);
 
   @protected
   PoolAttemptDto dco_decode_pool_attempt_dto(dynamic raw);
@@ -474,6 +480,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TierInfoDto dco_decode_tier_info_dto(dynamic raw);
+
+  @protected
+  TierKindDto dco_decode_tier_kind_dto(dynamic raw);
 
   @protected
   TimingDto dco_decode_timing_dto(dynamic raw);
@@ -642,6 +651,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ObserverDto sse_decode_box_autoadd_observer_dto(SseDeserializer deserializer);
+
+  @protected
+  PointingHintDto sse_decode_box_autoadd_pointing_hint_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   SolveOptionsDto sse_decode_box_autoadd_solve_options_dto(
@@ -931,6 +945,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PointingHintDto? sse_decode_opt_box_autoadd_pointing_hint_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SolvedGeometryDto? sse_decode_opt_box_autoadd_solved_geometry_dto(
     SseDeserializer deserializer,
   );
@@ -956,6 +975,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PixelKindDto sse_decode_pixel_kind_dto(SseDeserializer deserializer);
+
+  @protected
+  PointingHintDto sse_decode_pointing_hint_dto(SseDeserializer deserializer);
 
   @protected
   PoolAttemptDto sse_decode_pool_attempt_dto(SseDeserializer deserializer);
@@ -1002,6 +1024,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TierInfoDto sse_decode_tier_info_dto(SseDeserializer deserializer);
+
+  @protected
+  TierKindDto sse_decode_tier_kind_dto(SseDeserializer deserializer);
 
   @protected
   TimingDto sse_decode_timing_dto(SseDeserializer deserializer);
@@ -1204,6 +1229,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_observer_dto(
     ObserverDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_pointing_hint_dto(
+    PointingHintDto self,
     SseSerializer serializer,
   );
 
@@ -1568,6 +1599,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_pointing_hint_dto(
+    PointingHintDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_solved_geometry_dto(
     SolvedGeometryDto? self,
     SseSerializer serializer,
@@ -1596,6 +1633,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_pixel_kind_dto(PixelKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointing_hint_dto(
+    PointingHintDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pool_attempt_dto(
@@ -1665,6 +1708,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_tier_info_dto(TierInfoDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tier_kind_dto(TierKindDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_timing_dto(TimingDto self, SseSerializer serializer);

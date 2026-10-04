@@ -47,6 +47,13 @@ class _DbPageState extends State<DbPage> {
       await widget.pool.register(dbPath: path);
       await _refreshRegistered();
     },
+    registerPackage: (indexPath, starsPath) async {
+      await widget.pool.registerNarrow(
+        indexPath: indexPath,
+        starsPath: starsPath,
+      );
+      await _refreshRegistered();
+    },
   );
 
   @override
@@ -144,6 +151,52 @@ class _DbPageState extends State<DbPage> {
     }
   }
 
+  Future<void> _installPackage(DbPackage p) async {
+    final mgr = _manager();
+    final cancel = DbCancel();
+    setState(() {
+      _cancels[p.name] = cancel;
+      _error = null;
+    });
+    try {
+      await mgr.installPackage(
+        p,
+        cancel: cancel,
+        onProgress: (x) {
+          if (mounted) setState(() => _progress[p.name] = x);
+        },
+      );
+    } catch (e) {
+      if (mounted) setState(() => _error = '${p.name}: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _progress.remove(p.name);
+          _cancels.remove(p.name);
+        });
+      }
+    }
+  }
+
+  Future<void> _removePackage(DbPackage p) async {
+    try {
+      await _manager().removePackage(p);
+    } catch (e) {
+      // Windows keeps the files of a registered package open until the pool is reopened
+      if (mounted) setState(() => _error = '${p.name}: $e');
+    }
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${p.name} deleted; a registered package is released on the next app start',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _remove(DbTier t) async {
     await _manager().remove(t);
     // A registered tier cannot leave the pool (the handle still holds its mmap); say it frees on restart
@@ -206,6 +259,11 @@ class _DbPageState extends State<DbPage> {
           )
         else
           ...m.tiers.map((t) => _tierCard(mgr, t)),
+        if (m != null && m.packages.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('Packages', style: Theme.of(context).textTheme.titleSmall),
+          ...m.packages.map((p) => _packageCard(mgr, p)),
+        ],
         if (m != null && m.assets.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
@@ -221,7 +279,8 @@ class _DbPageState extends State<DbPage> {
         ),
         ..._registered.map(
           (t) => Text(
-            '  ${t.name}  ${t.minFovDeg.toStringAsFixed(1)}–${t.maxFovDeg.toStringAsFixed(1)}°  '
+            '  ${t.name}${t.kind == TierKindDto.narrow ? ' (narrow)' : ''}  '
+            '${t.minFovDeg.toStringAsFixed(1)}–${t.maxFovDeg.toStringAsFixed(1)}°  '
             '${t.numStars} stars / ${t.numPatterns} patterns',
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
@@ -346,6 +405,86 @@ class _DbPageState extends State<DbPage> {
                     onPressed: () =>
                         _install(t, allowNonMobile: blockedOnMobile),
                     child: Text(partial > 0 ? 'Resume' : 'Install'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The desktop narrow-field package: two files, installed together, registered with the pool
+  Widget _packageCard(DbManager mgr, DbPackage p) {
+    final installed = mgr.isPackageInstalled(p);
+    final prog = _progress[p.name];
+    final cancel = _cancels[p.name];
+    final mobile = Platform.isAndroid || Platform.isIOS;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${p.name}   ${p.fovLabel}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (installed) const _Tag('installed', Colors.green),
+                const _Tag('desktop only', Colors.blueGrey),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'download ${_mb(p.downloadBytes)} | installed ${_mb(p.installedBytes)} | '
+              'peak disk ${_mb(p.diskBytesNeeded)} | ${p.files.length} files',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            if (prog != null) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: prog.phase == DbPhase.downloading ? prog.fraction : null,
+              ),
+              const SizedBox(height: 4),
+              Text(switch (prog.phase) {
+                DbPhase.downloading =>
+                  '${prog.name}: downloading ${_mb(prog.received)} / ${_mb(prog.total)} '
+                      '(${(prog.fraction * 100).toStringAsFixed(0)}%)',
+                DbPhase.verifying => '${prog.name}: verifying sha256…',
+                DbPhase.decompressing =>
+                  '${prog.name}: decompressing and verifying…',
+                DbPhase.registering => 'registering with the pool…',
+                DbPhase.done => 'done',
+              }, style: const TextStyle(fontSize: 12)),
+            ],
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (cancel != null)
+                  TextButton(
+                    onPressed: cancel.cancel,
+                    child: const Text('Cancel'),
+                  )
+                else if (installed)
+                  TextButton(
+                    onPressed: () => _removePackage(p),
+                    child: const Text('Delete'),
+                  )
+                else if (mobile)
+                  const Text(
+                    'desktop builds only',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  )
+                else
+                  FilledButton.tonal(
+                    onPressed: () => _installPackage(p),
+                    child: const Text('Install'),
                   ),
               ],
             ),

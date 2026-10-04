@@ -1,6 +1,6 @@
 PODS:
   - Flutter (1.0.0)
-  - unisolver_flutter (0.4.4):
+  - unisolver_flutter (0.5.0):
     - Flutter
 
 DEPENDENCIES:
@@ -15,7 +15,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
-  unisolver_flutter: 957f0f949b01db8ceec493ad8579dd401edc975f
+  unisolver_flutter: ea651aa288c2c375dcd89e94b1d9b2b7fddaa310
 
 PODFILE CHECKSUM: 3ba3a73b1b12adcf321a227a745625fe0888cc82
 

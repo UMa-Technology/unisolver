@@ -1,13 +1,13 @@
 //! Synthetic sky and centroids for the narrow engine's tests (unit and integration). Not part
 //! of the API.
 use crate::outcome::CentroidOut;
-use seiza::catalog::{CatalogStar, MemoryCatalog, StarCatalog};
+use unisolver_starmatch::catalog::{CatalogStar, MemoryCatalog, StarCatalog};
 
-/// Deterministic generator (same recurrence as seiza's tests)
+/// Deterministic generator (same recurrence as unisolver-starmatch's tests)
 pub struct Lcg(pub u64);
 
 impl Lcg {
-    #[allow(clippy::should_implement_trait)] // mirrors seiza's test helper
+    #[allow(clippy::should_implement_trait)] // mirrors unisolver-starmatch's test helper
     pub fn next(&mut self) -> f64 {
         self.0 = self
             .0
@@ -37,7 +37,7 @@ pub fn synthetic_sky(seed: u64) -> MemoryCatalog {
 /// Centroids of `sky` seen through `truth` on a `width`×`height` frame: 15 % missed, ±0.3 px
 /// jitter, mass from magnitude, brightest first (as an extraction delivers them).
 pub fn centroids_for(
-    truth: &seiza::Wcs,
+    truth: &unisolver_starmatch::Wcs,
     sky: &MemoryCatalog,
     width: u32,
     height: u32,
@@ -105,7 +105,7 @@ pub fn write_package(
     dir: &std::path::Path,
     stem: &str,
 ) -> (std::path::PathBuf, std::path::PathBuf) {
-    let params = seiza::blind::BlindParams {
+    let params = unisolver_starmatch::blind::BlindParams {
         min_scale_arcsec_px: scale_arcsec_px.0,
         max_scale_arcsec_px: scale_arcsec_px.1,
         ..Default::default()
@@ -119,10 +119,11 @@ pub fn write_package(
         name.push(format!(".tmp{}", std::process::id()));
         std::path::PathBuf::from(name)
     };
-    seiza::blind::BlindIndex::build(sky, &params)
+    unisolver_starmatch::blind::BlindIndex::build(sky, &params)
         .write_to(&aside(&idx))
         .expect("write index");
-    let mut tiles = seiza::catalog::TileSetBuilder::new(16, 2026.0, "synthetic test sky");
+    let mut tiles =
+        unisolver_starmatch::catalog::TileSetBuilder::new(16, 2026.0, "synthetic test sky");
     for s in sky.all_brighter_than(30.0) {
         tiles.add(s.ra, s.dec, s.mag);
     }

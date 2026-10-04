@@ -1,16 +1,16 @@
-//! seiza's linear TAN solution (CRVAL, CRPIX, CD in degrees per pixel) as unisolver's
+//! unisolver-starmatch's linear TAN solution (CRVAL, CRPIX, CD in degrees per pixel) as unisolver's
 //! [`Wcs`], whose transforms run through a pinhole camera, a roll and a tangent point
 //! (tetra3's model).
 use crate::camera::{CameraParams, DistortionParams};
 use crate::outcome::Wcs;
 
-/// Converts a linear seiza WCS on a `width`×`height` frame. Pixel coordinates are top-left
-/// origin, the same ones the centroids handed to seiza used.
+/// Converts a linear unisolver-starmatch WCS on a `width`×`height` frame. Pixel coordinates are
+/// top-left origin, the same ones the centroids handed to the search used.
 ///
 /// tetra3's model is CD = (1/f)·[[p·cos θ, −sin θ], [p·sin θ, cos θ]] (p = −1 when mirrored).
 /// An affine CD is projected onto the nearest such similarity: parity from the sign of the
 /// determinant, f from its magnitude, θ from both columns.
-pub(crate) fn wcs_from_seiza(sw: &seiza::Wcs, width: u32, height: u32) -> Wcs {
+pub(crate) fn wcs_from_linear(sw: &unisolver_starmatch::Wcs, width: u32, height: u32) -> Wcs {
     let cd = [
         [sw.cd[0][0].to_radians(), sw.cd[0][1].to_radians()],
         [sw.cd[1][0].to_radians(), sw.cd[1][1].to_radians()],
@@ -68,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn converted_wcs_maps_pixels_like_seiza() {
+    fn converted_wcs_maps_pixels_like_starmatch() {
         let (w, h) = (3000u32, 2000u32);
         let cases = [
             ((10.0, 20.0), 1.7, 0.0, false),
@@ -77,14 +77,14 @@ mod tests {
             ((0.02, -60.0), 2.0, 315.0, true),
         ];
         for (center, scale, rot, flipped) in cases {
-            let sw = seiza::Wcs::from_center_scale_rotation(
+            let sw = unisolver_starmatch::Wcs::from_center_scale_rotation(
                 center,
                 (1499.5, 999.5),
                 scale,
                 rot,
                 flipped,
             );
-            let ours = wcs_from_seiza(&sw, w, h);
+            let ours = wcs_from_linear(&sw, w, h);
             assert_eq!(ours.camera.parity_flip, flipped);
             assert!((ours.scale_arcsec_per_px() - scale).abs() < 1e-9 * scale.max(1.0));
             for &(x, y) in &[

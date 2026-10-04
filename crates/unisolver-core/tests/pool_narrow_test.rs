@@ -1,10 +1,10 @@
 //! The pool with the narrow-field engine: registration by file header, and the routing rules
 //! that keep the tetra3 tiers' fast path as it was (`narrow::route`).
-use seiza::catalog::{MemoryCatalog, StarCatalog};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use unisolver_core::narrow::testkit::{patch_sky, write_package};
 use unisolver_core::*;
+use unisolver_starmatch::catalog::{MemoryCatalog, StarCatalog};
 use unisolver_synth as synth;
 
 const WIDE: &str = "unisolver_15_40";

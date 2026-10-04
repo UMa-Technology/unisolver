@@ -22,15 +22,14 @@ lz4_flex = { version = "0.11", optional = true }
 ruzstd = { version = "0.8", optional = true }
 sgp4 = { version = "2", optional = true }
 # narrow: the narrow-field engine (desktop builds; off by default)
-# (without data-paths: unisolver passes every path itself)
-seiza = { path = "../../third_party/seiza/seiza", optional = true, default-features = false }
+unisolver-starmatch = { path = "../unisolver-starmatch", optional = true }
 
 [features]
 imageio = ["dep:image", "dep:quick-xml", "dep:flate2", "dep:lz4_flex", "dep:ruzstd"]
 # Satellite pass annotation (TLE + SGP4 + topocentric conversion)
 satellites = ["dep:sgp4"]
-# Narrow-field engine on seiza's blind index (desktop builds)
-narrow = ["dep:seiza"]
+# Narrow-field engine on the star-centred blind index (desktop builds)
+narrow = ["dep:unisolver-starmatch"]
 
 [dev-dependencies]
 # Integration tests are separate crates: to `use` tetra3/numeris directly they must
@@ -42,8 +41,8 @@ numeris = "0.6"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # Decompresses the bundled database for the golden regression (tests only; pure Rust)
 ruzstd = "0.8"
-# The narrow engine's integration tests build indexes with seiza directly
-seiza = { path = "../../third_party/seiza/seiza", default-features = false }
+# The narrow engine's integration tests build indexes directly
+unisolver-starmatch = { path = "../unisolver-starmatch" }
 
 [[test]]
 name = "imageio_local_test"

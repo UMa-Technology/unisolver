@@ -4,7 +4,7 @@
 //! match list and residual statistics of a tetra3 solve, and a second gate against chance
 //! solutions.
 use crate::outcome::{CentroidOut, MatchOut, Wcs};
-use seiza::catalog::StarCatalog;
+use unisolver_starmatch::catalog::StarCatalog;
 
 /// Brightest centroids taken into the check
 pub(crate) const CHECK_CENTROIDS: usize = 60;
@@ -126,7 +126,7 @@ pub(crate) fn binomial_tail(n: usize, k: usize, p: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::narrow::geometry::wcs_from_seiza;
+    use crate::narrow::geometry::wcs_from_linear;
     use crate::narrow::testkit::{centroids_for, synthetic_sky};
 
     #[test]
@@ -141,7 +141,7 @@ mod tests {
     fn the_true_wcs_verifies_and_a_wrong_one_does_not() {
         let sky = synthetic_sky(7);
         let (w, h) = (4000u32, 3000u32);
-        let truth = seiza::Wcs::from_center_scale_rotation(
+        let truth = unisolver_starmatch::Wcs::from_center_scale_rotation(
             (212.4, -35.7),
             (1999.5, 1499.5),
             6.0,
@@ -151,20 +151,20 @@ mod tests {
         let cents = centroids_for(&truth, &sky, w, h, 11);
         assert!(cents.len() > 25, "scene too sparse: {}", cents.len());
 
-        let good = verify(&wcs_from_seiza(&truth, w, h), &cents, &sky);
+        let good = verify(&wcs_from_linear(&truth, w, h), &cents, &sky);
         assert!(good.matched.len() >= 20, "matched {}", good.matched.len());
         assert!(good.prob < 1e-10, "prob {}", good.prob);
         assert!(good.rmse_arcsec < 3.0, "rmse {}", good.rmse_arcsec);
         assert!(good.matched.iter().all(|m| m.catalog_id == 0));
 
-        let off = seiza::Wcs::from_center_scale_rotation(
+        let off = unisolver_starmatch::Wcs::from_center_scale_rotation(
             (213.4, -35.2),
             (1999.5, 1499.5),
             6.0,
             74.0,
             false,
         );
-        let bad = verify(&wcs_from_seiza(&off, w, h), &cents, &sky);
+        let bad = verify(&wcs_from_linear(&off, w, h), &cents, &sky);
         assert!(
             bad.prob > 1e-5,
             "a wrong field must not verify (prob {})",

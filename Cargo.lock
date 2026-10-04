@@ -2005,12 +2005,12 @@ dependencies = [
  "quick-xml",
  "rayon",
  "ruzstd",
- "seiza",
  "serde",
  "sgp4",
  "tetra3",
  "thiserror",
  "tracing",
+ "unisolver-starmatch",
  "unisolver-synth",
 ]
 

@@ -11,8 +11,8 @@ const CENTER: (f64, f64) = (212.4, -35.7);
 /// 6″/px over 4000 px
 const FOV: f64 = 6.0 * 4000.0 / 3600.0;
 
-fn index_params() -> seiza::blind::BlindParams {
-    seiza::blind::BlindParams {
+fn index_params() -> unisolver_starmatch::blind::BlindParams {
+    unisolver_starmatch::blind::BlindParams {
         min_scale_arcsec_px: 1.0,
         max_scale_arcsec_px: 15.0,
         ..Default::default()
@@ -21,12 +21,18 @@ fn index_params() -> seiza::blind::BlindParams {
 
 fn engine() -> NarrowEngine {
     let sky = synthetic_sky(7);
-    let index = seiza::blind::BlindIndex::build(&sky, &index_params());
+    let index = unisolver_starmatch::blind::BlindIndex::build(&sky, &index_params());
     NarrowEngine::from_parts("synthetic", index, Box::new(sky)).unwrap()
 }
 
 fn scene() -> Vec<CentroidOut> {
-    let truth = seiza::Wcs::from_center_scale_rotation(CENTER, (1999.5, 1499.5), 6.0, 74.0, false);
+    let truth = unisolver_starmatch::Wcs::from_center_scale_rotation(
+        CENTER,
+        (1999.5, 1499.5),
+        6.0,
+        74.0,
+        false,
+    );
     centroids_for(&truth, &synthetic_sky(7), W, H, 11)
 }
 

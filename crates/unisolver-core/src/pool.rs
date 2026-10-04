@@ -234,7 +234,7 @@ impl SolverPool {
         Ok(info)
     }
 
-    /// Registers the narrow-field engine: a seiza blind index (`SEIZABI1`) and its star tiles
+    /// Registers the narrow-field engine: a blind index (`SEIZABI1`) and its star tiles
     /// (`SEIZAST1`/`SEIZAST2`). Both are memory mapped and only their headers are read, so it
     /// is as quick as registering a tetra3 tier. One package per pool: registering the same
     /// index again returns it, another one is an error (open a new pool to replace it). Builds

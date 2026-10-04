@@ -1,5 +1,6 @@
-//! Narrow-field engine: seiza's blind pattern index and star tiles, fed with unisolver's own
-//! centroids and checked with unisolver's own matcher. Desktop builds only (`narrow` feature).
+//! Narrow-field engine: a star-centred blind pattern index and star tiles
+//! (unisolver-starmatch), fed with unisolver's own centroids and checked with unisolver's own
+//! matcher. Desktop builds only (`narrow` feature).
 pub(crate) mod geometry;
 pub(crate) mod route;
 #[doc(hidden)]
@@ -8,21 +9,21 @@ pub(crate) mod verify;
 
 use crate::error::{CoreError, Result};
 use crate::outcome::{CentroidOut, SolveStatus, SolvedGeometry};
-use seiza::blind::{BlindIndex, BlindParams};
-use seiza::catalog::{StarCatalog, TileCatalog};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use unisolver_starmatch::blind::{BlindIndex, BlindParams};
+use unisolver_starmatch::catalog::{StarCatalog, TileCatalog};
 
 pub use route::NARROW_MAX_FOV_DEG;
 
-/// Matches a blind solution must keep after our own check (seiza's own blind floor)
+/// Matches a blind solution must keep after our own check (unisolver-starmatch's own blind floor)
 pub const BLIND_MIN_MATCHES: usize = 12;
 /// Matches a hinted solution must keep after our own check
 pub const HINTED_MIN_MATCHES: usize = 8;
 /// Highest accepted chance-match probability (tetra3's `match_threshold`)
 pub const MAX_MISMATCH_PROB: f64 = 1e-5;
 
-/// seiza's index schema 1: disc radius (degrees) and magnitude cap of each tier
+/// Index schema 1: disc radius (degrees) and magnitude cap of each tier
 const SCHEMA1_TIERS: [(f64, f32); 8] = [
     (6.0, 6.1),
     (3.0, 7.6),
@@ -175,11 +176,11 @@ impl NarrowEngine {
         if centroids.len() < floor {
             return done(SolveStatus::TooFew, None);
         }
-        let mut stars: Vec<seiza::DetectedStar> = centroids
+        let mut stars: Vec<unisolver_starmatch::DetectedStar> = centroids
             .iter()
             .map(|c| {
                 let m = c.mass.unwrap_or(0.0) as f64;
-                seiza::DetectedStar {
+                unisolver_starmatch::DetectedStar {
                     x: c.x,
                     y: c.y,
                     flux: m,
@@ -191,8 +192,8 @@ impl NarrowEngine {
         stars.sort_by(|a, b| b.flux.total_cmp(&a.flux));
         let dims = (width, height);
         let catalog: &(dyn StarCatalog + Sync) = &*self.catalog;
-        // seiza's solution, kept when our own check finds `floor` matches or more
-        let accept = |sol: seiza::solve::Solution, floor: usize| {
+        // unisolver-starmatch's solution, kept when our own check finds `floor` matches or more
+        let accept = |sol: unisolver_starmatch::solve::Solution, floor: usize| {
             self.geometry(&sol, centroids, width, height, floor)
                 .ok_or(SolveStatus::NoMatch)
         };
@@ -206,7 +207,7 @@ impl NarrowEngine {
                 max_pattern_deg: self.index.max_pattern_deg(),
                 ..Default::default()
             };
-            match seiza::blind::solve_blind_until(
+            match unisolver_starmatch::blind::solve_blind_until(
                 &stars,
                 catalog,
                 &self.index,
@@ -215,7 +216,7 @@ impl NarrowEngine {
                 req.deadline,
             ) {
                 Ok(sol) => accept(sol, BLIND_MIN_MATCHES),
-                Err(seiza::Error::Timeout) => Err(SolveStatus::Timeout),
+                Err(unisolver_starmatch::Error::Timeout) => Err(SolveStatus::Timeout),
                 Err(_) => Err(SolveStatus::NoMatch),
             }
         };
@@ -232,7 +233,7 @@ impl NarrowEngine {
                 fov_deg,
                 fov_tolerance,
             } => {
-                let hint = seiza::solve::SolveHint {
+                let hint = unisolver_starmatch::solve::SolveHint {
                     center: (ra_deg, dec_deg),
                     radius_deg,
                     scale_arcsec_px: scale_of(fov_deg, width),
@@ -244,9 +245,15 @@ impl NarrowEngine {
                 // fit. So the hint gets part of the time, its result is checked, and anything
                 // short of a checked solution leaves the rest to the blind search.
                 let phase = hinted_phase_end(Instant::now(), req.deadline);
-                let hinted = seiza::solve::solve_until(&stars, catalog, &hint, dims, Some(phase))
-                    .map_err(|_| SolveStatus::NoMatch)
-                    .and_then(|sol| accept(sol, HINTED_MIN_MATCHES));
+                let hinted = unisolver_starmatch::solve::solve_until(
+                    &stars,
+                    catalog,
+                    &hint,
+                    dims,
+                    Some(phase),
+                )
+                .map_err(|_| SolveStatus::NoMatch)
+                .and_then(|sol| accept(sol, HINTED_MIN_MATCHES));
                 match hinted {
                     Ok(g) => Ok(g),
                     Err(_) if req.deadline.is_some_and(|d| Instant::now() >= d) => {
@@ -265,17 +272,17 @@ impl NarrowEngine {
         }
     }
 
-    /// The geometry of a seiza solution after our own check: None unless it keeps `floor`
-    /// matches at a low enough chance probability
+    /// The geometry of a unisolver-starmatch solution after our own check: None unless it keeps
+    /// `floor` matches at a low enough chance probability
     fn geometry(
         &self,
-        sol: &seiza::solve::Solution,
+        sol: &unisolver_starmatch::solve::Solution,
         centroids: &[CentroidOut],
         width: u32,
         height: u32,
         floor: usize,
     ) -> Option<SolvedGeometry> {
-        let wcs = geometry::wcs_from_seiza(&sol.wcs, width, height);
+        let wcs = geometry::wcs_from_linear(&sol.wcs, width, height);
         let checked = verify::verify(&wcs, centroids, &*self.catalog);
         if checked.matched.len() < floor || checked.prob > MAX_MISMATCH_PROB {
             return None;

@@ -10,7 +10,7 @@
 
 pub mod tiles;
 
-pub use tiles::{TileCatalog, TileSetBuilder};
+pub use tiles::{TILE_MAGIC, TileCatalog, TileSetBuilder};
 
 /// A reference star position, ICRS degrees.
 #[derive(Debug, Clone, Copy, PartialEq)]

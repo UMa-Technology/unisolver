@@ -5,8 +5,8 @@ use unisolver_starmatch::{INDEX_BUILDER, blind, catalog};
 
 /// `INDEX_BUILDER` and the sha256 of the index built below (839 888 bytes)
 const GOLDEN: (&str, &str) = (
-    "seiza-0.19.2",
-    "a3639fe8117213aaf3772f6b3494cfc6044f8add53f961a6a5115edf8828eceb",
+    "starmatch-1",
+    "f53cce6e62162e2c1669f1a7b50f8aea4b63cfdd12581b4526dbc585060f38f5",
 );
 
 struct Lcg(u64);

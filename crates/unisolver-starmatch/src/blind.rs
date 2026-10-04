@@ -109,7 +109,8 @@ const RR_VERIFY_COARSE_FLOOR: usize = 10;
 /// one `Vec` per anchor for an entire tier can otherwise consume gigabytes
 /// before any patterns are merged.
 const INDEX_ANCHOR_BATCH: usize = 65_536;
-const INDEX_MAGIC: &[u8; 8] = b"SEIZABI1";
+/// First 8 bytes of a blind index file
+pub const INDEX_MAGIC: &[u8; 8] = b"UNIBLIX1";
 const INDEX_HEADER_SIZE: usize = 64;
 const PATTERN_RECORD_SIZE: usize = 11 * size_of::<f32>();
 const SERIALIZE_BATCH: usize = 65_536;
@@ -436,7 +437,7 @@ impl BlindIndex {
                     }
                 }
             }
-            if std::env::var("SEIZA_DEBUG").is_ok() {
+            if std::env::var("STARMATCH_DEBUG").is_ok() {
                 eprintln!(
                     "blind-index-tier: radius={radius:.2} mag<={mag_cap:.1} patterns={}",
                     patterns.len() - tier_pattern_start
@@ -481,7 +482,7 @@ impl BlindIndex {
         let map =
             unsafe { MmapOptions::new().map(&file) }.map_err(|error| invalid_index(path, error))?;
         if map.len() < INDEX_HEADER_SIZE || &map[..8] != INDEX_MAGIC {
-            return Err(invalid_index(path, "not a SEIZABI1 blind index"));
+            return Err(invalid_index(path, "not a blind index"));
         }
 
         let keys_len = usize::try_from(read_u64(&map, 8))
@@ -582,7 +583,7 @@ impl BlindIndex {
         Ok(())
     }
 
-    /// Persist the index in the little-endian `SEIZABI1` format. The
+    /// Persist the index in the little-endian `UNIBLIX1` format. The
     /// resulting file is suitable for memory-mapped reuse and CDN hosting.
     pub fn write_to(&self, path: &Path) -> io::Result<()> {
         let mut out = BufWriter::with_capacity(4 * 1024 * 1024, File::create(path)?);
@@ -702,7 +703,7 @@ fn invalid_mapped_index(message: impl std::fmt::Display) -> crate::Error {
 }
 
 /// Solve with no position hint. `stars` must be sorted brightest-first
-/// (as produced by [`crate::detect::detect_stars`]). Hypotheses are
+/// (as unisolver's extraction delivers them). Hypotheses are
 /// verified in parallel across CPU cores.
 pub fn solve_blind(
     stars: &[DetectedStar],
@@ -981,7 +982,7 @@ fn solve_blind_with_global_ladder(
         }
     }
 
-    if std::env::var("SEIZA_DEBUG").is_ok() {
+    if std::env::var("STARMATCH_DEBUG").is_ok() {
         eprintln!(
             "blind-funnel: {stat_quads} image quads, {stat_candidates} candidates, \
              {stat_scale_ok} scale-ok"
@@ -1047,7 +1048,7 @@ fn solve_blind_with_global_ladder(
         .collect();
     ranked.par_sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
 
-    if let Ok(truth) = std::env::var("SEIZA_DEBUG_TRUTH") {
+    if let Ok(truth) = std::env::var("STARMATCH_DEBUG_TRUTH") {
         let parts: Vec<f64> = truth.split(',').filter_map(|v| v.parse().ok()).collect();
         if parts.len() == 2 {
             let near = ranked.iter().enumerate().min_by(|(_, a), (_, b)| {
@@ -1634,13 +1635,14 @@ pub(crate) mod tests {
         };
         let built = BlindIndex::build(&catalog, &params);
         let dir = std::env::temp_dir().join(format!(
-            "seiza-blind-index-{}-{}",
+            "starmatch-blind-index-{}-{}",
             std::process::id(),
             rng.0
         ));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("blind-gaia16.idx");
         built.write_to(&path).unwrap();
+        assert_eq!(&std::fs::read(&path).unwrap()[..8], INDEX_MAGIC);
         let index = BlindIndex::open(&path).unwrap();
         index.validate().unwrap();
         assert_eq!(index.pattern_count(), built.pattern_count());
@@ -1661,7 +1663,7 @@ pub(crate) mod tests {
     #[test]
     fn open_defers_exhaustive_blind_index_validation() {
         let dir = std::env::temp_dir().join(format!(
-            "seiza-blind-index-lazy-open-{}",
+            "starmatch-blind-index-lazy-open-{}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();

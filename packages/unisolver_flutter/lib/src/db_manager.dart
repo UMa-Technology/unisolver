@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'db_format.dart';
 import 'db_manifest.dart';
 import 'rust/api/install.dart' as rust;
 
@@ -155,10 +156,9 @@ class DbManager {
 
   String _partPath(DbItem t) => '$dir/${t.file}.part';
 
-  bool isInstalled(DbTier t) {
-    final f = File(dbPath(t));
-    return f.existsSync() && f.lengthSync() > 0;
-  }
+  /// Whether the tier's database is on disk in the format this engine reads. One left by an
+  /// earlier release (the UNISOLV2 container) counts as not installed, so [install] replaces it.
+  bool isInstalled(DbTier t) => isFormat2File(File(dbPath(t)));
 
   /// Paths of installed databases (`UniSolverPool.openDir` takes [dir] itself; this is for UIs)
   List<String> installedPaths() {
@@ -219,6 +219,9 @@ class DbManager {
         phase: DbPhase.decompressing,
         received: t.bytes,
         total: t.bytes));
+    // The decompressor keeps an existing non-empty file: drop a database in an old format first
+    final old = File(out);
+    if (old.existsSync()) old.deleteSync();
     try {
       await _install(zstPath: zst.path, outPath: out);
     } on Object catch (e) {

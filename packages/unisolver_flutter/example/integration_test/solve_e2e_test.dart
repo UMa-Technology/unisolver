@@ -28,8 +28,19 @@ void main() {
     final logs = <String>[];
     rust_log.setLogStream().listen((e) => logs.add('${e.level} ${e.message}'));
 
+    // A wide tier left by an earlier release (the UNISOLV2 container, which this engine no
+    // longer reads) is replaced by the bundled database in format 2
+    final support = await getApplicationSupportDirectory();
+    File('${support.path}/unisolver_10_80.db')
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([...'UNISOLV2'.codeUnits, ...List.filled(56, 0)]);
     final paths = await UnisolverAssets.ensureInstalled();
-    expect(await File(paths.dbPath).length(), greaterThan(30 * 1000 * 1000));
+    expect(await File(paths.dbPath).open().then((r) => r.read(6)), [
+      ...'T3DB'.codeUnits,
+      2,
+      0,
+    ]);
+    expect(await File(paths.dbPath).length(), greaterThan(20 * 1000 * 1000));
 
     final solver = await UniSolver.newInstance(dbPath: paths.dbPath);
     final props = solver.properties();

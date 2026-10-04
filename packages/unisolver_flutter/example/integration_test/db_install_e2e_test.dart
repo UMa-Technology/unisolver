@@ -290,10 +290,11 @@ void main() {
       // The decompressed size must equal the manifest's raw_bytes (manifest and archive agree)
       final f = File(dbPath);
       if (tier.rawBytes != null) expect(f.lengthSync(), tier.rawBytes);
-      expect(
-        String.fromCharCodes(await f.open().then((r) => r.read(8))),
-        'UNISOLV2',
-      );
+      expect(await f.open().then((r) => r.read(6)), [
+        ...'T3DB'.codeUnits,
+        2,
+        0,
+      ]);
 
       // The engine accepts it, and its range matches the manifest
       final tiers = await pool.tiers();

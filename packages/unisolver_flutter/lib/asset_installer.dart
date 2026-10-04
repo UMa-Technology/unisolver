@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'src/db_format.dart';
 import 'src/rust/api/install.dart' as rust;
 
 /// First launch: install the bundled assets into the app support directory (database
@@ -29,7 +30,10 @@ class UnisolverAssets {
     final dsoPath = '${dir.path}/unisolver_dso.bin';
 
     final dbFile = File(dbPath);
-    if (await _needsInstall(dbFile)) {
+    // Missing, empty or another format (a database left by an earlier release): install. The
+    // decompressor keeps an existing non-empty file, so an old one must go first.
+    if (!isFormat2File(dbFile)) {
+      if (await dbFile.exists()) await dbFile.delete();
       final zstBytes = await rootBundle.load(_dbAsset);
       final zstFile = File('${dir.path}/unisolver_10_80.db.zst');
       await zstFile.writeAsBytes(zstBytes.buffer.asUint8List(), flush: true);
@@ -72,16 +76,4 @@ class UnisolverAssets {
     }
   }
 
-  /// Missing, empty or old-format (no UNISOLV2 magic) files trigger a reinstall: v1 postcard
-  /// databases work but stay fully resident, so upgrades move them to the mmap-friendly v2.
-  static Future<bool> _needsInstall(File f) async {
-    if (!await f.exists() || (await f.length()) < 8) return true;
-    final raf = await f.open();
-    try {
-      final magic = await raf.read(8);
-      return String.fromCharCodes(magic) != 'UNISOLV2';
-    } finally {
-      await raf.close();
-    }
-  }
 }

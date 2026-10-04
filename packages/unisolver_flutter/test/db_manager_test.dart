@@ -13,6 +13,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unisolver_flutter/src/db_format.dart';
 import 'package:unisolver_flutter/src/db_manager.dart';
 import 'package:unisolver_flutter/src/db_manifest.dart';
 
@@ -120,8 +121,11 @@ void main() {
 
   setUp(() async {
     tmp = Directory.systemTemp.createTempSync('unisolver_dbmgr');
-    // A 400 KB "tier" with verifiable content
-    tierBytes = List<int>.generate(400 * 1024, (i) => (i * 31 + 7) & 0xFF);
+    // A 400 KB "tier" with verifiable content, headed like a format-2 database
+    tierBytes = [
+      ...format2Header,
+      ...List<int>.generate(400 * 1024, (i) => (i * 31 + 7) & 0xFF),
+    ];
     tierSha = sha256.convert(tierBytes).toString();
     namesBytes = List<int>.generate(210 * 1024, (i) => (i * 17 + 3) & 0xFF);
     namesSha = sha256.convert(namesBytes).toString();
@@ -209,6 +213,18 @@ void main() {
       throwsA(isA<DbManifestException>()
           .having((e) => e.toString(), 'message', contains('manifest-v3.json'))),
     );
+  });
+
+  test('a database left by an earlier release counts as not installed and is replaced', () async {
+    final m = manager();
+    final tier = (await m.fetchManifest()).byName('tier_5_10')!;
+    File(m.dbPath(tier))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([...'UNISOLV2'.codeUnits, ...List.filled(64, 0)]);
+    expect(m.isInstalled(tier), isFalse);
+    await m.install(tier);
+    expect(m.isInstalled(tier), isTrue);
+    expect(File(m.dbPath(tier)).readAsBytesSync(), tierBytes);
   });
 
   test('a manifest newer than the engine is an error, not a guess', () {

@@ -1,2 +1,3 @@
 0001-cargo-flatten-workspace-inheritance.patch
 0002-solve-deadlines.patch
+0003-optional-data-paths.patch

@@ -22,7 +22,8 @@ lz4_flex = { version = "0.11", optional = true }
 ruzstd = { version = "0.8", optional = true }
 sgp4 = { version = "2", optional = true }
 # narrow: the narrow-field engine (desktop builds; off by default)
-seiza = { path = "../../third_party/seiza/seiza", optional = true }
+# (without data-paths: unisolver passes every path itself)
+seiza = { path = "../../third_party/seiza/seiza", optional = true, default-features = false }
 
 [features]
 imageio = ["dep:image", "dep:quick-xml", "dep:flate2", "dep:lz4_flex", "dep:ruzstd"]
@@ -42,7 +43,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # Decompresses the bundled database for the golden regression (tests only; pure Rust)
 ruzstd = "0.8"
 # The narrow engine's integration tests build indexes with seiza directly
-seiza = { path = "../../third_party/seiza/seiza" }
+seiza = { path = "../../third_party/seiza/seiza", default-features = false }
 
 [[test]]
 name = "imageio_local_test"

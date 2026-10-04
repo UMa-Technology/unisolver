@@ -12,7 +12,7 @@ keywords = ["astronomy", "astrophotography", "plate-solving", "wcs", "astrometry
 categories = ["science", "multimedia::images"]
 
 [dependencies]
-directories = "6"
+directories = { version = "6", optional = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 thiserror = "2"
 seiza-calibration = { path = "../seiza-calibration", version = "0.4.2" }
@@ -26,6 +26,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 postcard = { version = "1", features = ["use-std"] }
 sha2 = "0.11"
+
+[features]
+default = ["data-paths"]
+# Default catalog locations (`data_paths`): the platform data directories `seiza setup`
+# installs into. Embedders that always pass their own paths can leave it out, and with it
+# the `directories` dependency tree.
+data-paths = ["dep:directories"]
 
 [dev-dependencies]
 tempfile = "3"

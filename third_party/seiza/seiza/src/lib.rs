@@ -10,6 +10,7 @@
 
 pub mod blind;
 pub mod catalog;
+#[cfg(feature = "data-paths")]
 pub mod data_paths;
 pub mod detect;
 pub mod minor_bodies;

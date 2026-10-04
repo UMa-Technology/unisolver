@@ -24,3 +24,10 @@ Optional wall-clock deadlines, so a caller can bound a failing solve: NEW `Error
 deadline, unchanged). Checked before each hinted search window and rank-robust quad, before blind
 hypothesis scoring, before each verification batch and at the start of every hypothesis
 verification. Test: `blind::tests::solves_give_up_at_a_passed_deadline`.
+
+## 0003-optional-data-paths
+
+`seiza::data_paths` (default catalog locations, through the `directories` crate) moves behind a new
+`data-paths` feature, on by default. unisolver passes every path itself and depends on seiza with
+`default-features = false`, which keeps `directories` and its MPL-2.0 dependency `option-ext` out of
+the shipped libraries.

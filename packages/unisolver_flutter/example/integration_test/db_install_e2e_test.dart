@@ -394,4 +394,77 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'importFile and importBundled install local files: recognised, decompressed, registered, solvable',
+    (t) async {
+      final support = await getApplicationSupportDirectory();
+      final dir = Directory('${support.path}/dbmgr_import');
+      final downloads = Directory('${support.path}/dbmgr_import_downloads');
+      for (final d in [dir, downloads]) {
+        if (d.existsSync()) d.deleteSync(recursive: true);
+        d.createSync(recursive: true);
+      }
+
+      // "A file the user downloaded": the real archive of the bundled wide tier under another name
+      const assetKey = 'packages/unisolver_flutter/assets/unisolver_10_80.db.zst';
+      final zst = (await rootBundle.load(assetKey)).buffer.asUint8List();
+      final saved = File('${downloads.path}/wide (1).db.zst')
+        ..writeAsBytesSync(zst, flush: true);
+      final sha = await sha256File(path: saved.path);
+      String manifest(String name, String file) => json.encode({
+        'version': 3,
+        'revision': 1,
+        'base_url': '',
+        'tiers': [
+          {
+            'name': name,
+            'file': file,
+            'min_fov_deg': 10.0,
+            'max_fov_deg': 80.0,
+            'bytes': zst.length,
+            'sha256': sha,
+            'mobile': true,
+          },
+        ],
+      });
+
+      final pool = await UniSolverPool.empty();
+      final mgr = DbManager(
+        dir: dir.path,
+        register: (p) => pool.register(dbPath: p).then((_) {}),
+      );
+      mgr.seedManifest(manifest('wide_import', 'wide_import.db.zst'));
+      final r = await mgr.importFile(saved.path);
+      expect(r.name, 'wide_import');
+      expect(saved.existsSync(), isTrue);
+      expect((await pool.tiers()).map((e) => e.name), contains('wide_import'));
+
+      // Solvable at once (the Scorpius sample, as in the download test)
+      final bytes = await rootBundle.load('assets/sample_scorpius.jpg');
+      final img = File('${dir.path}/sample.jpg')
+        ..writeAsBytesSync(bytes.buffer.asUint8List(), flush: true);
+      final res = await pool.solveImageFileAuto(
+        path: img.path,
+        base: SolveOptionsDto.defaults(fovEstimateDeg: 70),
+      );
+      expect(res.outcome.status, SolveStatusDto.ok);
+      expect(res.db, 'wide_import');
+
+      // "An archive the app bundles": the same asset, found by its file name in the app's manifest
+      final bundledJson = manifest('wide_bundled', 'unisolver_10_80.db.zst');
+      final b = await UnisolverAssets.importBundled(mgr, assetKey, manifestJson: bundledJson);
+      expect(b!.name, 'wide_bundled');
+      expect(
+        await UnisolverAssets.importBundled(mgr, assetKey, manifestJson: bundledJson),
+        isNull,
+        reason: 'idempotent',
+      );
+      expect(dir.listSync().where((e) => e.path.endsWith('.bundled')), isEmpty);
+
+      dir.deleteSync(recursive: true);
+      downloads.deleteSync(recursive: true);
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
 }

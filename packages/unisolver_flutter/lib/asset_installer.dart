@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'src/db_format.dart';
+import 'src/db_manager.dart';
+import 'src/db_manifest.dart';
 import 'src/rust/api/install.dart' as rust;
 
 /// First launch: install the bundled assets into the app support directory (database
@@ -64,6 +66,34 @@ class UnisolverAssets {
       return null; // not declared by the app
     }
     return path;
+  }
+
+  /// Installs a database archive the **app** bundles in its own assets (declared in the app's
+  /// pubspec, e.g. `assets/unisolver_5_10.db.zst` taken from the data release) into [manager]'s
+  /// directory, checked against [manifestJson]: the manifest bundled with the same build, so the
+  /// two always agree. Idempotent: returns null when that tier is already installed.
+  static Future<DbImport?> importBundled(
+    DbManager manager,
+    String assetKey, {
+    required String manifestJson,
+  }) async {
+    final m = DbManifest.parse(manifestJson);
+    final file = assetKey.split('/').last;
+    for (final t in m.tiers) {
+      if (t.file == file && manager.isInstalled(t)) return null;
+    }
+    final data = await rootBundle.load(assetKey);
+    Directory(manager.dir).createSync(recursive: true);
+    final tmp = File('${manager.dir}/$file.bundled');
+    await tmp.writeAsBytes(
+      data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      flush: true,
+    );
+    try {
+      return await manager.importFile(tmp.path, manifest: m);
+    } finally {
+      if (tmp.existsSync()) tmp.deleteSync();
+    }
   }
 
   /// Small assets are copied. **Lengths are compared on every launch**: when an asset

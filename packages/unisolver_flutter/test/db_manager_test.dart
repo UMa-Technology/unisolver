@@ -600,4 +600,31 @@ void main() {
     );
     await expectLater(manager().install(newer), throwsA(isA<DbException>().having((e) => e.message, 'message', contains('upgrade'))));
   });
+
+  group('seedManifest', () {
+    String withRevision(int r) =>
+        json.encode({...json.decode(manifestText) as Map<String, dynamic>, 'revision': r});
+
+    test('a manifest without revision counts as 0', () {
+      expect(DbManifest.parse(manifestText).revision, 0);
+    });
+
+    test('an empty cache takes the bundled manifest', () {
+      expect(manager().seedManifest(withRevision(3)).revision, 3);
+      expect(manager().cachedManifest()!.revision, 3);
+    });
+
+    test('a cached manifest at least as new is kept', () {
+      manager().seedManifest(withRevision(5));
+      expect(manager().seedManifest(withRevision(4)).revision, 5);
+      expect(manager().seedManifest(withRevision(5)).revision, 5);
+      expect(manager().cachedManifest()!.revision, 5);
+    });
+
+    test('an older cache is replaced', () {
+      manager().seedManifest(withRevision(2));
+      expect(manager().seedManifest(withRevision(6)).revision, 6);
+      expect(manager().cachedManifest()!.revision, 6);
+    });
+  });
 }

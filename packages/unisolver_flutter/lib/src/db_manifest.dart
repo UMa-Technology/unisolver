@@ -1,6 +1,5 @@
 /// Dart model of the tier manifest (`manifest-v3.json`, version 3: databases in tetra3's
-/// format 2). Version 2 (`manifest.json`) lists the older format and stays published for
-/// earlier plugin releases.
+/// format 2). Releases before 0.5.0 read version 2 (`manifest.json`).
 ///
 /// The manifest is the single entry point of distribution: clients read it, then fetch tiers
 /// by `key`. Fields match the manifest generator one to one; change both together.
@@ -56,7 +55,8 @@ class DbTier implements DbItem {
   @override
   final String file;
 
-  /// Content-addressed download path (`db/<last 8 hex of sha256>/<file>`). **Absent for the bundled tier**
+  /// Download path relative to the base URL, named after the content (for example
+  /// `unisolver_5_10-cbe3d569.db.zst`). May be absent for the bundled tier
   @override
   final String? key;
 
@@ -280,9 +280,14 @@ class DbManifest {
     required this.tiers,
     this.assets = const [],
     this.packages = const [],
+    this.revision = 0,
   });
 
   final int version;
+
+  /// Publication counter: the host raises it whenever the content changes; 0 when absent. Tells
+  /// a manifest bundled with an app from a newer one fetched since ([DbManager.seedManifest]).
+  final int revision;
 
   /// Host prefix; download URL = baseUrl + tier.key
   final String baseUrl;
@@ -342,6 +347,7 @@ class DbManifest {
         .toList();
     return DbManifest(
       version: v,
+      revision: (j['revision'] as num?)?.toInt() ?? 0,
       baseUrl: (j['base_url'] as String?) ?? '',
       tiers: tiers,
       assets: assets,

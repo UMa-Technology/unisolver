@@ -196,6 +196,19 @@ class DbManager {
     }
   }
 
+  /// Caches [json], a manifest bundled with the app, unless the cache already holds one at least
+  /// as new (by `revision`): the app can then list and import files offline, and a manifest
+  /// fetched since is kept. Returns the manifest now cached. Throws [DbManifestException] for a
+  /// manifest this engine cannot read.
+  DbManifest seedManifest(String json) {
+    final seed = DbManifest.parse(json);
+    final cached = cachedManifest();
+    if (cached != null && cached.revision >= seed.revision) return cached;
+    Directory(dir).createSync(recursive: true);
+    File('$dir/$_manifestFile').writeAsStringSync(json, flush: true);
+    return seed;
+  }
+
   String dbPath(DbTier t) => '$dir/${t.name}.db';
 
   String _partPath(DbItem t) => '$dir/${t.file}.part';

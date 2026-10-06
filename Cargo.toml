@@ -18,3 +18,26 @@ codegen-units = 1
 
 [profile.test]
 opt-level = 3
+
+# Apps build the plugin in their debug runs too (cargokit passes --release only to profile and
+# release builds), and an unoptimized engine solves 9–13× slower: 18 photos and FITS frames took
+# 83 s against 6.6 s. So debug builds optimize the engine and every dependency as well, keeping
+# debug assertions and overflow checks. `*` covers dependencies only, so the workspace members
+# that make up the shipped libraries are named.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.tetra3]
+opt-level = 3
+
+[profile.dev.package.unisolver-core]
+opt-level = 3
+
+[profile.dev.package.unisolver-starmatch]
+opt-level = 3
+
+[profile.dev.package.unisolver_frb]
+opt-level = 3
+
+[profile.dev.package.unisolver-cabi]
+opt-level = 3

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+1. **Apps' debug builds solve at full speed.** Cargokit builds the plugin's Rust library with
+   `--release` only for profile and release builds, so an app's debug run solved with an
+   unoptimized engine, 9–13× slower: 18 photos and FITS frames took 83 s against 6.6 s. The
+   workspace now optimizes the engine and its dependencies in debug builds too, keeping debug
+   assertions and overflow checks, and the same frames take as long as in a release build. The
+   first debug build after updating compiles about as long as a release build.
+
 ## 2026-10-07 — v0.7.0
 
 1. **Wide frames with a lit foreground solve.** A solve took the brightest 100 centroids, and

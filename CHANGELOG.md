@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-06 — v0.6.0
+
 1. **solvecli solves with a pool of only the narrow-field package.** It used to stop at the first
    frame with "the pool has no tetra3 tier to annotate with". Annotation needs a tetra3 tier's
    catalog, so such a pool now solves without annotating: it says so once at start and in each

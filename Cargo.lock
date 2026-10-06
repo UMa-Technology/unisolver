@@ -1051,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "namesgen"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "clap",
  "serde_json",
@@ -1552,7 +1552,7 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "solvecli"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "clap",
  "image",
@@ -1839,7 +1839,7 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
 name = "unisolver-cabi"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "cbindgen",
  "image",
@@ -1851,7 +1851,7 @@ dependencies = [
 
 [[package]]
 name = "unisolver-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "flate2",
  "image",
@@ -1872,7 +1872,7 @@ dependencies = [
 
 [[package]]
 name = "unisolver-starmatch"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "memmap2",
  "rayon",
@@ -1883,7 +1883,7 @@ dependencies = [
 
 [[package]]
 name = "unisolver-synth"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "image",
  "numeris",
@@ -1894,7 +1894,7 @@ dependencies = [
 
 [[package]]
 name = "unisolver_frb"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "flutter_rust_bridge",
@@ -2169,7 +2169,7 @@ checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 
 [[package]]
 name = "xtask"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",

@@ -13,6 +13,14 @@
    tracking and the narrow-field engine keep the brightest. `SolveOptions::spread_wide`
    (default on) and solvecli's `--no-spread` turn it off; the outcome's `centroids` are the list
    the solve took.
+2. **EXIF focal lengths on 16:9 and square photos.** The 35 mm-equivalent focal length is now
+   read on the camera's native frame, 4:3 (3:2 for 3:2 photos), as phones write it: a 16:9
+   photo keeps that frame's long side and a square one its short side. A phone's 16:9 photos
+   used to get a hint 6–10% too wide (24 mm: 76.3° instead of the 71.6° they solve at, 47.7°
+   instead of 44.2° held upright); on 8 such photos the hints now land within 1.5% of the
+   solved field, and 4:3 and 3:2 photos are unchanged. `CameraParams::from_equivalent_focal_35mm` changes
+   accordingly. A photo cropped after capture still carries the camera's focal length, so its
+   hint misses and the ladder finds the field.
 
 ## 2026-10-06 — v0.6.0
 

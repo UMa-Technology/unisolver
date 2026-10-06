@@ -2,6 +2,9 @@ use crate::{coords, CoreError, Result};
 use serde::{Deserialize, Serialize};
 use tetra3::{num_coeffs, CameraModel, Distortion, PolynomialDistortion, RadialDistortion};
 
+/// Diagonal of the 36 × 24 mm frame that 35 mm equivalents refer to
+const FULL_FRAME_DIAGONAL_MM: f64 = 43.266;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DistortionParams {
     None,
@@ -70,14 +73,41 @@ impl CameraParams {
         Self::from_horizontal_fov(2.0 * t.atan().to_degrees(), width, height)
     }
 
-    /// EXIF FocalLengthIn35mmFilm (CIPA diagonal equivalent; full-frame diagonal 43.266 mm)
+    /// EXIF FocalLengthIn35mmFilm: the 35 mm equivalent of the camera's **native** frame (CIPA: a
+    /// diagonal equivalent on the 43.266 mm full-frame diagonal). Phones have 4:3 sensors and
+    /// write the same value for their 16:9 and square photos, which crop that frame and keep its
+    /// long side or its short side: a 24 mm main camera spans 71.6° across a 16:9 photo, not the
+    /// 76.3° its own diagonal would give. Cameras with 3:2 sensors write it for their 3:2 frame.
+    /// So the native frame is 3:2 when the image is 3:2 (within 2%) and 4:3 otherwise, and the
+    /// image keeps the native long side when it is at least as wide, the short side when it is
+    /// squarer. A photo cropped after capture still carries the camera's value, so the FOV is a
+    /// hint only.
     pub fn from_equivalent_focal_35mm(mm: f64, width: u32, height: u32) -> Result<Self> {
         if !(mm.is_finite() && mm > 1.0 && mm < 2000.0) {
             return Err(CoreError::InvalidInput(format!(
                 "35mm focal out of range: {mm}"
             )));
         }
-        Self::from_diagonal_fov(2.0 * (43.266 / 2.0 / mm).atan().to_degrees(), width, height)
+        check_dims(width, height)?;
+        let (long, short) = (width.max(height) as f64, width.min(height) as f64);
+        let aspect = long / short;
+        let native = if (aspect / 1.5 - 1.0).abs() <= 0.02 {
+            1.5
+        } else {
+            4.0 / 3.0
+        };
+        let native_long_mm = FULL_FRAME_DIAGONAL_MM * native / (native * native + 1.0).sqrt();
+        let long_mm = if aspect >= native {
+            native_long_mm
+        } else {
+            native_long_mm / native * aspect
+        };
+        let width_mm = long_mm * width as f64 / long;
+        Self::from_horizontal_fov(
+            2.0 * (width_mm / 2.0 / mm).atan().to_degrees(),
+            width,
+            height,
+        )
     }
 
     /// Horizontal FOV in degrees implied by the focal length
@@ -257,6 +287,26 @@ mod tests {
         let c = CameraParams::from_equivalent_focal_35mm(24.0, 4032, 3024).unwrap();
         let fov = c.to_tetra3(4032, 3024).unwrap().fov_deg();
         assert!((fov - 71.6).abs() < 0.3, "fov={fov}");
+    }
+    #[test]
+    fn equivalent_35mm_keeps_the_native_side_of_a_crop() {
+        let fov = |mm: f64, w: u32, h: u32| {
+            CameraParams::from_equivalent_focal_35mm(mm, w, h)
+                .unwrap()
+                .horizontal_fov_deg(w)
+        };
+        // A phone's 16:9 photos keep its 4:3 frame's long side (24 mm main, 48 mm and 78 mm;
+        // the photos solved at 71.5°, 43.5–44.1°, 23.0° and 14.4°)
+        assert!((fov(24.0, 4032, 2268) - 71.6).abs() < 0.1);
+        assert!((fov(24.0, 2268, 4032) - 44.2).abs() < 0.1);
+        assert!((fov(48.0, 2268, 4032) - 22.9).abs() < 0.1);
+        assert!((fov(78.0, 2268, 4032) - 14.2).abs() < 0.1);
+        // A square one keeps its short side
+        assert!((fov(24.0, 3024, 3024) - 56.8).abs() < 0.1);
+        // Native frames as before: 4:3 phones, 3:2 cameras either way up
+        assert!((fov(24.0, 4032, 3024) - 71.6).abs() < 0.1);
+        assert!((fov(50.0, 6000, 4000) - 39.6).abs() < 0.1);
+        assert!((fov(50.0, 4000, 6000) - 27.0).abs() < 0.1);
     }
     #[test]
     fn invalid_inputs_err_not_panic() {

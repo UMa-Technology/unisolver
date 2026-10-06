@@ -14,11 +14,15 @@ use common::{bundled_w_db, repo_root};
 use unisolver_core::*;
 use unisolver_synth::exif::{jpeg_with_exif, ExifFields};
 
-/// 35 mm-equivalent focal length whose CIPA diagonal FOV matches a horizontal FOV on w × h
+/// The whole 35 mm-equivalent focal length (as phones write it) whose FOV hint on w × h comes
+/// closest to a horizontal FOV, through the engine's own conversion
 fn focal_35mm(h_fov_deg: f32, w: u32, h: u32) -> u16 {
-    let diag = ((w * w + h * h) as f64).sqrt();
-    let tan_half_diag = (h_fov_deg as f64 / 2.0).to_radians().tan() * diag / w as f64;
-    (21.633 / tan_half_diag).round() as u16
+    let off = |mm: u16| {
+        focal_35mm_hint(mm as f32, w, h).map_or(f32::INFINITY, |p| (p.fov_deg - h_fov_deg).abs())
+    };
+    (2..2000u16)
+        .min_by(|&a, &b| off(a).total_cmp(&off(b)))
+        .unwrap()
 }
 
 #[test]

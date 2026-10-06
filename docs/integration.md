@@ -164,6 +164,11 @@ The EXIF keys are `kCGImagePropertyExifFocalLenIn35mmFilm`,
 Android's `ExifInterface`. Without a zone, leave the time out rather than guess: a wrong hour
 moves the moon by half a degree.
 
+The engine reads FocalLengthIn35mmFilm as phones write it, for the camera's native frame: 4:3
+(3:2 for 3:2 photos), whose long side a 16:9 photo keeps and whose short side a square one
+keeps. A photo cropped after capture still carries the camera's value, so its hint misses and
+the ladder finds the field.
+
 ### 1.4 Annotation
 
 ```dart

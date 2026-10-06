@@ -889,9 +889,9 @@ pub(crate) fn hint_preset(fov_deg: f32) -> FovPreset {
     }
 }
 
-/// Hint rung for a 35 mm-equivalent focal length (EXIF FocalLengthIn35mmFilm) on a frame
-/// of this size: the CIPA diagonal convention gives the diagonal FOV, the aspect ratio the
-/// horizontal one. None for an implausible focal length or a FOV outside (0.2°, 120°).
+/// Hint rung for a 35 mm-equivalent focal length (EXIF FocalLengthIn35mmFilm) on a frame of
+/// this size, converted on the camera's native frame (`CameraParams::from_equivalent_focal_35mm`).
+/// None for an implausible focal length or a FOV outside (0.2°, 120°).
 pub fn focal_35mm_hint(mm: f32, width: u32, height: u32) -> Option<FovPreset> {
     let cam = CameraParams::from_equivalent_focal_35mm(mm as f64, width, height).ok()?;
     let fov = cam.horizontal_fov_deg(width);

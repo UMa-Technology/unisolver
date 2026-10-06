@@ -152,17 +152,18 @@ impl ImageMeta {
         (0.2..=120.0).contains(&fov).then_some(fov)
     }
 
-    /// Horizontal FOV **hint** from the 35 mm-equivalent focal length (EXIF), through the
-    /// CIPA diagonal convention; None without one or outside (0.2°, 120°).
+    /// Horizontal FOV **hint** from the 35 mm-equivalent focal length (EXIF), on the camera's
+    /// native frame (see `CameraParams::from_equivalent_focal_35mm`); None without one or
+    /// outside (0.2°, 120°).
     pub fn fov_hint_35mm_deg(&self) -> Option<f64> {
         crate::solver::focal_35mm_hint(self.focal_35mm_mm? as f32, self.width, self.height)
             .map(|p| p.fov_deg as f64)
     }
 
     /// Hint rungs (0–3), each with ±15% tolerance, rungs within 1° merged: the 35 mm
-    /// equivalent (phones write it and it already accounts for crops), the focal length
-    /// with the pixel size and, when binning > 1, that hint × binning, because XPIXSZ may
-    /// mean either the physical or the binned pixel.
+    /// equivalent (phones write it for their native 4:3 frame; a crop made after capture is not
+    /// in it), the focal length with the pixel size and, when binning > 1, that hint × binning,
+    /// because XPIXSZ may mean either the physical or the binned pixel.
     pub fn solve_hints(&self) -> Vec<crate::FovPreset> {
         let mut fovs: Vec<f64> = Vec::new();
         fovs.extend(self.fov_hint_35mm_deg());

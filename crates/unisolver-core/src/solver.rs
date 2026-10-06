@@ -610,7 +610,7 @@ pub(crate) fn extract_frame(
                     ..Default::default()
                 };
                 if (w as usize) * (h as usize) > crate::bands::BANDED_ABOVE_PX {
-                    crate::bands::extract(frame, &cfg)?
+                    crate::bands::extract(frame, &cfg)?.0
                 } else {
                     extract_centroids_from_raw(&frame.to_luma_f32()?, w, h, &cfg)?.centroids
                 }

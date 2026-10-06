@@ -49,14 +49,43 @@ fn cores(w: usize, h: usize) -> Vec<(usize, usize)> {
         .collect()
 }
 
-/// Connected-component extraction of `frame` band by band; the result matches a single
-/// pass (centre-origin coordinates, brightest first, at most `cfg.max_centroids`).
-pub(crate) fn extract(frame: &Frame, cfg: &CentroidExtractionConfig) -> Result<Vec<Centroid>> {
+/// A detection in frame coordinates: how deep inside its band's core it lies, its band, and its
+/// rank in that band's extraction (brightest first)
+#[derive(Clone)]
+struct Detection {
+    centroid: Centroid,
+    depth: f64,
+    band: usize,
+    rank: usize,
+}
+
+/// Connected-component extraction of `frame` band by band, as two lists that each match a
+/// single pass (centre-origin coordinates, brightest first). The first holds at most
+/// `cfg.max_centroids`, each band capped alike before the bands merge, as earlier releases
+/// extracted it, so the solves that take it do not change; the second holds every detection,
+/// for the wide-field spread (`crate::spread`).
+pub(crate) fn extract(
+    frame: &Frame,
+    cfg: &CentroidExtractionConfig,
+) -> Result<(Vec<Centroid>, Vec<Centroid>)> {
     assert_eq!(
         cfg.local_bg_block_size,
         Some(BLOCK as u32),
         "bands align to the background block"
     );
+    let uncapped = CentroidExtractionConfig {
+        max_centroids: None,
+        ..cfg.clone()
+    };
+    let found = detect(frame, &uncapped)?;
+    let cap = cfg.max_centroids.unwrap_or(usize::MAX);
+    let mut capped = merge(found.iter().filter(|d| d.rank < cap).cloned().collect());
+    capped.truncate(cap);
+    Ok((capped, merge(found)))
+}
+
+/// Every band's detections centred in its core (or within `EDGE` of it)
+fn detect(frame: &Frame, cfg: &CentroidExtractionConfig) -> Result<Vec<Detection>> {
     let (w, h) = (frame.width as usize, frame.height as usize);
     let half_h = (h as f64 - 1.0) / 2.0;
     // Bands with their margins, largest first (the buffers are sized once)
@@ -67,54 +96,58 @@ pub(crate) fn extract(frame: &Frame, cfg: &CentroidExtractionConfig) -> Result<V
     bands.sort_by_key(|&(y0, _, top, bottom)| (std::cmp::Reverse(bottom - top), y0));
     let mut extractor = CentroidExtractor::new();
     let mut luma = Vec::new();
-    // (centroid in frame coordinates, depth inside its band's core, band)
-    let mut found: Vec<(Centroid, f64, usize)> = Vec::new();
+    let mut found = Vec::new();
     for (y0, y1, top, bottom) in bands {
-        let band = y0;
         frame.to_luma_f32_rows_into(top, bottom, &mut luma)?;
         let r = extractor.extract_from_raw(&luma, w as u32, (bottom - top) as u32, cfg)?;
         // Band centre-origin → frame centre-origin
         let shift = top as f64 + (bottom - top - 1) as f64 / 2.0 - half_h;
-        for mut c in r.centroids {
+        for (rank, mut c) in r.centroids.into_iter().enumerate() {
             let y = c.y as f64 + shift;
             let row = y + half_h;
             let depth = (row - y0 as f64).min(y1 as f64 - row);
             if depth >= -EDGE {
                 c.y = y as f32;
-                found.push((c, depth, band));
+                found.push(Detection {
+                    centroid: c,
+                    depth,
+                    band: y0,
+                    rank,
+                });
             }
         }
     }
-    // Deepest first, so a boundary star keeps the measurement from the band that saw it
-    // with the most room around it
-    found.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let mut kept: Vec<(Centroid, f64, usize)> = Vec::with_capacity(found.len());
+    Ok(found)
+}
+
+/// One list from the bands' detections: a star on a core boundary, seen by both bands, keeps
+/// the measurement from the band that saw it deepest inside its core; brightest first, as a
+/// single pass returns them (ties in raster order).
+fn merge(mut found: Vec<Detection>) -> Vec<Centroid> {
+    found.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+    let mut kept: Vec<Centroid> = Vec::with_capacity(found.len());
     let mut boundary: Vec<(f32, f32, usize)> = Vec::new();
-    for (c, depth, band) in found {
-        if depth < EDGE {
+    for d in found {
+        let c = d.centroid;
+        if d.depth < EDGE {
             let seen = boundary
                 .iter()
-                .any(|&(x, y, b)| b != band && (x - c.x).abs() < SAME && (y - c.y).abs() < SAME);
+                .any(|&(x, y, b)| b != d.band && (x - c.x).abs() < SAME && (y - c.y).abs() < SAME);
             if seen {
                 continue;
             }
-            boundary.push((c.x, c.y, band));
+            boundary.push((c.x, c.y, d.band));
         }
-        kept.push((c, depth, band));
+        kept.push(c);
     }
-    // Brightest first, as a single pass returns them (ties in raster order)
-    let mut out: Vec<Centroid> = kept.into_iter().map(|(c, _, _)| c).collect();
-    out.sort_by(|a, b| {
+    kept.sort_by(|a, b| {
         b.mass
             .unwrap_or(0.0)
             .total_cmp(&a.mass.unwrap_or(0.0))
             .then(a.y.total_cmp(&b.y))
             .then(a.x.total_cmp(&b.x))
     });
-    if let Some(max) = cfg.max_centroids {
-        out.truncate(max);
-    }
-    Ok(out)
+    kept
 }
 
 #[cfg(test)]
@@ -177,7 +210,7 @@ mod tests {
             .unwrap()
             .centroids;
             drop(luma);
-            let banded = extract(&frame, &cfg).unwrap();
+            let banded = extract(&frame, &cfg).unwrap().0;
             let mut diffs: Vec<f32> = single
                 .iter()
                 .filter_map(|s| {
@@ -227,7 +260,7 @@ mod tests {
         let single = tetra3::centroid_extraction::extract_centroids_from_raw(&img, w, h, &cfg)
             .unwrap()
             .centroids;
-        let banded = extract(&frame, &cfg).unwrap();
+        let (banded, all) = extract(&frame, &cfg).unwrap();
         assert_eq!(single.len(), 100);
         assert_eq!(banded.len(), single.len());
         let near_boundary = banded
@@ -250,6 +283,18 @@ mod tests {
                 .unwrap_or_else(|| panic!("star at ({}, {}) missing from the bands", s.x, s.y));
             let dm = (b.mass.unwrap() - s.mass.unwrap()).abs() / s.mass.unwrap();
             assert!(dm < 0.01, "mass differs by {dm}");
+        }
+        // Every detection comes back too, brightest first, and holds each star of the capped list
+        assert!(all.len() > banded.len(), "{} detections", all.len());
+        assert!(all.windows(2).all(|p| p[0].mass >= p[1].mass));
+        for b in &banded {
+            assert!(
+                all.iter()
+                    .any(|a| (a.x - b.x).abs() < 0.05 && (a.y - b.y).abs() < 0.05),
+                "capped star at ({}, {}) missing from every detection",
+                b.x,
+                b.y
+            );
         }
     }
 }

@@ -125,13 +125,14 @@ pattern table stays on disk and pages in on demand. The tree is generated: chang
 
 ### Databases
 
-The plugin bundles a **10–80° wide-field database** (phones and wide lenses). For long
-lenses and telescopes, generate narrower databases with the upstream tetra3rs tools: the
-engine loads them as they are, routes across every tier you register (`SolverPool`), and
-`DbManager` installs them from any static host serving a manifest. Desktop builds can add
-the **narrow-field package** for 0.18–3.1° (a blind index and its star tiles, about 2.5 GB to
-download), which `DbManager.installPackage` installs from the same manifest. See
-[docs/integration.md](docs/integration.md), section 1.6.
+The plugin bundles a **10–80° wide-field database** (phones and wide lenses). Narrower tiers
+(5–10°, 2.5–5°, and 1–2.5° for desktop) and, for desktop builds, the **narrow-field package**
+for 0.18–3.1° (a blind index and its star tiles, about 2.5 GB to download) are release assets of
+[unisolver-data](https://github.com/UMa-Technology/unisolver-data). `DbManager` installs them
+from there, through the system proxy on desktop, or from files the user downloaded another way
+(`importFile`); the engine routes across every tier you register (`SolverPool`). You can also
+generate your own with the upstream tetra3rs tools. See [docs/integration.md](docs/integration.md),
+section 1.6.
 
 ## Development
 

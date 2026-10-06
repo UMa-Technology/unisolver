@@ -435,19 +435,19 @@ Routing (no configuration needed; the same rules as the single-database ladder):
   reach it unless `narrowBlind` is set. Its attempts carry `kind == TierKindDto.narrow`.
   Below about 0.4° give it a pointing (`base.pointingHint`; see §5, item 10).
 
-The plugin bundles one tier, covering 10–80°. For narrower fields, generate databases with
-the upstream tetra3rs tools (the engine loads them as they are) and register them, or let
-`DbManager` install them from any static host serving a manifest in the format below
-(manifest → resumable download → sha256 check → decompress → register):
+The plugin bundles one tier, covering 10–80°. The narrower tiers and the narrow-field package
+are release assets of the data repository, and `DbManager` installs them from there or from any
+static host serving a manifest in the format below (manifest → resumable download → sha256 check
+→ decompress → register):
 
 ```dart
 final mgr = DbManager(
   dir: dir,
-  baseUrl: 'https://<your host>/unisolver/',
+  baseUrl: 'https://github.com/UMa-Technology/unisolver-data/releases/download/v3/',
   register: (path) => pool.register(dbPath: path).then((_) {}), // solvable at once, no restart
 );
 final manifest = await mgr.fetchManifest();          // cached; cachedManifest() works offline
-final tier = manifest.byName('my_narrow_tier')!;
+final tier = manifest.byName('unisolver_5_10')!;
 await mgr.install(tier, onProgress: (p) => print('${p.phase} ${p.fraction}'));
 ```
 
@@ -458,12 +458,12 @@ under `packages`, installed together and registered through a `registerPackage` 
 ```dart
 final mgr = DbManager(
   dir: dir,
-  baseUrl: 'https://<your host>/unisolver/',
+  baseUrl: 'https://github.com/UMa-Technology/unisolver-data/releases/download/v3/',
   register: (path) => pool.register(dbPath: path).then((_) {}),
   registerPackage: (index, stars) =>
       pool.registerNarrow(indexPath: index, starsPath: stars).then((_) {}),
 );
-final pkg = manifest.packageByName('my_narrow_package')!;
+final pkg = manifest.packageByName('unisolver_narrow')!;
 if (!mgr.isPackageInstalled(pkg)) {
   await mgr.installPackage(pkg, onProgress: (p) => print('${p.name} ${p.phase}'));
 }
@@ -481,12 +481,43 @@ if (!mgr.isPackageInstalled(pkg)) {
 - `removePackage` deletes the files. A pool that registered the package keeps it until the pool
   is reopened (and on Windows the files cannot be deleted until then).
 
-Manifest fields (`manifest-v3.json`, version 3; hosts keep `manifest.json`, version 2, for
-releases before database format 2):
+#### Proxies, downloaded files and tiers bundled with the app
+
+- **Proxies.** On desktop, downloads take the proxy from the environment (`https_proxy`, as Dart
+  does) and otherwise from the system settings (a manual HTTP or HTTPS proxy on macOS and
+  Windows), read at each connection. Auto-configuration (PAC) scripts are not read: use the proxy
+  tool's TUN mode or import the files. On iOS and Android, VPN-style proxies apply to the app as
+  they are. To choose the proxy yourself, pass `httpClient`; `systemProxy()` returns the
+  system's setting.
+- **Files downloaded another way** (a browser, a file-sharing link, another computer):
+  `importFile` recognises a tier, package file or asset by size and sha256, installs it as a
+  download would be and registers it; the file's name does not matter and the file is left
+  alone. A package is registered once both of its files are in place.
+
+  ```dart
+  final r = await mgr.importFile(pickedPath);   // DbImport: name, kind, path, missing
+  if (!r.complete) print('still missing: ${r.missing}');   // the other file of a package
+  ```
+
+- **Tiers bundled with the app.** Ship the manifest and the archives you want offline from the
+  start (for example `unisolver_5_10.db.zst`) in your app's assets, then on first launch:
+
+  ```dart
+  final manifestJson = await rootBundle.loadString('assets/manifest-v3.json');
+  mgr.seedManifest(manifestJson);   // kept unless the cache holds a newer revision
+  await UnisolverAssets.importBundled(mgr, 'assets/unisolver_5_10.db.zst',
+      manifestJson: manifestJson);   // null when already installed
+  ```
+
+  The archive stays in the app package and the database is decompressed next to the others,
+  so a bundled tier takes its archive plus its database on the device.
+
+Manifest fields (`manifest-v3.json`, version 3; releases before 0.5.0 read `manifest.json`,
+version 2):
 
 | Field | Purpose |
 |---|---|
-| `key` | Content-addressed path `db/<last 8 hex of sha256>/<file>` (`assets/…` and `pkg/…` for assets and package files); URL = `base_url + key` |
+| `key` | Download path relative to `base_url`, named after the content: the data release uses `<name>-<last 8 hex of sha256>.<ext>` (for example `unisolver_5_10-cbe3d569.db.zst`); URL = `base_url + key` |
 | `sha256` | Digest of the archive; **verified after every download** (`DbManager` refuses a mismatch and removes the leftover) |
 | `bytes` / `raw_bytes` | Download size / decompressed size; `tier.diskBytesNeeded` is the peak disk use during install |
 | `raw_sha256` | Digest of the decompressed file (tiers and package files), **checked while decompressing**: a mismatch throws `DbChecksumException` and nothing is installed |
@@ -496,6 +527,7 @@ releases before database format 2):
 | `license` / `attribution` | The tier's data license and the attribution it requires (Gaia DR3 for star databases) |
 | `assets` | Optional files used as downloaded (the names pack): `name`, `kind`, `file`, `key`, `bytes`, `sha256`, `license`, `attribution`; install with `DbManager.installAsset` |
 | `packages` | Multi-file downloads (the desktop narrow-field package): `name`, `kind` (`blind-index`), `min_fov_deg` / `max_fov_deg`, `mobile` (false), `min_engine`, `license`, `attribution`, informational counts, and `files`, each with `role` (`index` or `stars`), `file`, `key`, `bytes`, `sha256`, `raw_bytes`, `raw_sha256`; install with `DbManager.installPackage` |
+| `revision` | Publication counter, raised whenever the content changes (0 when absent); `seedManifest` keeps a cached manifest at least as new as the bundled one |
 
 Behaviour (all covered by tests): an interrupted download keeps its `.part` and resumes
 with `Range`; a server ignoring `Range` gets a clean restart; a digest mismatch deletes
@@ -763,12 +795,17 @@ tracing-subscriber layer.
 | `unisolver_dso.bin` | DSO catalog (NGC / IC / Messier) with outlines | 796 KB | bundled with the plugin |
 | `unisolver_constellations.bin` | 88 IAU constellation figures and boundaries | 200 KB | bundled with the plugin |
 | `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 229 KB | opt-in: declared by the app, or downloaded |
-| narrow-field package (blind index + star tiles) | narrow fields 0.18–3.1°, desktop builds | 2.5 GB / 3.2 GB | not bundled; `DbManager.installPackage` from your host |
+| `unisolver_5_10.db` | 5–10° | 23 MB / 41 MB | from the data release (`DbManager.install`) |
+| `unisolver_2p5_5.db` | 2.5–5° | 108 MB / 165 MB | from the data release |
+| `unisolver_1_2p5.db` | 1–2.5°, desktop builds | 287 MB / 400 MB | from the data release |
+| narrow-field package (blind index + star tiles) | narrow fields 0.18–3.1°, desktop builds | 2.5 GB / 3.2 GB | not bundled; from the data release (`DbManager.installPackage`) |
 
 - Databases are tetra3's format 2, memory-mapped. Files from releases before it (the
   `UNISOLV2` container) no longer load; download them again.
-- Only the wide tier is bundled; narrower tiers and the narrow-field package are yours to
-  generate and host (section 1.6; `unisolver-starmatch` has the package builders).
+- Only the wide tier is bundled. The narrower tiers and the narrow-field package are release
+  assets of the data repository, [unisolver-data](https://github.com/UMa-Technology/unisolver-data)
+  (section 1.6); you can also generate and host your own (`unisolver-starmatch` has the package
+  builders).
 - Mobile devices should stay at ≥ 2.5° tiers: phones have no narrower fields, and deeper
   tiers are too large to keep resident on mobile. The narrow-field package is for desktop
   builds only.

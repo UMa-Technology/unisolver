@@ -6,6 +6,25 @@
    frame with "the pool has no tetra3 tier to annotate with". Annotation needs a tetra3 tier's
    catalog, so such a pool now solves without annotating: it says so once at start and in each
    solution's `layer_notes`, and `--annotate-dir` draws only the centroids and matched stars.
+2. **Star databases from the data repository.** The narrower tiers and the narrow-field package
+   are now published as release assets of `UMa-Technology/unisolver-data`; point `DbManager` at
+   `https://github.com/UMa-Technology/unisolver-data/releases/download/v3/`. Asset names carry
+   the file's digest (`unisolver_5_10-cbe3d569.db.zst`) and manifests gain a `revision`. The
+   example app uses this address by default.
+3. **Downloads follow the system proxy on desktop.** Dart's `HttpClient` reads only the
+   `https_proxy` environment variable, which apps started from the Dock or the Start menu do not
+   have, so a proxy set in the system settings was ignored and GitHub downloads crawled or
+   failed where a proxy is needed (measured: 38 KB/s direct, 2 MB in 4 s through the proxy).
+   `DbManager` now takes the environment's proxy and otherwise the system's (a manual HTTP or
+   HTTPS proxy on macOS and Windows; `systemProxy()` returns it). PAC scripts are not read.
+4. **`DbManager.importFile` installs files downloaded another way.** A tier, package file or
+   asset is recognised by size and sha256 against the manifest, whatever its name, then
+   decompressed, checked and registered as a download would be; a package registers when its
+   second file arrives. The example app's database page has an "Import file…" button.
+5. **Manifests and tiers bundled with the app.** `DbManager.seedManifest` caches a manifest the
+   app ships unless the cache holds a newer `revision`, and `UnisolverAssets.importBundled`
+   installs a tier archive from the app's own assets, so an app can carry, say, the 5–10° tier
+   and work offline from the first launch.
 
 ## 2026-10-05 — v0.5.0
 

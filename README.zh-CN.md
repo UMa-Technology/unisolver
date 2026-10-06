@@ -117,11 +117,12 @@ mmap 进来，模式表留在磁盘按需分页。这棵树是生成的：只能
 
 ### 星库
 
-插件随包提供 **10–80° 宽场星库**（手机与广角镜头）。长焦与望远镜可用上游 tetra3rs
-工具生成更窄视场的星库：引擎直接加载，对你注册的所有档位做路由（`SolverPool`），
-`DbManager` 能从任何提供清单的静态服务器安装。桌面构建还可加装 0.18–3.1° 的
-**窄场包**（盲解索引加星表分块，下载约 2.5 GB），同样由 `DbManager.installPackage`
-按清单安装。见 [docs/integration.md](docs/integration.md) 第 1.6 节。
+插件随包提供 **10–80° 宽场星库**（手机与广角镜头）。更窄的档（5–10°、2.5–5°，以及桌面用的
+1–2.5°）和桌面构建可加装的 0.18–3.1° **窄场包**（盲解索引加星表分块，下载约 2.5 GB）都发布在
+[unisolver-data](https://github.com/UMa-Technology/unisolver-data) 的 Release 里。`DbManager`
+从那里安装（桌面上走系统代理），也能导入用户用别的方式下载的文件（`importFile`）；引擎对你注册的
+所有档位做路由（`SolverPool`）。也可以用上游 tetra3rs 工具自己生成。见
+[docs/integration.md](docs/integration.md) 第 1.6 节。
 
 ## 开发
 

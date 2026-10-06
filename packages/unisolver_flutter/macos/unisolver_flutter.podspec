@@ -23,6 +23,9 @@ Flutter plugin for unisolver, an offline plate solver with a Rust core.
   s.dependency 'FlutterMacOS'
 
   s.platform = :osx, '10.11'
+  # The Rust library reads the system proxy settings (api/proxy.rs); a static library does not
+  # carry its framework dependencies into the app's link
+  s.frameworks = 'SystemConfiguration'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
 

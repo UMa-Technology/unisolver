@@ -30,7 +30,11 @@ unisolver-core = { path = "../../../crates/unisolver-core", features = ["narrow"
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_System_Registry"] }
+
+# The system proxy settings for downloads (api/proxy.rs)
+[target.'cfg(target_os = "macos")'.dependencies]
+system-configuration = "0.6"
 
 [dev-dependencies]
 unisolver-synth = { path = "../../../crates/unisolver-synth" }

@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -404761215;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 747396215;
 
 // Section: executor
 
@@ -1730,6 +1730,35 @@ fn wire__crate__api__types__solve_options_dto_defaults_impl(
         },
     )
 }
+fn wire__crate__api__proxy__system_proxy_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "system_proxy",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::proxy::system_proxy())?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__wcs__wcs_pixels_to_sky_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -3042,6 +3071,17 @@ impl SseDecode for Option<crate::api::types::SolvedGeometryDto> {
     }
 }
 
+impl SseDecode for Option<crate::api::proxy::SystemProxy> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::proxy::SystemProxy>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3355,6 +3395,18 @@ impl SseDecode for crate::api::types::StarAnnotationDto {
     }
 }
 
+impl SseDecode for crate::api::proxy::SystemProxy {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_host = <String>::sse_decode(deserializer);
+        let mut var_port = <u16>::sse_decode(deserializer);
+        return crate::api::proxy::SystemProxy {
+            host: var_host,
+            port: var_port,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::TierInfoDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3402,6 +3454,13 @@ impl SseDecode for crate::api::types::TimingDto {
             solve_ms: var_solveMs,
             total_ms: var_totalMs,
         };
+    }
+}
+
+impl SseDecode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u16::<NativeEndian>().unwrap()
     }
 }
 
@@ -3616,8 +3675,9 @@ fn pde_ffi_dispatcher_sync_impl(
         28 => wire__crate__api__attribution__data_attributions_impl(ptr, rust_vec_len, data_len),
         30 => wire__crate__api__install__engine_version_impl(ptr, rust_vec_len, data_len),
         37 => wire__crate__api__types__solve_options_dto_defaults_impl(ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__proxy__system_proxy_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__wcs__wcs_pixels_to_sky_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__wcs__wcs_sky_to_pixels_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4827,6 +4887,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::StarAnnotationDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::proxy::SystemProxy {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.host.into_into_dart().into_dart(),
+            self.port.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::proxy::SystemProxy
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::proxy::SystemProxy>
+    for crate::api::proxy::SystemProxy
+{
+    fn into_into_dart(self) -> crate::api::proxy::SystemProxy {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::TierInfoDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5905,6 +5986,16 @@ impl SseEncode for Option<crate::api::types::SolvedGeometryDto> {
     }
 }
 
+impl SseEncode for Option<crate::api::proxy::SystemProxy> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::proxy::SystemProxy>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6126,6 +6217,14 @@ impl SseEncode for crate::api::types::StarAnnotationDto {
     }
 }
 
+impl SseEncode for crate::api::proxy::SystemProxy {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.host, serializer);
+        <u16>::sse_encode(self.port, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::TierInfoDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6162,6 +6261,13 @@ impl SseEncode for crate::api::types::TimingDto {
         <f32>::sse_encode(self.extract_ms, serializer);
         <f32>::sse_encode(self.solve_ms, serializer);
         <f32>::sse_encode(self.total_ms, serializer);
+    }
+}
+
+impl SseEncode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u16::<NativeEndian>(self).unwrap();
     }
 }
 

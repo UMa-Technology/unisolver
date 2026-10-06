@@ -10,6 +10,7 @@ import 'api/attribution.dart';
 import 'api/install.dart';
 import 'api/logging.dart';
 import 'api/preview.dart';
+import 'api/proxy.dart';
 import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
@@ -182,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SolvedGeometryDto dco_decode_box_autoadd_solved_geometry_dto(dynamic raw);
+
+  @protected
+  SystemProxy dco_decode_box_autoadd_system_proxy(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
@@ -425,6 +429,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  SystemProxy? dco_decode_opt_box_autoadd_system_proxy(dynamic raw);
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
@@ -479,6 +486,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StarAnnotationDto dco_decode_star_annotation_dto(dynamic raw);
 
   @protected
+  SystemProxy dco_decode_system_proxy(dynamic raw);
+
+  @protected
   TierInfoDto dco_decode_tier_info_dto(dynamic raw);
 
   @protected
@@ -486,6 +496,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TimingDto dco_decode_timing_dto(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -666,6 +679,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SolvedGeometryDto sse_decode_box_autoadd_solved_geometry_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  SystemProxy sse_decode_box_autoadd_system_proxy(SseDeserializer deserializer);
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
@@ -955,6 +971,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  SystemProxy? sse_decode_opt_box_autoadd_system_proxy(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -1023,6 +1044,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  SystemProxy sse_decode_system_proxy(SseDeserializer deserializer);
+
+  @protected
   TierInfoDto sse_decode_tier_info_dto(SseDeserializer deserializer);
 
   @protected
@@ -1030,6 +1054,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TimingDto sse_decode_timing_dto(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -1247,6 +1274,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_solved_geometry_dto(
     SolvedGeometryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_system_proxy(
+    SystemProxy self,
     SseSerializer serializer,
   );
 
@@ -1611,6 +1644,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_system_proxy(
+    SystemProxy? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
@@ -1707,6 +1746,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_system_proxy(SystemProxy self, SseSerializer serializer);
+
+  @protected
   void sse_encode_tier_info_dto(TierInfoDto self, SseSerializer serializer);
 
   @protected
@@ -1714,6 +1756,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_timing_dto(TimingDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

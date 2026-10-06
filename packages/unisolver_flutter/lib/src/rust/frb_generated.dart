@@ -7,6 +7,7 @@ import 'api/attribution.dart';
 import 'api/install.dart';
 import 'api/logging.dart';
 import 'api/preview.dart';
+import 'api/proxy.dart';
 import 'api/satellites.dart';
 import 'api/solver.dart';
 import 'api/types.dart';
@@ -72,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -404761215;
+  int get rustContentHash => 747396215;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -244,6 +245,8 @@ abstract class RustLibApi extends BaseApi {
   SolveOptionsDto crateApiTypesSolveOptionsDtoDefaults({
     required double fovEstimateDeg,
   });
+
+  SystemProxy? crateApiProxySystemProxy();
 
   Float64List crateApiWcsWcsPixelsToSky({
     required WcsDto wcs,
@@ -1566,6 +1569,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  SystemProxy? crateApiProxySystemProxy() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_system_proxy,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProxySystemProxyConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProxySystemProxyConstMeta =>
+      const TaskConstMeta(debugName: "system_proxy", argNames: []);
+
+  @override
   Float64List crateApiWcsWcsPixelsToSky({
     required WcsDto wcs,
     required List<double> pixels,
@@ -1576,7 +1601,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_wcs_dto(wcs, serializer);
           sse_encode_list_prim_f_64_loose(pixels, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_f_64_strict,
@@ -1605,7 +1630,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_wcs_dto(wcs, serializer);
           sse_encode_list_prim_f_64_loose(radec, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_f_64_strict,
@@ -1935,6 +1960,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SolvedGeometryDto dco_decode_box_autoadd_solved_geometry_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_solved_geometry_dto(raw);
+  }
+
+  @protected
+  SystemProxy dco_decode_box_autoadd_system_proxy(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_system_proxy(raw);
   }
 
   @protected
@@ -2654,6 +2685,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SystemProxy? dco_decode_opt_box_autoadd_system_proxy(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_system_proxy(raw);
+  }
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
@@ -2881,6 +2918,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SystemProxy dco_decode_system_proxy(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return SystemProxy(
+      host: dco_decode_String(arr[0]),
+      port: dco_decode_u_16(arr[1]),
+    );
+  }
+
+  @protected
   TierInfoDto dco_decode_tier_info_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2915,6 +2964,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       solveMs: dco_decode_f_32(arr[1]),
       totalMs: dco_decode_f_32(arr[2]),
     );
+  }
+
+  @protected
+  int dco_decode_u_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -3339,6 +3394,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_solved_geometry_dto(deserializer));
+  }
+
+  @protected
+  SystemProxy sse_decode_box_autoadd_system_proxy(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_system_proxy(deserializer));
   }
 
   @protected
@@ -4329,6 +4392,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SystemProxy? sse_decode_opt_box_autoadd_system_proxy(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_system_proxy(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -4629,6 +4705,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SystemProxy sse_decode_system_proxy(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_host = sse_decode_String(deserializer);
+    var var_port = sse_decode_u_16(deserializer);
+    return SystemProxy(host: var_host, port: var_port);
+  }
+
+  @protected
   TierInfoDto sse_decode_tier_info_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
@@ -4669,6 +4753,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       solveMs: var_solveMs,
       totalMs: var_totalMs,
     );
+  }
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint16();
   }
 
   @protected
@@ -5107,6 +5197,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_solved_geometry_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_system_proxy(
+    SystemProxy self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_system_proxy(self, serializer);
   }
 
   @protected
@@ -5959,6 +6058,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_system_proxy(
+    SystemProxy? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_system_proxy(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -6186,6 +6298,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_system_proxy(SystemProxy self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.host, serializer);
+    sse_encode_u_16(self.port, serializer);
+  }
+
+  @protected
   void sse_encode_tier_info_dto(TierInfoDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
@@ -6210,6 +6329,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_32(self.extractMs, serializer);
     sse_encode_f_32(self.solveMs, serializer);
     sse_encode_f_32(self.totalMs, serializer);
+  }
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint16(self);
   }
 
   @protected

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-07 — v0.7.0
+
 1. **Wide frames with a lit foreground solve.** A solve took the brightest 100 centroids, and
    on a wide frame a foreground lit by streetlights or windows (leaves, branches, buildings, a
    telescope) can outshine every star of a light-polluted sky and take all of them. Blind solves

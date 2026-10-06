@@ -1,7 +1,12 @@
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:unisolver_flutter/unisolver_flutter.dart';
+
+/// The data repository's release: the star databases and the narrow-field package
+const kDataReleaseUrl =
+    'https://github.com/UMa-Technology/unisolver-data/releases/download/v3/';
 
 /// Tier manager page: fetch the manifest → install / resume / delete → register with the pool.
 ///
@@ -28,9 +33,10 @@ class DbPage extends StatefulWidget {
 }
 
 class _DbPageState extends State<DbPage> {
-  // Narrow-field tiers are not distributed with the open-source build: point this
-  // at your own static host (or scripts/ci/serve_tiers.py for a local rehearsal).
-  late final TextEditingController _base = TextEditingController();
+  // The star databases are release assets of the data repository; any static host serving a
+  // manifest works too (scripts/ci/serve_tiers.py for a local rehearsal)
+  late final TextEditingController _base = TextEditingController(text: kDataReleaseUrl);
+  bool _importing = false;
   DbManifest? _manifest;
   String? _error;
   bool _loading = false;
@@ -118,6 +124,40 @@ class _DbPageState extends State<DbPage> {
         setState(() {
           _progress.remove(t.name);
           _cancels.remove(t.name);
+        });
+      }
+    }
+  }
+
+  /// A file downloaded another way (a browser, a file-sharing link): recognised by its checksum
+  Future<void> _importFile() async {
+    final picked = await openFile();
+    if (picked == null) return;
+    setState(() {
+      _importing = true;
+      _error = null;
+    });
+    try {
+      final r = await _manager().importFile(
+        picked.path,
+        onProgress: (p) {
+          if (mounted) setState(() => _progress['import'] = p);
+        },
+      );
+      if (r.kind == 'asset') await widget.onNamesInstalled?.call(r.path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(r.complete
+            ? 'Imported ${r.name}'
+            : 'Imported part of ${r.name}; still missing: ${r.missing.join(', ')}'),
+      ));
+    } catch (e) {
+      if (mounted) setState(() => _error = 'import: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _importing = false;
+          _progress.remove('import');
         });
       }
     }
@@ -238,6 +278,23 @@ class _DbPageState extends State<DbPage> {
             FilledButton(
               onPressed: _loading ? null : _fetch,
               child: Text(_loading ? 'Fetching…' : 'Fetch manifest'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _importing ? null : _importFile,
+              icon: const Icon(Icons.file_open),
+              label: Text(_importing ? 'Importing…' : 'Import file…'),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'A database file downloaded another way: recognised by its checksum',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           ],
         ),

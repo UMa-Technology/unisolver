@@ -627,4 +627,87 @@ void main() {
       expect(manager().cachedManifest()!.revision, 6);
     });
   });
+
+  group('importFile', () {
+    late Directory downloads;
+    setUp(() => downloads = Directory('${tmp.path}_downloads')..createSync());
+    tearDown(() {
+      if (downloads.existsSync()) downloads.deleteSync(recursive: true);
+    });
+
+    File saved(String name, List<int> bytes) =>
+        File('${downloads.path}/$name')..writeAsBytesSync(bytes, flush: true);
+
+    Matcher refused(String text) =>
+        throwsA(isA<DbException>().having((e) => e.message, 'message', contains(text)));
+
+    test('a tier is recognised by size and sha256 whatever its name, then installed and registered',
+        () async {
+      final registered = <String>[];
+      final mgr = manager(register: (p) async => registered.add(p))..seedManifest(manifestText);
+      final f = saved('whatever (1).zst', tierBytes);
+      final r = await mgr.importFile(f.path);
+      expect((r.name, r.kind, r.complete), ('tier_5_10', 'tier', true));
+      expect(File(r.path).readAsBytesSync(), tierBytes);
+      expect(registered, [r.path]);
+      expect(f.existsSync(), isTrue, reason: "the user's file is left alone");
+      expect(mgr.isInstalled(mgr.cachedManifest()!.byName('tier_5_10')!), isTrue);
+    });
+
+    test('a file of another size or content is refused and installs nothing', () async {
+      final mgr = manager()..seedManifest(manifestText);
+      await expectLater(mgr.importFile(saved('a.zst', [1, 2, 3]).path),
+          refused('not a file of this manifest'));
+      final wrong = List<int>.of(tierBytes)..[100] ^= 0xFF;
+      await expectLater(mgr.importFile(saved('b.zst', wrong).path), refused('does not match'));
+      expect(tmp.listSync().whereType<File>().where((f) => f.path.endsWith('.db')), isEmpty);
+    });
+
+    test('a package registers once, when the import completes it', () async {
+      final calls = <List<String>>[];
+      final mgr = manager(registerPackage: (i, s) async => calls.add([i, s]))
+        ..seedManifest(manifestText);
+      final first = await mgr.importFile(saved('index', idxRaw).path);
+      expect(first.kind, 'package');
+      expect(first.missing, ['stars']);
+      expect(calls, isEmpty);
+      final second = await mgr.importFile(saved('stars', starsRaw).path);
+      expect(second.complete, isTrue);
+      expect(calls, [
+        ['${tmp.path}/np.idx', '${tmp.path}/np.stars'],
+      ]);
+      await mgr.importFile(saved('index again', idxRaw).path);
+      expect(calls, hasLength(1), reason: 'a package that was already complete is not registered again');
+    });
+
+    test('an asset is copied as it is', () async {
+      final mgr = manager()..seedManifest(manifestText);
+      final r = await mgr.importFile(saved('names.bin', namesBytes).path);
+      expect((r.name, r.kind), ('unisolver_names', 'asset'));
+      expect(File(r.path).readAsBytesSync(), namesBytes);
+    });
+
+    test("install's refusals apply: the bundled tier, a package on mobile, an old engine", () async {
+      final bundled = manager(digest: ({required path}) async => 'f' * 64)..seedManifest(manifestText);
+      await expectLater(bundled.importFile(saved('w.zst', List<int>.filled(16, 0)).path),
+          refused('ships with the plugin'));
+      final mobile = manager(isMobile: true)..seedManifest(manifestText);
+      await expectLater(mobile.importFile(saved('i', idxRaw).path), refused('desktop builds only'));
+      final old = manager(engineVersion: () => '0.4.9')..seedManifest(manifestText);
+      await expectLater(old.importFile(saved('i2', idxRaw).path), refused('needs engine'));
+    });
+
+    test('too little free disk is refused before decompressing', () async {
+      final mgr = manager(freeSpace: (_) async => 10)..seedManifest(manifestText);
+      await expectLater(mgr.importFile(saved('t', tierBytes).path), refused('MB free'));
+    });
+
+    test('without a cached manifest one can be passed, or the error says what to do', () async {
+      final mgr = manager();
+      await expectLater(mgr.importFile(saved('t', tierBytes).path), refused('seedManifest'));
+      final r = await mgr.importFile(saved('t2', tierBytes).path,
+          manifest: DbManifest.parse(manifestText));
+      expect(r.name, 'tier_5_10');
+    });
+  });
 }

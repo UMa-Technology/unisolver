@@ -90,6 +90,31 @@ class DbHttpException extends DbException {
   final int statusCode;
 }
 
+/// What [DbManager.importFile] installed.
+class DbImport {
+  const DbImport({
+    required this.name,
+    required this.kind,
+    required this.path,
+    this.missing = const [],
+  });
+
+  /// The tier, package or asset name
+  final String name;
+
+  /// `tier`, `package` or `asset`
+  final String kind;
+
+  /// The installed file: the database, the package file or the asset
+  final String path;
+
+  /// Package files still to import, by role (`index`, `stars`); empty for tiers, assets and
+  /// complete packages
+  final List<String> missing;
+
+  bool get complete => missing.isEmpty;
+}
+
 class DbCancelledException extends DbException {
   DbCancelledException(String name) : super('download cancelled: $name');
 }
@@ -457,6 +482,153 @@ class DbManager {
         final file = File(path);
         if (file.existsSync()) file.deleteSync();
       }
+    }
+  }
+
+  /// Installs a file obtained another way (a browser download, a file-sharing link, a copy from
+  /// another computer). It is recognised by size and sha256 against [manifest] (by default the
+  /// cached one, see [seedManifest]) and then installed as a download would be: decompressed,
+  /// checked again and registered. Its name does not matter and the file itself is left alone. A
+  /// package is registered when the import completes it.
+  Future<DbImport> importFile(
+    String path, {
+    DbManifest? manifest,
+    void Function(DbProgress)? onProgress,
+    bool allowNonMobile = false,
+  }) async {
+    final m = manifest ?? cachedManifest();
+    if (m == null) {
+      throw DbException('no manifest to check $path against: fetch one, cache the bundled copy '
+          'with seedManifest, or pass one');
+    }
+    final src = File(path);
+    if (!src.existsSync()) throw DbException('$path does not exist');
+    final len = src.lengthSync();
+    final label = path.split(Platform.pathSeparator).last;
+    final candidates = <DbItem>[
+      ...m.tiers.where((t) => t.bytes == len),
+      for (final p in m.packages) ...p.files.where((f) => f.bytes == len),
+      ...m.assets.where((a) => a.bytes == len),
+    ];
+    if (candidates.isEmpty) {
+      throw DbException('$label is not a file of this manifest (nothing in it is $len bytes)');
+    }
+    onProgress?.call(DbProgress(
+        name: label, phase: DbPhase.verifying, received: len, total: len));
+    final got = (await _digest(path: path)).toLowerCase();
+    final item = candidates.where((c) => c.sha256 == got).firstOrNull;
+    if (item == null) {
+      throw DbException('$label does not match this manifest: its sha256 is $got');
+    }
+    if (item is DbTier) {
+      return _importTier(item, path, onProgress, allowNonMobile);
+    }
+    if (item is DbPackageFile) {
+      return _importPackageFile(
+          m.packageByName(item.package)!, item, path, onProgress);
+    }
+    return _importAsset(item as DbAsset, path, onProgress);
+  }
+
+  Future<DbImport> _importTier(DbTier t, String src,
+      void Function(DbProgress)? onProgress, bool allowNonMobile) async {
+    if (t.bundled) {
+      throw DbException('${t.name} ships with the plugin: install it with '
+          'UnisolverAssets.ensureInstalled()');
+    }
+    _requireEngine(t.name, t.minEngine);
+    if (_isMobile && !t.mobile && !allowNonMobile) {
+      throw DbException('${t.name} is not marked mobile in the manifest '
+          '(${t.fovLabel}) — pass allowNonMobile: true to override');
+    }
+    final need = t.rawBytes ?? t.diskBytesNeeded;
+    await _requireSpace(t.name, need);
+    final out = dbPath(t);
+    await _decompress(t.name, src, out, t.rawSha256, need, t.bytes, onProgress);
+    final reg = register;
+    if (reg != null) {
+      onProgress?.call(DbProgress(
+          name: t.name,
+          phase: DbPhase.registering,
+          received: t.bytes,
+          total: t.bytes));
+      await reg(out);
+    }
+    onProgress?.call(DbProgress(
+        name: t.name, phase: DbPhase.done, received: t.bytes, total: t.bytes));
+    return DbImport(name: t.name, kind: 'tier', path: out);
+  }
+
+  Future<DbImport> _importPackageFile(DbPackage p, DbPackageFile f, String src,
+      void Function(DbProgress)? onProgress) async {
+    if (_isMobile) throw DbException('${p.name} is for desktop builds only');
+    _requireEngine(p.name, p.minEngine);
+    final wasComplete = isPackageInstalled(p);
+    final out = packageFilePath(f);
+    if (!_fileInstalled(f)) {
+      await _requireSpace(f.name, f.rawBytes);
+      await _decompress(
+          f.name, src, out, f.rawSha256, f.rawBytes, f.bytes, onProgress);
+    }
+    final missing = [
+      for (final x in p.files)
+        if (!_fileInstalled(x)) x.role,
+    ];
+    final reg = registerPackage;
+    if (missing.isEmpty && !wasComplete && reg != null) {
+      onProgress?.call(DbProgress(
+          name: p.name,
+          phase: DbPhase.registering,
+          received: p.downloadBytes,
+          total: p.downloadBytes));
+      await reg(packageFilePath(p.index), packageFilePath(p.stars));
+    }
+    onProgress?.call(DbProgress(
+        name: f.name, phase: DbPhase.done, received: f.bytes, total: f.bytes));
+    return DbImport(name: p.name, kind: 'package', path: out, missing: missing);
+  }
+
+  Future<DbImport> _importAsset(
+      DbAsset a, String src, void Function(DbProgress)? onProgress) async {
+    final out = assetPath(a);
+    Directory(dir).createSync(recursive: true);
+    final part = File(_partPath(a));
+    File(src).copySync(part.path);
+    final old = File(out);
+    if (old.existsSync()) old.deleteSync();
+    part.renameSync(out);
+    onProgress?.call(DbProgress(
+        name: a.name, phase: DbPhase.done, received: a.bytes, total: a.bytes));
+    return DbImport(name: a.name, kind: 'asset', path: out);
+  }
+
+  /// Refuses before writing anything when the volume has less than [need] bytes free
+  Future<void> _requireSpace(String name, int need) async {
+    Directory(dir).createSync(recursive: true);
+    final free = await _freeSpace(dir);
+    if (free < need) {
+      throw DbException('$name needs about ${(need / 1e6).round()} MB free, '
+          '${(free / 1e6).round()} MB available');
+    }
+  }
+
+  /// Decompresses [src] to [out] (replacing it) and checks [rawSha256]; leaves nothing behind on
+  /// failure
+  Future<void> _decompress(String name, String src, String out, String? rawSha256,
+      int need, int total, void Function(DbProgress)? onProgress) async {
+    onProgress?.call(DbProgress(
+        name: name, phase: DbPhase.decompressing, received: total, total: total));
+    // The decompressor keeps an existing non-empty file
+    final old = File(out);
+    if (old.existsSync()) old.deleteSync();
+    try {
+      await _install(zstPath: src, outPath: out, rawSha256: rawSha256);
+    } on Object catch (e) {
+      final f = File(out);
+      if (f.existsSync()) f.deleteSync();
+      throw _rawMismatch(e) ??
+          DbException('$name: decompression failed — needs about '
+              '${(need / 1e6).round()} MB free', cause: e);
     }
   }
 

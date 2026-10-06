@@ -11,7 +11,9 @@ import 'dart:io';
 
 import 'db_format.dart';
 import 'db_manifest.dart';
+import 'db_proxy.dart';
 import 'rust/api/install.dart' as rust;
+import 'rust/api/proxy.dart' as rust;
 
 /// Decompress-and-install (defaults to Rust's streaming zstd), checking the decompressed
 /// sha256 when the manifest gives one. Injectable for pure-Dart tests.
@@ -103,6 +105,7 @@ class DbManager {
     DbFreeSpace? freeSpace,
     DbEngineVersion? engineVersion,
     HttpClient Function()? httpClient,
+    DbSystemProxy? systemProxy,
     bool? isMobile,
   })  : _baseUrlOverride = baseUrl,
         _install = installer ?? rust.installCompressedFile,
@@ -110,7 +113,11 @@ class DbManager {
         _freeSpace = freeSpace ??
             ((d) async => (await rust.availableDiskBytes(path: d)).toInt()),
         _engineVersion = engineVersion ?? rust.engineVersion,
-        _newClient = httpClient ?? HttpClient.new,
+        _newClient = httpClient,
+        _systemProxy = systemProxy ??
+            ((isMobile ?? (Platform.isAndroid || Platform.isIOS))
+                ? _noProxy
+                : rust.systemProxy),
         _isMobile = isMobile ?? (Platform.isAndroid || Platform.isIOS);
 
   /// Directory for installed databases (usually `getApplicationSupportDirectory()`)
@@ -127,7 +134,22 @@ class DbManager {
   final DbRegisterPackage? registerPackage;
   final DbFreeSpace _freeSpace;
   final DbEngineVersion _engineVersion;
-  final HttpClient Function() _newClient;
+  /// An injected client factory, used as it is (its proxy included)
+  final HttpClient Function()? _newClient;
+  final DbSystemProxy _systemProxy;
+
+  static rust.SystemProxy? _noProxy() => null;
+
+  /// A client for one request: the injected factory as it is; otherwise one that takes the
+  /// environment's proxy, then the system's (read at each connection, so a change applies at once)
+  HttpClient _client() {
+    final make = _newClient;
+    if (make != null) return make();
+    final system = _systemProxy;
+    return HttpClient()
+      ..findProxy = (uri) =>
+          proxyFor(uri, environment: Platform.environment, system: system);
+  }
   final bool _isMobile;
 
   /// Version 3: databases in tetra3's format 2. Hosts keep version 2 (`manifest.json`) for
@@ -144,7 +166,7 @@ class DbManager {
       throw DbException('no base URL: pass baseUrl or use a cached manifest');
     }
     final url = _join(base, _manifestFile);
-    final client = _newClient()..connectionTimeout = timeout;
+    final client = _client()..connectionTimeout = timeout;
     try {
       final resp = await client.getUrl(Uri.parse(url)).then((r) => r.close());
       if (resp.statusCode != HttpStatus.ok) {
@@ -524,7 +546,7 @@ class DbManager {
     if (base.isEmpty) throw DbException('no base URL for ${t.name}');
     final url = _join(base, t.key!);
 
-    final client = _newClient();
+    final client = _client();
     try {
       final req = await client.getUrl(Uri.parse(url));
       if (have > 0) req.headers.set(HttpHeaders.rangeHeader, 'bytes=$have-');

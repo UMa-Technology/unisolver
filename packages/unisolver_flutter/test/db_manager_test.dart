@@ -120,17 +120,19 @@ void main() {
     DbInstaller? installer,
     DbFreeSpace? freeSpace,
     DbEngineVersion? engineVersion,
+    DbDigest? digest,
   }) =>
       DbManager(
         dir: tmp.path,
         baseUrl: baseUrl ?? cdn.baseUrl,
         installer: installer ?? fakeInstall,
-        digest: realDigest,
+        digest: digest ?? realDigest,
         register: register,
         registerPackage: registerPackage,
         freeSpace: freeSpace ?? (_) async => 1 << 40,
         engineVersion: engineVersion ?? () => '0.5.0',
         isMobile: isMobile,
+        systemProxy: () => null,
       );
 
   setUp(() async {

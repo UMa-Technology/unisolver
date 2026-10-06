@@ -454,9 +454,9 @@ impl SolverPool {
                 let cfg = pass_config(&o, w, h, pass)?;
                 let ext = cache.get(frame, &o.extraction.resolve(), &self.rayon)?;
                 let refine = crate::solver::Refine::from_opts(&o);
-                let (mut out, _) = tier
-                    .solver
-                    .solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
+                let (mut out, _) =
+                    tier.solver
+                        .solve_extracted(ext.pick(&o, w), &cfg, w, h, t_total, refine)?;
 
                 // Profile retry, as in the single-database ladder: once per step, only on
                 // TooFew (NoMatch more likely means a wrong FOV); tracking and Custom never retry.
@@ -467,9 +467,14 @@ impl SolverPool {
                 {
                     if let Some(alt) = o.extraction.alternate() {
                         let ext2 = cache.get(frame, &alt.resolve(), &self.rayon)?;
-                        let (out2, _) = tier
-                            .solver
-                            .solve_extracted(&ext2, &cfg, w, h, t_total, refine)?;
+                        let (out2, _) = tier.solver.solve_extracted(
+                            ext2.pick(&o, w),
+                            &cfg,
+                            w,
+                            h,
+                            t_total,
+                            refine,
+                        )?;
                         if matches!(out2.status, SolveStatus::Ok) {
                             out = out2;
                         }
@@ -516,7 +521,10 @@ impl SolverPool {
         t_total: Instant,
     ) -> Result<Option<SolveOutcome>> {
         use crate::narrow::{NarrowMode, NarrowRequest, BLIND_MIN_MATCHES, HINTED_MIN_MATCHES};
-        let (ext, retried) = cache.richest(frame, &base.extraction.resolve(), &self.rayon)?;
+        let (extraction, retried) =
+            cache.richest(frame, &base.extraction.resolve(), &self.rayon)?;
+        // The narrow-field engine takes the brightest, as before
+        let ext = &extraction.brightest;
         let floor = match step.mode {
             NarrowMode::Blind { .. } => BLIND_MIN_MATCHES,
             NarrowMode::Hinted { .. } => HINTED_MIN_MATCHES,

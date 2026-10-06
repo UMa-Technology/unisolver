@@ -170,6 +170,13 @@ pub struct SolveOptions {
     /// frames. Never with `camera` or a tracking hint. Default on.
     #[serde(default = "default_true")]
     pub refine_scale: bool,
+    /// Blind solves of wide fields (FOV 10° or more, no tracking hint): take the centroids cell
+    /// by cell over the frame (8 square cells along the long side, each giving its brightest in
+    /// turn) instead of the brightest overall, so a foreground lit by streetlights or windows
+    /// cannot take every slot from the stars. The outcome's `centroids` are then in that order.
+    /// Narrower fields, tracking and the narrow-field engine keep the brightest. Default on.
+    #[serde(default = "default_true")]
+    pub spread_wide: bool,
     /// Pools with the narrow-field engine only: approximate pointing (a mount's position). File
     /// entries fill it from the header's RA/Dec when it is None. The tetra3 tiers never use it,
     /// and it changes no routing.
@@ -225,6 +232,7 @@ impl SolveOptions {
             thorough: false,
             fit_lens: true,
             refine_scale: true,
+            spread_wide: true,
             match_threshold: 1e-5,
             timeout_ms: Some(5000),
             observation_unix_ms: None,
@@ -408,8 +416,14 @@ impl Solver {
         let cfg = build_solve_config(opts, w, h)?;
 
         let refine = Refine::from_opts(opts);
-        let (mut out, mut raw) =
-            self.extract_and_solve(frame, &opts.extraction.resolve(), &cfg, t_total, refine)?;
+        let (mut out, mut raw) = self.extract_and_solve(
+            frame,
+            &opts.extraction.resolve(),
+            opts,
+            &cfg,
+            t_total,
+            refine,
+        )?;
 
         // Profile retry: the fallback when the material guess was wrong. Triggers: see the field docs.
         let trigger = matches!(out.status, SolveStatus::TooFew)
@@ -417,7 +431,7 @@ impl Solver {
         if trigger && opts.retry_alternate_profile && opts.attitude_hint.is_none() {
             if let Some(alt) = opts.extraction.alternate() {
                 let (out2, raw2) =
-                    self.extract_and_solve(frame, &alt.resolve(), &cfg, t_total, refine)?;
+                    self.extract_and_solve(frame, &alt.resolve(), opts, &cfg, t_total, refine)?;
                 if matches!(out2.status, SolveStatus::Ok) {
                     let mut out2 = out2;
                     out2.extraction_retried = true;
@@ -436,17 +450,26 @@ impl Solver {
         Ok((out, raw))
     }
 
-    /// One extraction plus solve. extract_ms/solve_ms belong to this attempt; total_ms counts from t_total.
+    /// One extraction plus solve, from the list `opts` takes (`Extraction::pick`).
+    /// extract_ms/solve_ms belong to this attempt; total_ms counts from t_total.
     fn extract_and_solve(
         &self,
         frame: &Frame,
         extraction: &ExtractionOptions,
+        opts: &SolveOptions,
         cfg: &SolveConfig,
         t_total: Instant,
         refine: Refine,
     ) -> Result<SolveInner> {
-        let ext = extract_frame(frame, extraction, &self.pool)?;
-        self.solve_extracted(&ext, cfg, frame.width, frame.height, t_total, refine)
+        let e = extract_frame(frame, extraction, &self.pool)?;
+        self.solve_extracted(
+            e.pick(opts, frame.width),
+            cfg,
+            frame.width,
+            frame.height,
+            t_total,
+            refine,
+        )
     }
 
     /// Solves once from already-extracted centroids. **Extraction does not depend on the
@@ -535,8 +558,8 @@ impl Solver {
     }
 }
 
-/// One extraction: upstream centroids (centre origin, for the solver), public centroids
-/// (top-left origin), shape diagnostics and timing. Depends only on (luma, profile).
+/// One list of a frame's centroids: upstream centroids (centre origin, for the solver), public
+/// centroids (top-left origin), shape diagnostics and the extraction's time.
 pub(crate) struct Extracted {
     pub centroids: Vec<tetra3::Centroid>,
     pub topleft: Vec<CentroidOut>,
@@ -544,11 +567,54 @@ pub(crate) struct Extracted {
     pub extract_ms: f32,
 }
 
+impl Extracted {
+    fn new(centroids: Vec<tetra3::Centroid>, w: u32, h: u32, extract_ms: f32) -> Self {
+        let topleft: Vec<CentroidOut> = centroids
+            .iter()
+            .map(|c| {
+                let (x, y) = coords::center_to_topleft(c.x as f64, c.y as f64, w, h);
+                CentroidOut {
+                    x,
+                    y,
+                    mass: c.mass,
+                    elongation: c.cov.as_ref().map(crate::outcome::elongation_of),
+                }
+            })
+            .collect();
+        let median_elongation = crate::outcome::median_elongation(&topleft);
+        Self {
+            centroids,
+            topleft,
+            median_elongation,
+            extract_ms,
+        }
+    }
+}
+
+/// One extraction of a frame, as the two lists solves take: the brightest (narrow fields,
+/// tracking, the narrow-field engine) and the same detections spread over the frame (blind
+/// solves of wide fields, see `spread`). Depends only on (luma, extraction options).
+pub(crate) struct Extraction {
+    pub brightest: Extracted,
+    /// None for the fast extraction, which only tracking uses
+    pub spread: Option<Extracted>,
+}
+
+impl Extraction {
+    /// The list a solve with `opts` on a frame `width` pixels wide takes (`spread::applies`)
+    pub(crate) fn pick(&self, opts: &SolveOptions, width: u32) -> &Extracted {
+        match &self.spread {
+            Some(s) if crate::spread::applies(opts, width) => s,
+            _ => &self.brightest,
+        }
+    }
+}
+
 /// Extractions of one frame, one per set of resolved extraction options: extraction does
 /// not depend on the database or the FOV, so ladders and pools reuse it across attempts.
 #[derive(Default)]
 pub(crate) struct ExtractCache {
-    entries: Vec<(ExtractionOptions, Arc<Extracted>)>,
+    entries: Vec<(ExtractionOptions, Arc<Extraction>)>,
 }
 
 impl ExtractCache {
@@ -557,7 +623,7 @@ impl ExtractCache {
         frame: &Frame,
         opts: &ExtractionOptions,
         rayon_pool: &rayon::ThreadPool,
-    ) -> Result<Arc<Extracted>> {
+    ) -> Result<Arc<Extraction>> {
         if let Some((_, e)) = self.entries.iter().find(|(k, _)| k == opts) {
             return Ok(e.clone());
         }
@@ -566,16 +632,20 @@ impl ExtractCache {
         Ok(e)
     }
 
-    /// The extraction with the most centroids so far (extracting with `primary` when there is
-    /// none yet), and whether it came from other options than `primary`
+    /// The extraction whose brightest list is the longest so far (extracting with `primary`
+    /// when there is none yet), and whether it came from other options than `primary`
     #[cfg(feature = "narrow")]
     pub(crate) fn richest(
         &mut self,
         frame: &Frame,
         primary: &ExtractionOptions,
         rayon_pool: &rayon::ThreadPool,
-    ) -> Result<(Arc<Extracted>, bool)> {
-        match self.entries.iter().max_by_key(|(_, e)| e.topleft.len()) {
+    ) -> Result<(Arc<Extraction>, bool)> {
+        match self
+            .entries
+            .iter()
+            .max_by_key(|(_, e)| e.brightest.topleft.len())
+        {
             Some((opts, e)) => Ok((e.clone(), opts != primary)),
             None => Ok((self.get(frame, primary, rayon_pool)?, false)),
         }
@@ -590,15 +660,18 @@ impl ExtractCache {
 /// Extracts a frame; rayon parallelism stays inside the given pool (≤ 4 threads). The
 /// luminance is converted here, per extraction, rather than held for a whole ladder; frames
 /// above [`crate::bands::BANDED_ABOVE_PX`] take the banded path and never exist as
-/// full-frame f32.
+/// full-frame f32. The connected-component extraction keeps every detection: its brightest
+/// `max_centroids` are the brightest list, exactly as before, and `spread::select` picks the
+/// spread list from all of them.
 pub(crate) fn extract_frame(
     frame: &Frame,
     extraction: &ExtractionOptions,
     rayon_pool: &rayon::ThreadPool,
-) -> Result<Extracted> {
+) -> Result<Extraction> {
+    type Lists = (Vec<tetra3::Centroid>, Option<Vec<tetra3::Centroid>>);
     let (w, h) = (frame.width, frame.height);
     let t_ex = Instant::now();
-    let centroids = rayon_pool.install(|| -> Result<Vec<tetra3::Centroid>> {
+    let (brightest, spread) = rayon_pool.install(|| -> Result<Lists> {
         Ok(match extraction {
             ExtractionOptions::Ccl {
                 sigma_threshold,
@@ -609,16 +682,29 @@ pub(crate) fn extract_frame(
                     max_centroids: Some(*max_centroids),
                     ..Default::default()
                 };
-                if (w as usize) * (h as usize) > crate::bands::BANDED_ABOVE_PX {
-                    crate::bands::extract(frame, &cfg)?.0
-                } else {
-                    extract_centroids_from_raw(&frame.to_luma_f32()?, w, h, &cfg)?.centroids
-                }
+                let (brightest, all) =
+                    if (w as usize) * (h as usize) > crate::bands::BANDED_ABOVE_PX {
+                        crate::bands::extract(frame, &cfg)?
+                    } else {
+                        let all = extract_centroids_from_raw(
+                            &frame.to_luma_f32()?,
+                            w,
+                            h,
+                            &CentroidExtractionConfig {
+                                max_centroids: None,
+                                ..cfg
+                            },
+                        )?
+                        .centroids;
+                        (all[..all.len().min(*max_centroids)].to_vec(), all)
+                    };
+                let spread = crate::spread::select(&all, w, h, *max_centroids);
+                (brightest, Some(spread))
             }
             ExtractionOptions::Fast {
                 sigma_threshold,
                 max_centroids,
-            } => {
+            } => (
                 extract_centroids_fast(
                     &frame.to_luma_f32()?,
                     w,
@@ -629,30 +715,15 @@ pub(crate) fn extract_frame(
                         ..Default::default()
                     },
                 )?
-                .centroids
-            }
+                .centroids,
+                None,
+            ),
         })
     })?;
     let extract_ms = t_ex.elapsed().as_secs_f32() * 1000.0;
-
-    let topleft: Vec<CentroidOut> = centroids
-        .iter()
-        .map(|c| {
-            let (x, y) = coords::center_to_topleft(c.x as f64, c.y as f64, w, h);
-            CentroidOut {
-                x,
-                y,
-                mass: c.mass,
-                elongation: c.cov.as_ref().map(crate::outcome::elongation_of),
-            }
-        })
-        .collect();
-    let median_elongation = crate::outcome::median_elongation(&topleft);
-    Ok(Extracted {
-        centroids,
-        topleft,
-        median_elongation,
-        extract_ms,
+    Ok(Extraction {
+        brightest: Extracted::new(brightest, w, h, extract_ms),
+        spread: spread.map(|s| Extracted::new(s, w, h, extract_ms)),
     })
 }
 
@@ -708,7 +779,8 @@ impl Solver {
             let cfg = pass_config(&o, w, h, pass)?;
             let ext = cache.get(frame, &o.extraction.resolve(), &self.pool)?;
             let refine = Refine::from_opts(&o);
-            let (mut out, _) = self.solve_extracted(&ext, &cfg, w, h, t_total, refine)?;
+            let (mut out, _) =
+                self.solve_extracted(ext.pick(&o, w), &cfg, w, h, t_total, refine)?;
             // Profile retry, once per rung and only on TooFew: inside a ladder NoMatch more
             // likely means a wrong FOV
             if first
@@ -718,7 +790,8 @@ impl Solver {
             {
                 if let Some(alt) = o.extraction.alternate() {
                     let ext2 = cache.get(frame, &alt.resolve(), &self.pool)?;
-                    let (out2, _) = self.solve_extracted(&ext2, &cfg, w, h, t_total, refine)?;
+                    let (out2, _) =
+                        self.solve_extracted(ext2.pick(&o, w), &cfg, w, h, t_total, refine)?;
                     if matches!(out2.status, SolveStatus::Ok) {
                         out = out2;
                     }

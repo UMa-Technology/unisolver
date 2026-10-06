@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+1. **Wide frames with a lit foreground solve.** A solve took the brightest 100 centroids, and
+   on a wide frame a foreground lit by streetlights or windows (leaves, branches, buildings, a
+   telescope) can outshine every star of a light-polluted sky and take all of them. Blind solves
+   of fields 10° or wider now take the centroids cell by cell over the frame (square cells, 8
+   along the long side), each cell's brightest in turn, so the open sky keeps its share. On 12
+   phone photos the solved count went from 7 to 11; the 47 phone frames of the regression, 24
+   stacked frames and 6 FITS/XISF frames solve as before, within 0.07° of where they did. A
+   foreground that surrounds a narrow strip of sky still leaves too few stars. Narrower fields,
+   tracking and the narrow-field engine keep the brightest. `SolveOptions::spread_wide`
+   (default on) and solvecli's `--no-spread` turn it off; the outcome's `centroids` are the list
+   the solve took.
+
 ## 2026-10-06 — v0.6.0
 
 1. **solvecli solves with a pool of only the narrow-field package.** It used to stop at the first

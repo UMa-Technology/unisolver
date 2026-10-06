@@ -29,6 +29,7 @@ mod scale;
 mod search;
 pub mod sky;
 pub mod solver;
+mod spread;
 
 pub use aberration::days_since_j2000;
 pub use annotate::{

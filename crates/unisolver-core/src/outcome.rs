@@ -127,6 +127,9 @@ pub struct SolvedGeometry {
 pub struct SolveOutcome {
     pub status: SolveStatus,
     pub solution: Option<SolvedGeometry>,
+    /// The centroids the solve took, top-left origin (`matched[].centroid_index` points into this
+    /// list): the brightest first or, for blind solves of wide fields (`SolveOptions::spread_wide`),
+    /// cell by cell over the frame, each round brightest first.
     pub centroids: Vec<CentroidOut>,
     pub timing: Timing,
     /// The extraction was retried with the other profile: on Ok the solution came

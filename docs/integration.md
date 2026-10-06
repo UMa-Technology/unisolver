@@ -99,6 +99,12 @@ ladder.
   `thorough: true` to append the exhaustive search (every rung, every centroid, full timeout)
   when waiting beats missing: a frame without stars then takes about 20 s to fail on a
   desktop instead of 2.
+- **Wide frames spread their centroids** (blind solves of 10° or wider): instead of the
+  brightest 100 overall, the frame is cut into square cells, 8 along its long side, and each
+  cell gives its brightest in turn, so a foreground lit by streetlights or windows cannot take
+  every slot from the stars of a light-polluted sky. `outcome.centroids` is then in that order.
+  Narrower fields and tracking keep the brightest. The plugin and the C library always do this;
+  Rust callers can turn it off with `SolveOptions::spread_wide`.
 - `ExtractionProfileDto`: the default `.phoneJpeg()` (σ10) suits compressed phone images;
   astro cameras and clean sensors want `.cleanSensor()` (σ5); for files of any origin use
   `.auto()` (σ10 first, the other profile on failure).
@@ -872,6 +878,11 @@ and `stellarium` when you ship the names pack. The example app lists them all un
     field, 95% solved at 0.18° and all of them at 0.25–0.6°. Pass `pointingHint` (C:
     `pointing_hint`) with the mount's RA/Dec, or keep RA/Dec in the FITS/XISF header, which
     pool file entries read.
+11. **A lit foreground**: trees, buildings or equipment lit by streetlights or windows can
+    outshine the stars of a light-polluted sky. Blind wide-field solves spread their centroids
+    over the frame (§1.3), which copes with a foreground in part of the frame; one that
+    surrounds a narrow strip of sky, as between two lit buildings, still leaves too few stars.
+    Point higher, or frame more sky.
 
 ## 6. Versions and compatibility
 

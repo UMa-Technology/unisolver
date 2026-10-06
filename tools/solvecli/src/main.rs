@@ -46,6 +46,10 @@ struct Cli {
     /// Keep the scale the pattern match measured: do not re-measure it from the brightest stars
     #[arg(long)]
     no_refine_scale: bool,
+    /// Solve wide frames from the brightest centroids overall rather than spread cell by cell
+    /// over the frame
+    #[arg(long)]
+    no_spread: bool,
     /// Calibration: feed every image to a CalibrationSession, fit radial distortion, write the camera JSON
     #[arg(long)]
     calibrate_out: Option<PathBuf>,
@@ -455,6 +459,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         base.thorough = cli.thorough;
         base.fit_lens = !cli.no_fit_lens;
         base.refine_scale = !cli.no_refine_scale;
+        base.spread_wide = !cli.no_spread;
 
         // Observation time and place: the command line first, then the header (FITS/XISF time,
         // EXIF time with its zone and GPS position), as the library's file entries do

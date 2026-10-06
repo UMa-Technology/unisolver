@@ -250,8 +250,9 @@ mod tests {
             pixels: PixelData::LumaF32(img),
         };
         let opts = SolveOptions::new(fov);
-        let ext =
-            extract_frame(&frame, &opts.extraction.resolve(), &build_pool().unwrap()).unwrap();
+        let ext = extract_frame(&frame, &opts.extraction.resolve(), &build_pool().unwrap())
+            .unwrap()
+            .brightest;
         let cfg = build_solve_config(&opts, w, h).unwrap();
         let sol = db.solve_from_centroids(&ext.centroids, &cfg).unwrap();
         let g = geometry_from_solution(&sol, w, h, &ext.topleft);

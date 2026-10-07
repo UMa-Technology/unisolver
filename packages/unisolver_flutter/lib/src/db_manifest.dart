@@ -77,8 +77,9 @@ class DbTier implements DbItem {
   @override
   final String sha256;
 
-  /// Whether mobile devices should use it (min_fov ≥ 2.5°: phones have no narrower fields,
-  /// and deeper tiers are too large to keep resident on mobile)
+  /// Whether mobile devices should use it: true down to 2.5°, as phone cameras have no
+  /// narrower fields. Mobile apps that solve telescope frames install the 1–2.5° tier with
+  /// `allowNonMobile: true`; it fits in their memory (integration guide §4)
   final bool mobile;
 
   /// Ships with the plugin assets, not on the host (the wide tier). Clients must not download it

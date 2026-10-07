@@ -744,24 +744,11 @@ impl Solver {
                 "solve_with_fov_presets is for unknown-FOV frames; a calibrated camera should call solve()".into(),
             ));
         }
-        // Rungs outside the database range always fail (pattern scales are not in it)
-        // and each burns a full timeout on large databases (70/55/42° against a
-        // 2.5–12° database: three rungs × 4 s wasted). Clamp to the database range
-        // (with tolerance: edge frames can solve from neighbouring scales); if nothing
-        // survives, the prior ladder does not match the database at all, so sweep the
-        // database's own range instead.
+        // Clamped to the database's range, see `rungs_for_database`
         let props = self.properties();
-        let (lo, hi) = (props.min_fov_deg * 0.8, props.max_fov_deg * 1.25);
         let presets = with_focal_hint(base, frame.width, frame.height, presets);
-        let mut presets: Vec<FovPreset> = presets
-            .iter()
-            .copied()
-            .filter(|p| (lo..=hi).contains(&p.fov_deg))
-            .collect();
+        let presets = rungs_for_database(&presets, props.min_fov_deg, props.max_fov_deg);
         let informed = first_rung_informed(&presets, frame.width, frame.height);
-        if presets.is_empty() {
-            presets = db_range_ladder(props.min_fov_deg, props.max_fov_deg);
-        }
         // Staged search over the rungs (see `search`), extracting once
         let t_total = Instant::now();
         let (w, h) = (frame.width, frame.height);
@@ -831,6 +818,61 @@ pub(crate) fn db_range_ladder(min_fov_deg: f32, max_fov_deg: f32) -> Vec<FovPres
         max_error_deg: (min_fov_deg * 0.2).max(0.5),
     });
     v
+}
+
+/// The rungs of a database's range sweep (`db_range_ladder`) whose tolerance reaches `fov_deg`,
+/// closest first. A rung outside the database's range is not dropped when its sweep reaches it:
+/// an upright 0.72° frame lies below the 1–2.5° database's 0.8° but within its 1° ± 0.5° rung.
+pub(crate) fn range_rungs_reaching(
+    min_fov_deg: f32,
+    max_fov_deg: f32,
+    fov_deg: f32,
+) -> Vec<FovPreset> {
+    let mut v: Vec<FovPreset> = db_range_ladder(min_fov_deg, max_fov_deg)
+        .into_iter()
+        .filter(|r| (r.fov_deg - fov_deg).abs() <= r.max_error_deg)
+        .collect();
+    v.sort_by(|a, b| {
+        (a.fov_deg - fov_deg)
+            .abs()
+            .total_cmp(&(b.fov_deg - fov_deg).abs())
+    });
+    v
+}
+
+/// The rungs one database tries for `presets`. Rungs outside its range always fail (pattern
+/// scales are not in it) and each burns a full timeout on large databases (70/55/42° against a
+/// 2.5–12° database: three rungs × 4 s wasted), so they are clamped to the range (with
+/// tolerance: edge frames can solve from neighbouring scales). A rung outside it that the range
+/// sweep reaches takes those sweep rungs in its place, so a header hint just below the range is
+/// tried first rather than last. When no rung was in range, the prior ladder does not match the
+/// database at all, and the database's own range is swept (after any rungs moved up).
+pub(crate) fn rungs_for_database(
+    presets: &[FovPreset],
+    min_fov_deg: f32,
+    max_fov_deg: f32,
+) -> Vec<FovPreset> {
+    let in_range = |p: &FovPreset| (min_fov_deg * 0.8..=max_fov_deg * 1.25).contains(&p.fov_deg);
+    let mut out: Vec<FovPreset> = Vec::new();
+    for p in presets {
+        if in_range(p) {
+            out.push(*p);
+        } else {
+            for r in range_rungs_reaching(min_fov_deg, max_fov_deg, p.fov_deg) {
+                if !out.iter().any(|q| same_rung(q, &r)) {
+                    out.push(r);
+                }
+            }
+        }
+    }
+    if !presets.iter().any(in_range) {
+        for r in db_range_ladder(min_fov_deg, max_fov_deg) {
+            if !out.iter().any(|q| same_rung(q, &r)) {
+                out.push(r);
+            }
+        }
+    }
+    out
 }
 
 /// Aspect-aware default FOV ladder (rungs validated on 47 phone frames; shared by the
@@ -957,6 +999,38 @@ pub fn presets_with_hints(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One database clamps a ladder to its range. A rung below the range that its sweep
+    /// reaches takes those sweep rungs in its place, closest first, so an upright 0.72° frame
+    /// starts at the 1–2.5° database's 1° rung; the rest of the range follows, as when nothing
+    /// was in range. In-range rungs and ladders that reach nothing behave as before.
+    #[test]
+    fn database_rungs_put_a_hint_below_the_range_first() {
+        let rungs_of = |p: &[FovPreset]| p.iter().map(|r| r.fov_deg).collect::<Vec<_>>();
+        let sorted = |mut v: Vec<f32>| {
+            v.sort_by(f32::total_cmp);
+            v
+        };
+        let hinted = ladder_after_hints(&[hint_preset(0.718)], &aspect_ladder(1080, 1920));
+        let rungs = rungs_of(&rungs_for_database(&hinted, 1.0, 2.5));
+        assert_eq!(rungs[..2], [1.0, 1.0546875]);
+        assert_eq!(sorted(rungs), sorted(rungs_of(&db_range_ladder(1.0, 2.5))));
+        assert!(first_rung_informed(
+            &rungs_for_database(&hinted, 1.0, 2.5),
+            1080,
+            1920
+        ));
+
+        let phone = aspect_ladder(4000, 3000);
+        assert_eq!(
+            rungs_of(&rungs_for_database(&phone, 10.0, 80.0)),
+            rungs_of(&phone)
+        );
+        assert_eq!(
+            rungs_of(&rungs_for_database(&phone, 1.0, 2.5)),
+            rungs_of(&db_range_ladder(1.0, 2.5))
+        );
+    }
 
     /// The built-in ladder is an uninformed guess; a hint in front of it, or a caller's own
     /// FOV, is informed. A hint 0.02° off a ladder rung replaces that rung and still counts.

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+1. **A FOV hint narrower than every tier goes first to the sweep rungs that reach it.** An
+   upright 1080×1920 frame from a 250 mm telescope with 2.9 µm pixels is 0.72° across, below
+   the 1–2.5° tier's 0.8°. Its header hint was dropped, so the frame ran the wide tier's phone
+   ladder and the other tiers' sweeps before the 1–2.5° tier's 1° ± 0.5° rung solved it: 1.6 s
+   on an A16 iPhone and 3.5 s on a Snapdragon 865 phone. Such a hint now takes, in its place,
+   the rungs of a tier's own sweep that reach it, closest first. The tier still sweeps the rest
+   of its range later, so the same attempts run in a new order. Those frames now solve in 5 ms
+   and 19–49 ms on the same phones, and in about 6 ms on desktop. The same frames solve as
+   before: 34 simulated telescope frames, 20 more as RGB stacks and Bayer subframes, 60 synthetic
+   upright 0.72° fields, and the 47 phone photos (44/47). A single database clamps its rungs the
+   same way. A frame that does not solve fails up to 0.4 s later on phones, because the first
+   rung's deep probe now counts as informed.
+2. **Integration guide: mobile apps solving telescope frames.** A new part of section 4 covers
+   frames from smart telescopes. They span 0.7–3° and need the 1–2.5° tier. The manifest keeps
+   that tier `mobile: false` for phone cameras, so install it with `allowNonMobile: true`. With
+   it, simulated 0.72° × 1.28° frames solve 75–98% of the time and 1.2° × 2.1° frames 97–100%;
+   without it, almost none solve. The tier fits in a phone's memory: peaks measured 426 MB on an
+   A16 iPhone and 608 MB of anonymous memory on a Snapdragon 865 phone. The memory-mapped
+   pattern tables are clean pages that iOS does not count.
+
 ## 2026-10-07 — v0.7.1
 
 1. **Apps' debug builds solve at full speed.** Cargokit builds the plugin's Rust library with

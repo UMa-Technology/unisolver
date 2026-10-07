@@ -74,7 +74,8 @@ if (res.outcome.status == SolveStatusDto.ok) {
 `solveImageFileAuto` carries the whole FOV strategy: a FOV computed from the header (FITS
 focal length and pixel size; EXIF 35 mm-equivalent focal length, or focal length and focal
 plane resolution) goes first as a hint, the aspect-ratio ladder follows on failure, and
-rungs are clamped to the database's range, exactly as the C ABI's `solve_image_json`. The
+rungs are clamped to the database's range (a hint just below it starts at the range's own
+lowest rungs that reach it), exactly as the C ABI's `solve_image_json`. The
 header's observation time (FITS `DATE-AVG`, or `DATE-OBS` plus half the exposure; EXIF
 `DateTimeOriginal` with its zone), unless you pass one, comes back in
 `outcome.observationUnixMs`, next to `outcome.observer` from EXIF GPS: hand both to the
@@ -433,7 +434,11 @@ final ann = await pool.annotator(db: res.db, dsoPath: paths.dsoPath); // annotat
 Routing (no configuration needed; the same rules as the single-database ladder):
 
 - A header FOV hint (FITS/XISF `FOCALLEN` + `XPIXSZ`) goes **straight to the tier covering
-  it**; if the hint is wrong the ladder still runs (headers are hints, not truth).
+  it**; if the hint is wrong the ladder still runs (headers are hints, not truth). A hint
+  that no tier covers goes to the rungs of a tier's own range sweep that reach it, before the
+  ladder: an upright 1080×1920 frame at 250 mm with 2.9 µm pixels (0.72° across, below the
+  1–2.5° tier's 0.8°) starts at that tier's 1° ± 0.5° rung, and the tier still sweeps the rest
+  of its range later (section 4, "Mobile apps").
 - Without a hint: the aspect ladder on the wide tier, then each narrow tier sweeps its own
   range. Tolerance is [0.8×min, 1.25×max], so adjacent tiers meet and edge frames try both.
 - With a calibrated camera (`base.camera`) or a tracking hint the FOV is known: **no
@@ -489,6 +494,8 @@ if (!mgr.isPackageInstalled(pkg)) {
   cache, so the first narrow-field frames do not wait on a cold disk. Set
   `UNISOLVER_NO_PREFETCH=1` to skip it.
 - On iOS and Android `installPackage` refuses: mobile builds have no narrow-field engine.
+  Mobile apps solving telescope frames install the 1–2.5° tier instead (section 4, "Mobile
+  apps").
 - `removePackage` deletes the files. A pool that registered the package keeps it until the pool
   is reopened (and on Windows the files cannot be deleted until then).
 
@@ -533,7 +540,7 @@ version 2):
 | `bytes` / `raw_bytes` | Download size / decompressed size; `tier.diskBytesNeeded` is the peak disk use during install |
 | `raw_sha256` | Digest of the decompressed file (tiers and package files), **checked while decompressing**: a mismatch throws `DbChecksumException` and nothing is installed |
 | `min_engine` | Oldest engine that reads the file; `DbManager` refuses an entry that needs a newer one and says to upgrade |
-| `mobile` | Whether mobile devices should use it; mobile needs `allowNonMobile: true` otherwise |
+| `mobile` | Whether mobile devices should use it; mobile needs `allowNonMobile: true` otherwise. `false` for the 1–2.5° tier and the narrow-field package, which phone cameras never need; apps solving telescope frames install the 1–2.5° tier with the override (section 4, "Mobile apps") |
 | `bundled` | Ships with the plugin assets, not on the host; installed by `UnisolverAssets.ensureInstalled` |
 | `license` / `attribution` | The tier's data license and the attribution it requires (Gaia DR3 for star databases) |
 | `assets` | Optional files used as downloaded (the names pack): `name`, `kind`, `file`, `key`, `bytes`, `sha256`, `license`, `attribution`; install with `DbManager.installAsset` |
@@ -808,7 +815,7 @@ tracing-subscriber layer.
 | `unisolver_names.bin` | names in 13 languages (GPL-2.0-or-later) | 229 KB | opt-in: declared by the app, or downloaded |
 | `unisolver_5_10.db` | 5–10° | 23 MB / 41 MB | from the data release (`DbManager.install`) |
 | `unisolver_2p5_5.db` | 2.5–5° | 108 MB / 165 MB | from the data release |
-| `unisolver_1_2p5.db` | 1–2.5°, desktop builds | 287 MB / 400 MB | from the data release |
+| `unisolver_1_2p5.db` | 1–2.5°: desktop builds, and mobile apps solving telescope frames | 287 MB / 400 MB | from the data release (`allowNonMobile` on mobile) |
 | narrow-field package (blind index + star tiles) | narrow fields 0.18–3.1°, desktop builds | 2.5 GB / 3.2 GB | not bundled; from the data release (`DbManager.installPackage`) |
 
 - Databases are tetra3's format 2, memory-mapped. Files from releases before it (the
@@ -817,9 +824,8 @@ tracing-subscriber layer.
   assets of the data repository, [unisolver-data](https://github.com/UMa-Technology/unisolver-data)
   (section 1.6); you can also generate and host your own (`unisolver-starmatch` has the package
   builders).
-- Mobile devices should stay at ≥ 2.5° tiers: phones have no narrower fields, and deeper
-  tiers are too large to keep resident on mobile. The narrow-field package is for desktop
-  builds only.
+- Mobile apps choose tiers by what they solve: photos from the phone's own cameras, or frames
+  from a telescope (next section). The narrow-field package is for desktop builds only.
 - **Attribution is required**: the star databases and the narrow-field package derive from
   Gaia DR3 (ESA/Gaia/DPAC, CC BY-SA 3.0 IGO). Keep this in your app's About page, for example:
   *This work has made use of data from the European Space Agency (ESA) mission Gaia,
@@ -827,6 +833,80 @@ tracing-subscriber layer.
   The DSO catalog derives from OpenNGC (CC BY-SA 4.0), the constellation pack from the IAU
   charts and boundaries via Stellarium's modern (IAU) sky culture (CC BY-SA 4.0), and the
   names pack from Stellarium (GPL-2.0-or-later); see `THIRD_PARTY_LICENSES.md`.
+
+### Mobile apps: phone cameras and telescope frames
+
+**Photos from the phone's cameras** span 12° or more across, up to a 5× tele lens held
+upright, so the bundled 10–80° tier solves them; only the longest tele lenses (10×) reach the
+5–10° tier. Nothing narrower helps them, which is why the manifest marks the 1–2.5° tier
+`mobile: false`.
+
+**Frames from smart telescopes and small refractors**, imported as FITS, span 0.7–3° and need
+the 2.5–5° and 1–2.5° tiers. The engine routes by the **horizontal** FOV, which a FITS header
+gives as `NAXIS1 × XPIXSZ / FOCALLEN`:
+
+| Frames as saved | Horizontal × vertical | Solved by |
+|---|---|---|
+| 1080×1920 upright, 250 mm, 2.9 µm pixels (2.39″/px) | 0.72° × 1.28° | 1–2.5°, from its lowest rungs (below) |
+| the same frame turned landscape, 1920×1080 | 1.28° × 0.72° | 1–2.5° |
+| 1080×1920 upright, 150 mm, 2.9 µm pixels (3.99″/px) | 1.20° × 2.13° | 1–2.5° |
+| 3840×2160 at 2.75″/px (150 mm, 2 µm) | 2.93° × 1.65° | 2.5–5° |
+
+Measured on simulated frames (crops of two real 600 s frames, one sparse and one in the Milky
+Way, resampled to each camera, and synthetic star fields at 60 random pointings): without the
+1–2.5° tier no 250 mm frame solves and only a few landscape 150 mm frames do; with it, 75–98%
+of the 250 mm frames and 97–100% of the 150 mm frames solve. The rest need fainter stars than that tier holds;
+on desktop the narrow-field package solves them, given the header's RA/Dec.
+
+An upright 250 mm frame's 0.72° lies below every tier's range (the 1–2.5° tier takes 0.8° and
+up), but within that tier's 1° ± 0.5° sweep rung, so its header hint goes there first (section
+1.6). Measured on an A16 iPhone (6 GB) and a Snapdragon 865 Android phone (12 GB), with the
+header's hint:
+
+| Frame | A16 iPhone | Snapdragon 865 phone |
+|---|---|---|
+| 250 mm, upright | 5 ms | 19–49 ms |
+| 250 mm landscape, 150 mm either way | 4–47 ms | 12–42 ms |
+| 3840×2160 | 29–41 ms | 116–159 ms |
+| a frame that does not solve | 1.6–2.1 s | 4.0 s |
+| 250 mm, upright, without a header (the whole ladder) | 1.6 s | 3.5 s |
+
+**Memory.** Tiers are memory-mapped, and their pattern tables stay clean file pages: iOS does not
+count them against the app's limit (`phys_footprint`), and both systems reclaim them under
+pressure. What counts is each tier's star catalog, decoded when it is registered, and the
+extraction buffers of the frame being solved. Peaks with a profile build of the example app,
+solving the frames above (MB, the higher of two runs):
+
+| | A16 iPhone, `phys_footprint` | Snapdragon 865 phone, anonymous RSS | the same, file pages |
+|---|---|---|---|
+| App idle | 63 | 97 | 95 |
+| 10–80°, 5–10° and 2.5–5° tiers, solving | 271 | 351 | 321 |
+| plus the 1–2.5° tier, solving | 426 | 608 | 711 |
+| plus 400 MB of decoded images the app holds | 839 | 916 | 711 |
+
+The A16 iPhone's foreground limit measured 3.07 GB (`phys_footprint` plus
+`os_proc_available_memory()`), half its RAM. Apple does not publish these limits; at the same
+share a 4 GB iPhone would allow about 2 GB (an estimate, not measured), still more than twice
+the last row. Neither phone killed the app. A 4K frame accounts for about 140 MB of each peak.
+Android has no per-app limit; on 4 GB devices keep the app's own image cache modest, as the
+system reclaims background apps first and the foreground one last.
+
+**In the app:**
+
+- Install the 2.5–5° tier and, with `allowNonMobile: true` on `install` or `importFile`, the
+  1–2.5° tier: 395 MB to download for both, 565 MB installed. The 5–10° tier adds nothing for
+  telescope frames.
+- `installPackage` throws on iOS and Android: mobile builds have no narrow-field engine. Register
+  the tiers in a `UniSolverPool` as on desktop.
+- Pass the FITS file itself to `solveImageFileAuto`: its `FOCALLEN` and `XPIXSZ` route the frame.
+  A frame decoded by the app and passed to `solveFrameAuto` loses that hint (frames take only
+  `focalLength35Mm`) and sweeps the whole ladder: seconds instead of milliseconds for an upright
+  250 mm frame.
+- Do not downsample telescope frames: 1080p frames are small already, a 3840×2160 frame solves
+  in 30–160 ms on the phones above, and frames above 16 Mpx are extracted in bands (section 5,
+  item 6). Passing the file is what keeps the header's hint.
+- The header's RA/Dec is read, but only the narrow-field engine uses it, so it does nothing on
+  mobile.
 
 ### Showing attributions
 
@@ -865,7 +945,9 @@ and `stellarium` when you ship the names pack. The example app lists them all un
 6. **Large frames**: frames above 16 Mpx are extracted in horizontal bands, so a 26 Mpx
    astro frame peaks around 290 MB including a 320 MB narrow tier (630 MB before banding);
    phone frames up to 4K take a single pass. On mobile, still prefer downsampling 48 Mpx
-   originals to ≤ 4K: fewer pixels is less work, and the FOV does not change.
+   phone originals to ≤ 4K: fewer pixels is less work, and the FOV does not change. Telescope
+   frames need none: pass the FITS file, which keeps its header's FOV hint (section 4, "Mobile
+   apps").
 7. **Windows builds**: the DLL must be built on a Windows host (the dependency chain
    includes dart-sys); macOS can cross-check but not produce it.
 8. **macOS sandbox needs network access**: to download with `DbManager`, the host's

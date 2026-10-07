@@ -13,7 +13,9 @@
 //!    tiers first), not interleaved by FOV, to avoid paging between large mmaps.
 use crate::outcome::{SolveOutcome, SolveStatus};
 use crate::search::{self, Pass};
-use crate::solver::{db_range_ladder, pass_config, with_focal_hint, ExtractCache};
+use crate::solver::{
+    db_range_ladder, pass_config, range_rungs_reaching, with_focal_hint, ExtractCache,
+};
 use crate::{CoreError, FovPreset, Frame, Result, Solver};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -405,13 +407,18 @@ impl SolverPool {
         // Unknown FOV: the staged search over the plan (see `search`). Known FOV: each
         // covering tier once, with every centroid and the full timeout.
         let passes: Vec<Pass> = if steps.iter().all(|(_, p)| p.is_some()) {
-            // The informed first rung counts only when the plan kept it first
+            // The informed first rung counts only when the plan kept it first, itself or as
+            // the sweep rungs that took its place (see `plan`)
             let informed = crate::solver::first_rung_informed(&ladder, w, h)
                 && steps
                     .first()
                     .and_then(|(_, p)| *p)
                     .zip(ladder.first())
-                    .is_some_and(|(a, b)| crate::solver::same_rung(&a, b));
+                    .is_some_and(|(a, b)| {
+                        crate::solver::same_rung(&a, b)
+                            || (covering(&spans, b.fov_deg).is_empty()
+                                && (a.fov_deg - b.fov_deg).abs() <= a.max_error_deg)
+                    });
             search::schedule(steps.len(), base.timeout_ms, base.thorough, informed)
         } else {
             (0..steps.len())
@@ -666,9 +673,14 @@ fn nearest(spans: &[(f32, f32)], fov: f32) -> usize {
 
 /// Routing plan `(database index, rung)` in the order tried:
 /// 1. The caller's ladder (header hints first, aspect ladder after), each rung sent to
-///    every tier covering it, closest-centred first;
-/// 2. Fill-in: tiers never reached in step 1 sweep their own range (`db_range_ladder`),
-///    **to themselves only**; otherwise each narrow tier would re-sweep the wide ones;
+///    every tier covering it, closest-centred first. A rung no tier covers takes, in its
+///    place, the rungs of a tier's own range sweep that reach it (`range_rungs_reaching`):
+///    an upright 0.72° frame goes first to the 1–2.5° tier's 1° ± 0.5° rung, instead of
+///    after the wide tier's ladder and every sweep;
+/// 2. Fill-in: tiers no rung was routed to in step 1 sweep their own range
+///    (`db_range_ladder`), **to themselves only**; otherwise each narrow tier would re-sweep
+///    the wide ones. A tier that only lent rungs in step 1 still sweeps the rest, so those
+///    rungs change the order of the attempts, not which ones run;
 /// 3. No (database, FOV) pair twice.
 fn plan(spans: &[(f32, f32)], hints: &[FovPreset]) -> Vec<(usize, FovPreset)> {
     let mut steps: Vec<(usize, FovPreset)> = Vec::new();
@@ -677,8 +689,20 @@ fn plan(spans: &[(f32, f32)], hints: &[FovPreset]) -> Vec<(usize, FovPreset)> {
             .iter()
             .any(|(t, q)| *t == ti && (q.fov_deg - fov).abs() < 0.01 * fov.max(1.0))
     };
+    let mut routed = vec![false; spans.len()];
     for hp in hints {
-        for i in covering(spans, hp.fov_deg) {
+        let cands = covering(spans, hp.fov_deg);
+        if cands.is_empty() {
+            for (i, s) in spans.iter().enumerate() {
+                for r in range_rungs_reaching(s.0, s.1, hp.fov_deg) {
+                    if !dup(&steps, i, r.fov_deg) {
+                        steps.push((i, r));
+                    }
+                }
+            }
+        }
+        for i in cands {
+            routed[i] = true;
             if !dup(&steps, i, hp.fov_deg) {
                 steps.push((i, *hp));
             }
@@ -687,7 +711,7 @@ fn plan(spans: &[(f32, f32)], hints: &[FovPreset]) -> Vec<(usize, FovPreset)> {
     let mut order: Vec<usize> = (0..spans.len()).collect();
     order.sort_by(|&a, &b| spans[b].0.total_cmp(&spans[a].0));
     for i in order {
-        if steps.iter().any(|(t, _)| *t == i) {
+        if routed[i] {
             continue;
         }
         for p in db_range_ladder(spans[i].0, spans[i].1) {
@@ -760,6 +784,29 @@ mod tests {
         let steps = plan(&spans, &hints);
         assert_eq!(steps[0].0, 2, "2.9° hint must hit the 2.5–5° tier first");
         assert!((steps[0].1.fov_deg - 2.9).abs() < 1e-6);
+    }
+
+    /// A header hint narrower than every tier (an upright 1080×1920 frame at 250 mm with 2.9 µm
+    /// pixels, 0.72° across) goes first to the 1–2.5° tier's sweep rungs that reach it, closest
+    /// first. The attempts are the ones the plan without the hint makes, only earlier.
+    #[test]
+    fn hint_below_every_tier_moves_the_reaching_sweep_rungs_first() {
+        let spans = [(10.0, 80.0), (5.0, 10.0), (2.5, 5.0), (1.0, 2.5)];
+        let ladder = crate::aspect_ladder(1080, 1920);
+        let hinted =
+            crate::solver::ladder_after_hints(&[crate::solver::hint_preset(0.718)], &ladder);
+        let steps = plan(&spans, &hinted);
+        assert_eq!((steps[0].0, steps[0].1.fov_deg), (3, 1.0));
+        assert_eq!((steps[1].0, steps[1].1.fov_deg), (3, 1.0546875));
+        let attempts = |s: &[(usize, FovPreset)]| {
+            let mut v: Vec<(usize, u32)> = s
+                .iter()
+                .map(|(i, p)| (*i, (p.fov_deg * 1e4).round() as u32))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(attempts(&steps), attempts(&plan(&spans, &ladder)));
     }
 
     /// Where ranges overlap (10° is within both tiers' tolerance) both are tried, the closer-centred first.

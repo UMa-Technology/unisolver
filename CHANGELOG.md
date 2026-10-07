@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-08 — v0.7.2
+
 1. **A FOV hint narrower than every tier goes first to the sweep rungs that reach it.** An
    upright 1080×1920 frame from a 250 mm telescope with 2.9 µm pixels is 0.72° across, below
    the 1–2.5° tier's 0.8°. Its header hint was dropped, so the frame ran the wide tier's phone
